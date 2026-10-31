@@ -861,6 +861,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       const onOver = (event) => {
         // Safety net: a control rendered between sweeps still carries `title`.
         // Adopt it here so the native tooltip never gets the chance to appear.
+        // (React replaces nodes on some re-renders, so this path is not rare.)
         let fresh = event.target instanceof Element ? event.target : null;
         for (let i = 0; fresh && i < 8; i += 1, fresh = fresh.parentElement) {
           if (fresh.hasAttribute && fresh.hasAttribute('title')) adopt(fresh);
@@ -892,11 +893,15 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       window.addEventListener('resize', onDismiss);
 
       sweep();
-      // React re-renders put `title` back; adopt again whenever the composer
-      // subtree or its attributes change.
+      // React re-renders put `title` back, so re-adopt on every mutation.
+      //
+      // Deliberately do NOT hide here. The app mutates the body constantly while
+      // a turn streams, and hiding on any mutation killed the bubble the instant
+      // it appeared — which reads as "the tooltip stopped working".
       const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
         sweep();
-        if (showing) hide();
+        // The anchor can also be replaced rather than updated; follow it.
+        if (showing && !showing.isConnected) hide();
       });
       if (observer) observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['title'] });
 
@@ -1257,6 +1262,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
 
       // 1. One inventory once the composer has mounted.
       timeouts.push(setTimeout(() => collect('static'), 2500));
+
 
       // 2. Forensics for whatever the pointer lands on inside the composer. Wait
       //    for :hover to settle; the pointer is still on the element by then.
