@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-vt-Interface",
+    "description": "Harness 的 UI/UX 改善层：干净白 + 暖灰配色、仿 Codex 的输入框与浮层阴影、控件形状与字重统一。禁用后完全恢复原始界面。"
+  }
+}

@@ -1,0 +1,6 @@
+# Local toolchain artifacts — regenerable, never committed
+.codegraph/
+
+# OS / editor noise
+.DS_Store
+*.log

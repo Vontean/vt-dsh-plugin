@@ -1,0 +1,1290 @@
+/**
+ * dsh-vt-Interface — client half.
+ *
+ * ── Architecture ─────────────────────────────────────────────────────────────
+ * The plugin is layered so that adding another UI fix is a data change, not a
+ * code change. Three layers, strictly one-directional:
+ *
+ *   domain      what we want changed, in our own vocabulary
+ *               (tokens, css variables, component targets). No DSH names here
+ *               beyond the token/selector strings themselves.
+ *   adapters    the anti-corruption layer: translate one domain patch into one
+ *               concrete effect on DSH's runtime (Theme service, injected sheet,
+ *               CSSOM class discovery). DSH quirks stop here.
+ *   engine      owns lifetimes: apply every patch, re-resolve late stylesheets,
+ *               dispose everything in reverse order.
+ *
+ * The seam every patch crosses is a single interface:
+ *
+ *     apply(patch, ctx) -> () => void        // returns a disposer
+ *
+ * so a new UI fix is (a) a data entry in the domain section and (b) at most one
+ * new adapter function. Nothing else in the file needs to know about it.
+ *
+ * ── Why this shape ──────────────────────────────────────────────────────────
+ * DSH internals are the corrupted side of the seam: CSS-module classes carry
+ * per-build hashes, several design tokens are declared on `body, body *` so an
+ * inline override cannot reach descendants, and some component geometry is
+ * literal with no token at all. The adapters absorb exactly those three quirks;
+ * everything above them stays stable when the app updates.
+ *
+ * ── Design history (kept: it explains the current values) ────────────────────
+ *   v1  hue-only rotation of the reference ramp → invisible (ΔE < 3).
+ *   v2  dyed the canvas beige while surfaces stayed white → muddy purple-grey.
+ *   v3  Notion model: white canvas, warm greys in text and sidebar only.
+ *   v4  composer elevation modelled on the local Codex desktop app.
+ *   v5  send button aligned with its 28px siblings; glyph weight unified.
+ *   v6  layered architecture + runtime selector discovery + diagnostics hook.
+ */
+
+window.__ModuleLoader__.load({
+  id: 'dsh-vt-interface',
+  factory(require) {
+    'use strict';
+
+    const PLUGIN_ID = 'dsh-vt-interface';
+    const VERSION = '2.0.0';
+
+    /**
+     * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
+     * to `*, ::before, ::after`. Corner *shape* decides whether a control renders
+     * as a circle or as a squircle; border radius only sets the size. A 999px
+     * radius therefore still reads as a rounded square while the shape exponent
+     * stays at 1.5 — which is why radius-only overrides looked like no change.
+     * `superellipse(1)` is the exponent the app itself uses for the genuinely
+     * circular controls (send button, add button); `round` is the standard
+     * keyword for the same thing and stays as a fallback.
+     */
+    const CONTROL_SHAPE = 'corner-shape: round !important;\n  corner-shape: superellipse(1) !important;';
+
+    /**
+     * Weight for CJK controls that share a row with Latin values.
+     *
+     * At the same 13px, an ideograph fills ~85% of the em while Latin lowercase
+     * fills ~54% (measured: 11px vs 7px ink height in this app's font stack). A
+     * 500 weight that reads as "medium" in Latin therefore reads as "bold" in
+     * Chinese. Upstream sets the permission and plan chips to 500 while the model
+     * name beside them is 400, so the row reads as two type systems. Dropping the
+     * CJK side one step restores one system; the perceived size gap remains (that
+     * is the script itself), only the extra weight goes away.
+     */
+    const CJK_LABEL_WEIGHT = 400;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // DOMAIN — what we want changed. All visual values live here and nowhere
+    // else. Token names and rule signatures are the only DSH-specific facts.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Reference neutral ramp: scheme-neutral, exactly like the shipped one
+     * (dark mode gets its depth by pointing aliases at the low-numbered steps).
+     * Very low chroma (×1.3, capped 0.008) at hue 70°: removes the blue cast
+     * from dividers and mid greys without tinting any surface.
+     */
+    const WARM_RAMP = {
+      '00': '#ffffff',
+      '50': '#fbfaf8',
+      '60': '#f7f6f4',
+      '75': '#f5f2f0',
+      '100': '#f1ede8',
+      '150': '#f0ebe6',
+      '200': '#e9e4df',
+      '300': '#d6d2cd',
+      '400': '#b5b1ac',
+      '500': '#a09c97',
+      '550': '#938f8b',
+      '600': '#888480',
+      '700': '#686561',
+      '750': '#484441',
+      '800': '#383633',
+      '850': '#2e2c2a',
+      '875': '#242322',
+      '900': '#1c1b1a',
+      '950': '#171513',
+      '1000': '#13110d',
+    };
+
+    /** Semantic aliases: white canvas, warm-grey text, warm-white sidebar. */
+    const ALIAS = {
+      '--dsw-alias-bg-base': { light: '#ffffff', dark: '#191918' },
+      '--dsw-alias-bg-layer-1': { light: '#ffffff', dark: '#212120' },
+      '--dsw-alias-bg-layer-2': { light: '#ffffff', dark: '#292928' },
+      '--dsw-alias-bg-layer-3': { light: '#ffffff', dark: '#31312f' },
+      '--dsw-alias-label-primary': { light: '#0d0d0d', dark: '#f5f4f2' },
+      '--dsw-alias-label-secondary': { light: '#615d59', dark: '#c2bfbb' },
+      '--dsw-alias-label-tertiary': { light: '#7d7873', dark: '#9a9793' },
+      '--dsw-alias-label-caption': { light: '#9c9792', dark: '#75726e' },
+      '--dsw-specific-sidebar-fill': { light: '#f6f5f4', dark: '#1e1e1d' },
+      // Shipped #2631480f is blue (R38 G49 B72); a neutral alpha drops the cast.
+      '--dsw-alias-interactive-bg-hover': { light: '#0000000d', dark: '#ffffff14' },
+    };
+
+    /**
+     * PATCHES — the domain's registry. Adding a UI fix means adding an entry
+     * here; the engine and adapters stay untouched.
+     *
+     * kind: 'tokens'    → Theme service override layer (light/dark pairs).
+     * kind: 'variables' → redeclare CSS custom properties on every element that
+     *                     carries them, for tokens DSH declares on `body, body *`.
+     * kind: 'component' → CSS rules for a target resolved by signature.
+     */
+
+    // ── Patch constructors ──────────────────────────────────────────────────
+    // Pure selector mechanics. Two of them, both used while *defining* patches,
+    // both free of DSH state: they take a string and return a string. They live
+    // above `PATCHES` so that the data section never reaches downward into the
+    // adapter section for a helper — the dependency arrow stays one-directional.
+    // ────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Companion class from the same CSS-module family.
+     *
+     * Classes generated by one module share a prefix (`.pn0E2q_trigger`,
+     * `.pn0E2q_roundButton`), so a second state of the same control can be reached
+     * by swapping only the suffix — which stays hash-adaptive. The tempting
+     * `[class*="roundButton"]` instead matches every unrelated component whose
+     * class happens to contain those words, and silently restyles them.
+     */
+    function moduleSibling(selector, suffix) {
+      const first = String(selector || '').split(',')[0].trim();
+      const cut = first.lastIndexOf('_');
+      if (!first.startsWith('.') || cut < 0) return '';
+      return `${first.slice(0, cut)}_${suffix}`;
+    }
+
+    /**
+     * A dialog portalled to <body> and placed by `useAnchoredPosition`.
+     *
+     * That primitive only knows `align: 'start' | 'end'` — there is no centred
+     * option — and the panels above pass neither, so `left` lands on the
+     * trigger's left edge and a wide panel over a narrow trigger reads as
+     * hanging off to the right.
+     *
+     * It writes `left`/`top` as inline styles. `!important` in a stylesheet
+     * outranks a normal inline declaration, so the horizontal placement can be
+     * re-taken in CSS; `top` is left to the primitive.
+     *
+     * `anchor` names the element the panel should centre on. It must resolve to
+     * exactly one element at a time, which is why every anchor selector includes
+     * the trigger's own `aria-expanded="true"` state: only the open trigger's
+     * wrapper carries the anchor name, so two dialogs can never collide.
+     */
+    function anchoredDialog({ id, signature, fallback, anchor }) {
+      return {
+        kind: 'component',
+        id,
+        role: 'floating-dialog',
+        signature,
+        fallback,
+        rules: (selector) => {
+          const anchorSelector = typeof anchor === 'function' ? anchor(selector) : anchor;
+          return `
+${anchorSelector} {
+  anchor-name: --vt-anchor-${id};
+}
+${selector} {
+  position-anchor: --vt-anchor-${id} !important;
+  left: anchor(center) !important;
+  translate: -50% 0 !important;
+}`;
+        },
+      };
+    }
+
+    const PATCHES = [
+      {
+        kind: 'tokens',
+        id: 'palette',
+        source: 'vt-interface:clean-white',
+        tokens: () => {
+          const tokens = {};
+          for (const [step, hex] of Object.entries(WARM_RAMP)) {
+            tokens[`--dsw-static-neutral-bluish-${step}`] = { light: hex, dark: hex };
+          }
+          return Object.assign(tokens, ALIAS, {
+            /**
+             * Build marker: a custom property nothing consumes, so it has no
+             * visual effect. It shows up in Theme.listTokens, which makes it the
+             * cheapest way to prove WHICH client module generation is running —
+             * i.e. to tell a cached module from a freshly loaded one.
+             */
+            '--vt-interface-build': { light: VERSION, dark: VERSION },
+          });
+        },
+      },
+      {
+        kind: 'variables',
+        id: 'composer-elevation',
+        // Codex desktop `--elevation-composer`: a wide-but-faint 1px ring, a
+        // near shadow that grounds the edge, and a huge directional halo
+        // (80px blur, 2.4%, +8px spread) instead of a tight grey haze.
+        variables: {
+          '--dsw-elevation-soft': {
+            light: '0 0 0 1px #0000000a, 0 2px 8px 0 #0000000a, 0 4px 80px 8px #00000006',
+            dark: 'inset 0 0 1px 0 #ffffff33',
+          },
+        },
+      },
+      {
+        kind: 'tokens',
+        id: 'menu-surface',
+        source: 'vt-interface:menu-surface',
+        /**
+         * Every popover in the app paints through one shared material layer
+         * (`._material_ri079_*`): `background: var(--dsw-menu-surface-fill)` plus
+         * `backdrop-filter: var(--dsw-menu-backdrop-filter)`. Three tokens
+         * therefore restyle the add menu, the model menu, the session stats card,
+         * the schedule panel and every other popover at once.
+         *
+         * Shipped values are a 58%-opaque grey glass blurred at 40px with
+         * `saturate(150%)`. That combination lets the page colour bleed through
+         * AND boosts it, so the panel reads grey and tinted by whatever sits
+         * behind it; the same menu looks different depending on position.
+         * Codex uses a near-opaque surface with a short blur, which is why its
+         * panels stay clean.
+         *
+         * Only declared on `body`, so the Theme service reaches every descendant.
+         */
+        tokens: () => ({
+          '--dsw-menu-surface-fill': { light: '#fffffff5', dark: '#232324f5' },
+          // macOS redefines this one on `html[data-platform=darwin] body`; an
+          // inline value on body wins over that rule.
+          '--dsw-specific-menu': { light: '#fffffff5', dark: '#232324f5' },
+          '--dsw-menu-backdrop-filter': { light: 'blur(8px)', dark: 'blur(8px)' },
+        }),
+      },
+      {
+        kind: 'variables',
+        id: 'floating-elevation',
+        /**
+         * Edge of every floating layer. DSH declares this token on
+         * `body, body *`, so it has to be redeclared rather than themed.
+         *
+         * Shipped: `0 0 0 .5px <4% stroke>, 0 3px 8px 4%, 0 0 20px 5%` — a very
+         * faint hairline plus a wide ambient halo, which leaves the panel with no
+         * readable edge and a soft grey smudge around it.
+         * Codex menus use `--shadow-hairline` + `--shadow-xl`: a 10% hairline and
+         * one tighter, darker shadow. The stroke is baked into the value so the
+         * per-panel `--dsw-elevation-stroke-color` can no longer wash it out.
+         */
+        variables: {
+          '--dsw-elevation-prominent': {
+            light: '0 0 0 0.5px #0000001a, 0 8px 16px -4px #0000001f',
+            dark: '0 0 0 0.5px #ffffff1a, 0 8px 16px -4px #00000059',
+          },
+        },
+      },
+      {
+        kind: 'component',
+        id: 'composer-submit',
+        role: 'composer-submit',
+        /**
+         * Signature every candidate rule must carry. Verified unique against
+         * 0.2.1-rc.5: only the submit button combines a 34px square, a 999px
+         * radius, display:grid and the button-info-fill background.
+         */
+        signature: [
+          'width:34px',
+          'height:34px',
+          'border-radius:999px',
+          'display:grid',
+          'button-info-fill',
+        ],
+        /** Used before stylesheets are readable; stale values are harmless. */
+        fallback: '.JZLxKW_primary',
+        /**
+         * Shipped button is 34x34 with a 2px glyph stroke, while sibling icon
+         * controls are 28x28 with 1.5px (mic) and 1px (plus).
+         */
+        rules: (selector) => `
+${selector} {
+  width: 28px !important;
+  height: 28px !important;
+  transform: none !important;
+}
+${selector} svg,
+${selector} svg * {
+  stroke-width: 1.5 !important;
+}
+${selector} svg {
+  width: 14px !important;
+  height: 14px !important;
+}`,
+      },
+      {
+        kind: 'component',
+        id: 'composer-row-insets',
+        role: 'composer-tool-row',
+        /**
+         * Concentric corners — corrected premise.
+         *
+         * The card corner is a squircle (corner-shape: superellipse(1.5) comes
+         * from the shipped token sheet), so the circle-inscribed rule
+         * gap = R - r = 14px does NOT hold here; applying it pushed the corner
+         * controls further inside than the shipped layout (right gap measured
+         * 8-9px, bottom 6px).
+         *
+         * The shipped row padding is "2px 8px 6px": the bottom inset is
+         * accepted as correct, so the sides are brought to the same 6px to give
+         * one optical inset around the card instead of two different ones.
+         */
+        signature: ['flex-wrap:wrap', 'padding:2px8px6px', 'container-type:inline-size'],
+        fallback: '.JZLxKW_row',
+        rules: (selector) => `
+${selector} {
+  padding: 2px 6px 6px !important;
+}`,
+      },
+      {
+        kind: 'component',
+        id: 'composer-voice-button',
+        role: 'composer-voice',
+        /**
+         * The composer mic is a primitives Button wearing the voice plugin's
+         * `trigger` skin. Read from the live DOM: its classes are
+         * `…ghost… sm… <plugin>_trigger`, it measures 28x28, and its computed
+         * radius is 8px — because the plugin rule declares only
+         * `flex:none;width:28px;padding:0` and the radius falls through to the
+         * primitives' ghost button. That fall-through is why the hover hotspot
+         * stayed a rounded square.
+         *
+         * Discovery therefore targets the bare rule itself: same geometry, no
+         * radius of its own, selector ending in `_trigger`. The recording-state
+         * round button keeps its own attribute fallback.
+         *
+         * Signature tokens must be LONGHANDS. The CSSOM re-serializes shorthands,
+         * so the authored `flex: none` reads back as `flex: 0 0 auto` — matching
+         * on it made this patch report `fallback` on every boot, held up only by
+         * the shipped hash. Width and padding survive serialization verbatim, and
+         * `_trigger$` plus the border-radius rejection already leave one rule.
+         */
+        signature: ['width:28px', 'padding:0'],
+        reject: ['border-radius'],
+        selectorFilter: '_trigger$',
+        fallback: '.pn0E2q_trigger',
+        rules: (selector) => {
+          // The recording state ships as a sibling class in the same module. Derive
+          // it from the resolved selector instead of matching `[class*="roundButton"]`,
+          // which would also restyle every unrelated component using that word.
+          const round = moduleSibling(selector, 'roundButton');
+          const targets = round ? `${selector},\n${round}` : selector;
+          return `
+${targets} {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 999px !important;
+  ${CONTROL_SHAPE}
+}
+/* The ghost skin paints its hover background at the component radius, which
+ * resolved to a rounded square on a 28px control. Round the plate itself; no
+ * other control in the app is touched. */
+${selector}:hover,
+${selector}:focus-visible {
+  border-radius: 999px !important;
+  background-color: var(--dsw-alias-interactive-bg-hover) !important;
+  ${CONTROL_SHAPE}
+}`;
+        },
+      },
+      {
+        kind: 'component',
+        id: 'composer-select-chips',
+        role: 'composer-text-chip',
+        /** Permission and model chips are separate components; style both. */
+        match: 'all',
+        /**
+         * The composer's permission and model controls are `.X_select`:
+         * radius var(--dsw-radius-sm) = 8px on a 28px-tall control, so the hover
+         * hotspot reads as a rounded square. Text chips belong to the pill class.
+         *
+         * The earlier patch targeted `._4pRlHW_selector` — a different component
+         * (radius-md, 36px tall) — which is why nothing changed. Targets now come
+         * only from discovery or the one shipped fallback; no substring selectors,
+         * so other components' chips are never collateral damage.
+         */
+        signature: ['border-radius:var(--dsw-radius-sm)', 'max-width:220px', 'height:28px', '--dsw-alias-label-secondary'],
+        fallback: '.JZLxKW_select',
+        rules: (selector) => `
+${selector} {
+  border-radius: 999px !important;
+  font-weight: ${CJK_LABEL_WEIGHT} !important;
+  ${CONTROL_SHAPE}
+}`,
+      },
+      {
+        kind: 'component',
+        id: 'composer-model-trigger',
+        role: 'composer-model',
+        /** Same pill language for the model dropdown trigger (radius-sm = 8px). */
+        signature: ['height:28px', 'border-radius:var(--dsw-radius-sm)', 'max-width:min(360px,45cqw)'],
+        fallback: '.htuFrW_trigger',
+        rules: (selector) => `
+${selector} {
+  border-radius: 999px !important;
+  ${CONTROL_SHAPE}
+}`,
+      },
+      {
+        kind: 'component',
+        id: 'composer-plan-indicator',
+        role: 'composer-plan',
+        /**
+         * The plan-mode chip is rendered by the plan plugin only while plan mode
+         * is on; clicking it leaves plan mode (`chip.on.aria` = "计划模式已开启，
+         * 按下关闭"). Upstream paints it as a selected business-blue chip
+         * (tertiary fill + primary text), which reads as a loud toggle inside an
+         * otherwise quiet tool row.
+         *
+         * Reference (Codex composer): a hairline separator, then a neutral chip
+         * that only reveals itself on hover, where the leading glyph becomes the
+         * app's own filled close-circle. That glyph already ships as
+         * `IconCloseCircleFillRegular` — only the colour has to change, so this
+         * patch stays CSS-only and keeps the native accessibility strings.
+         *
+         * The separator hangs off the chip instead of a wrapper so it lands in
+         * the row gap no matter which flex container renders the control.
+         */
+        signature: [
+          'background:var(--dsw-alias-state-business-tertiary)',
+          'border-radius:var(--dsw-radius-sm)',
+          'height:28px',
+        ],
+        fallback: '.kKSgSq_chip',
+        rules: (selector) => {
+          // Same module as the chip, so no substring matching is needed.
+          const closeGlyph = moduleSibling(selector, 'hoverGlyph');
+          return `
+${selector} {
+  position: relative !important;
+  margin-left: 8px !important;
+  border-radius: 999px !important;
+  background-color: transparent !important;
+  color: var(--dsw-alias-label-secondary) !important;
+  font-weight: ${CJK_LABEL_WEIGHT} !important;
+  ${CONTROL_SHAPE}
+}
+${selector}::before {
+  content: '' !important;
+  position: absolute !important;
+  left: -8.5px !important;
+  top: 50% !important;
+  width: 0.5px !important;
+  height: 12px !important;
+  margin-top: -6px !important;
+  border-radius: 1px !important;
+  background-color: var(--dsw-alias-border-l2) !important;
+  pointer-events: none !important;
+}
+${selector}:hover:not(:disabled),
+${selector}:focus-visible {
+  background-color: var(--dsw-alias-interactive-bg-hover) !important;
+}
+/* One step lighter than the label, so the close affordance reads as a hint
+ * rather than as an error state. */
+${selector}:hover:not(:disabled)${closeGlyph ? ` ${closeGlyph}` : ''},
+${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
+  color: var(--dsw-alias-label-tertiary) !important;
+}`;
+        },
+      },
+      anchoredDialog({
+        id: 'stat-dialog-anchor',
+        /**
+         * The composer's stat pills (turns/steps, token usage) open a dialog that
+         * is portalled to <body> and placed by `useAnchoredPosition`. That
+         * primitive only accepts `align: 'start' | 'end'` — there is no centred
+         * option — and the chat plugin passes neither, so the panel's left edge
+         * lands on the pill's left edge. On a wide panel over a narrow pill that
+         * reads as "hanging off to the right".
+         *
+         * The anchor is the pill's own wrapper, which already ships the stable
+         * `data-composer-stat` attribute, and only the open pill has
+         * `aria-expanded="true"` — so `:has()` names exactly one anchor without
+         * touching any CSS-module hash.
+         *
+         * Signature tokens avoid anything the CSSOM rewrites: the authored
+         * `min(300px, 100vw - 24px)` reads back as `min(300px, -24px + 100vw)`,
+         * so only the stable prefix `max-width:min(440px,` is matched, paired
+         * with `width:max-content` which no sibling panel shares.
+         */
+        signature: ['width:max-content', 'max-width:min(440px,', 'border-radius:var(--dsw-radius-lg)'],
+        fallback: '.mR10tW_panel',
+        anchor: '[data-composer-stat]:has(> button[aria-expanded="true"])',
+      }),
+      anchoredDialog({
+        id: 'context-meter-anchor',
+        /**
+         * Same primitive, different component: the context ring
+         * (`上下文已用 27%`) portals its breakdown panel the same way. Its module
+         * declares `root`, `trigger` and `panel` together, so the anchor wrapper
+         * is derived from the resolved panel selector instead of a data hook.
+         * The trigger sits inside a Tooltip wrapper, hence a descendant `:has()`
+         * rather than a child combinator.
+         */
+        signature: ['width:min(264px,', 'border-radius:var(--dsw-radius-lg)', 'padding:12px'],
+        fallback: '.X0HXfW_panel',
+        anchor: (selector) => `${moduleSibling(selector, 'root')}:has(button[aria-expanded="true"])`,
+      }),
+    ];
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ADAPTERS — the anti-corruption layer. Each takes one patch and returns a
+    // disposer. They are the only code allowed to know how DSH works.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /** Theme service: light/dark token pairs, revoked by dropping the layer. */
+    function applyTokens(patch, ctx) {
+      return ctx.theme.overrideTokens(patch.source, patch.tokens());
+    }
+
+    /**
+     * DSH declares these properties on `body, body *`, so every element
+     * re-declares them and an inline value on `body` never reaches a descendant.
+     * Redeclaring on the same selector pair with !important is the only way in,
+     * and it avoids hashed class names entirely.
+     */
+    function renderVariables(patch) {
+      const valueFor = (name, scheme) => patch.variables[name][scheme];
+      const names = Object.keys(patch.variables);
+      const light = names.map((n) => `  ${n}: ${valueFor(n, 'light')} !important;`).join('\n');
+      const dark = names.map((n) => `  ${n}: ${valueFor(n, 'dark')} !important;`).join('\n');
+      return [
+        `body, body * {\n${light}\n}`,
+        `body[data-ds-dark-theme], body[data-ds-dark-theme] * {\n${dark}\n}`,
+      ].join('\n');
+    }
+
+    /**
+     * Every stylesheet reachable from the document.
+     *
+     * `<style>`/`<link>` sheets cover most plugins, but a plugin may ship its CSS
+     * in a constructed sheet installed through `adoptedStyleSheets` — those never
+     * appear in `document.styleSheets`, so a signature scan limited to the
+     * document list silently degrades to the hard-coded fallback. That is why the
+     * voice-button patch reports `fallback` while still working: only the shipped
+     * hash keeps it alive. Shadow roots are walked for the same reason.
+     */
+    function vtStyleSheets() {
+      if (typeof document === 'undefined') return [];
+      const sheets = [];
+      const seen = new Set();
+      const add = (list) => {
+        for (const sheet of Array.from(list || [])) {
+          if (!sheet || seen.has(sheet)) continue;
+          seen.add(sheet);
+          sheets.push(sheet);
+        }
+      };
+      add(document.styleSheets);
+      add(document.adoptedStyleSheets);
+      for (const el of document.querySelectorAll('*')) {
+        if (!el.shadowRoot) continue;
+        add(el.shadowRoot.styleSheets);
+        add(el.shadowRoot.adoptedStyleSheets);
+      }
+      return sheets;
+    }
+
+    /** Depth-first walk over plain rules and grouping rules (@media, @layer). */
+    function vtWalkRules(sheets, visit) {
+      const walk = (rules) => {
+        for (const rule of Array.from(rules || [])) {
+          if (!rule.selectorText && rule.cssRules) { walk(rule.cssRules); continue; }
+          if (!rule.selectorText || !rule.style) continue;
+          visit(rule);
+        }
+      };
+      for (const sheet of sheets) {
+        let rules;
+        try { rules = sheet.cssRules; } catch (err) { continue; } // opaque sheet
+        try { walk(rules); } catch (err) { /* malformed sheet */ }
+      }
+    }
+
+    /**
+     * Resolve a component target from the live CSSOM by rule signature, so the
+     * result survives CSS-module hash changes. Returns null when no candidate is
+     * readable yet; callers fall back to the shipped constant.
+     *
+     * `sheets` is passed in so one discovery pass reads every sheet once instead
+     * of once per patch.
+     */
+    function resolveTarget(patch, sheets) {
+      if (typeof document === 'undefined') return null;
+      const found = [];
+      vtWalkRules(sheets || vtStyleSheets(), (rule) => {
+        const probe = (rule.style.cssText || '').replace(/\s+/g, '').toLowerCase();
+        if (!patch.signature.every((token) => probe.includes(token))) return;
+        // Optional exclusions: a rule carrying a rejected token is not a match.
+        if (patch.reject && patch.reject.some((token) => probe.includes(token))) return;
+        // Optional selector constraint, for families whose bodies look alike.
+        if (patch.selectorFilter && !new RegExp(patch.selectorFilter).test(rule.selectorText)) return;
+        for (const match of rule.selectorText.matchAll(/\.([A-Za-z0-9_-]+)/g)) found.push(match[1]);
+      });
+      if (found.length === 0) return [];
+      const unique = [...new Set(found)];
+      unique.sort((a, b) => {
+        const pa = /_primary$/.test(a) ? 0 : 1;
+        const pb = /_primary$/.test(b) ? 0 : 1;
+        return pa - pb || a.length - b.length;
+      });
+      return unique.map((name) => `.${name}`);
+    }
+
+    /**
+     * Render every component patch. A patch declares how many matches it wants:
+     *   match: 'first' (default) — the single best candidate;
+     *   match: 'all'             — every rule carrying the signature, for families
+     *                              of controls that repeat across components.
+     * Unresolved targets fall back to the shipped constant, and if even that is
+     * stale the selector simply matches nothing.
+     */
+    function renderComponents(patches) {
+      const blocks = [];
+      const status = {};
+      const selectorsById = {};
+      // Read the stylesheet graph once per pass: adopted sheets are invisible to
+      // a per-patch scan that rebuilds the list, and the walk is not free.
+      const sheets = (typeof document === 'undefined') ? [] : vtStyleSheets();
+      for (const patch of patches) {
+        const discovered = resolveTarget(patch, sheets);
+        const selectors = discovered.length
+          ? (patch.match === 'all' ? discovered : discovered.slice(0, 1))
+          : [patch.fallback];
+        status[patch.id] = discovered.length
+          ? `discovered:${selectors.length}`
+          : 'fallback';
+        selectorsById[patch.id] = selectors;
+        blocks.push(patch.rules(selectors.join(',\n')));
+      }
+      return { css: blocks.join('\n'), status, selectors: selectorsById };
+    }
+
+    /**
+     * Remote diagnostics without any DOM access from the maintainer's side.
+     *
+     * The Theme inspect provider lists token NAMES but not values, so the measured
+     * result is encoded INTO the name: radius, size and padding of the first
+     * element each component patch resolved to. Values are empty strings, so
+     * nothing consumes these properties and nothing renders differently.
+     *
+     * Reading `--vt-report-<patch>-radius-<value>` is therefore enough to verify
+     * that a patch both resolved AND won the cascade.
+     */
+    function sanitize(text) {
+      return String(text)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 150);
+    }
+
+    /**
+     * The always-on verification channel: the resolved state of every patch,
+     * encoded into theme-token NAMES because the inspect provider lists names and
+     * not values.
+     *
+     * Scope is deliberately narrow — "did this patch resolve, and did its
+     * selector land on an element of a plausible size" — because it runs on every
+     * body mutation. Anything richer (computed styles, hover rules, pseudo
+     * elements) belongs to the opt-in probe, which pays for itself only while
+     * debugging.
+     */
+    function publishReport(ctx, status, selectorsById) {
+      if (typeof getComputedStyle !== 'function') return;
+      const report = { build: VERSION };
+      for (const [id, value] of Object.entries(status)) report[id] = value;
+      for (const [id, selectors] of Object.entries(selectorsById)) {
+        let firstElement = null;
+        selectors.forEach((selector, index) => {
+          let count = 0;
+          let element = null;
+          try {
+            const list = document.querySelectorAll(selector);
+            count = list.length;
+            element = list[0] || null;
+          } catch (error) {
+            count = -1;
+          }
+          report[`${id}-s${index}-n`] = count;
+          if (!firstElement && element) firstElement = element;
+        });
+        if (!firstElement) { report[`${id}-el`] = 'none'; continue; }
+        const style = getComputedStyle(firstElement);
+        const rect = firstElement.getBoundingClientRect();
+        report[`${id}-radius`] = style.borderRadius;
+        report[`${id}-size`] = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
+        if (id.includes('row')) report[`${id}-pad`] = style.padding;
+      }
+
+      const tokens = {};
+      for (const [key, value] of Object.entries(report)) {
+        tokens[`--vt-report-${sanitize(key)}-${sanitize(value)}`] = { light: '', dark: '' };
+      }
+      try {
+        ctx.theme.overrideTokens('vt-interface:report', tokens);
+      } catch (error) {
+        /* diagnostics must never break the visual layer */
+      }
+    }
+
+    /**
+     * Owns the single injected stylesheet. Styled with the loader's documented
+     * markers so the client module loader can reclaim it, and removed on dispose.
+     */
+    function createStyleHost(ctx) {
+      const tag = document.createElement('style');
+      tag.dataset.plugin = PLUGIN_ID;
+      tag.dataset.pluginCss = `${PLUGIN_ID}/vt-interface.css`;
+      document.head.appendChild(tag);
+      let current = null;
+      return {
+        set(css) {
+          if (css === current) return;
+          current = css;
+          tag.textContent = css;
+        },
+        dispose() {
+          tag.remove();
+        },
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PROBE — opt-in forensics. OFF by default; nothing below runs unless
+    // PROBE_ENABLED is flipped on the disk copy (hot reload applies it) or
+    // `__vtInterface.probe(true)` is called at runtime.
+    //
+    // When on, it posts live measurements of the real DOM to a local receiver:
+    //   node ./tools/dump-receiver.mjs     (listens on 127.0.0.1:8899)
+    // It exists because some questions ("did the patch win the cascade on THIS
+    // element?") cannot be answered from stylesheet text — only from computed
+    // style. The always-on report channel (`publishReport`) stays available
+    // with the probe off.
+    //
+    // Off by default because a UI patch should ship no timers, listeners or
+    // network egress it does not need.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const PROBE_ENABLED = false;
+    const DUMP_URL = 'http://127.0.0.1:8899/vt';
+    const VT_PROPS = ['border-radius', 'background', 'background-color', 'box-shadow', 'corner-shape', 'width', 'height', 'padding'];
+
+    function postDump(payload) {
+      try {
+        const body = JSON.stringify(payload);
+        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+          navigator.sendBeacon(DUMP_URL, new Blob([body], { type: 'text/plain' }));
+          return;
+        }
+        fetch(DUMP_URL, { method: 'POST', body, mode: 'no-cors', headers: { 'content-type': 'text/plain' } }).catch(() => {});
+      } catch (err) { /* diagnostics must never break the app */ }
+    }
+
+    /** Drop interaction pseudo-classes so a rule can be matched while at rest. */
+    function vtDehover(selector) {
+      return selector.replace(/::?(hover|focus-visible|focus-within|active)\b/g, '');
+    }
+
+    /** Every rule that would paint this element in a hover/active state. */
+    function vtHoverRules(el) {
+      const hits = [];
+      let order = 0;
+      for (const sheet of vtStyleSheets()) {
+        let rules;
+        try { rules = sheet.cssRules; } catch (err) { continue; }
+        if (!rules) continue;
+        const owner = sheet.href
+          || (sheet.ownerNode && sheet.ownerNode.dataset && sheet.ownerNode.dataset.pluginCss)
+          || 'inline';
+        for (const rule of Array.from(rules)) {
+          order += 1;
+          if (rule.type !== 1) continue;
+          const sel = rule.selectorText || '';
+          if (!/(:hover|:focus-visible|:active)/.test(sel)) continue;
+          const matched = sel.split(',').some((part) => {
+            const bare = vtDehover(part).trim();
+            if (!bare) return false;
+            try { return el.matches(bare); } catch (err) { return false; }
+          });
+          if (!matched) continue;
+          const decls = [];
+          for (const prop of VT_PROPS) {
+            const value = rule.style.getPropertyValue(prop);
+            if (value) decls.push(`${prop}:${value}${rule.style.getPropertyPriority(prop) ? '!' : ''}`);
+          }
+          if (!decls.length) continue;
+          hits.push({ order, owner, sel: sel.slice(0, 110), decls });
+        }
+      }
+      return hits;
+    }
+
+    /**
+     * Real glyph ink for the element's text, measured in the element's own font.
+     *
+     * `getBoundingClientRect` only reports the line box, which is identical for
+     * every control in a row and therefore useless for "why does this text look
+     * bigger". Canvas `actualBoundingBox*` reports the painted extent instead.
+     */
+    function vtInk(el) {
+      const text = (el.textContent || '').trim();
+      if (!text) return '';
+      try {
+        const cs = getComputedStyle(el);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return '';
+        ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        const m = ctx.measureText(text);
+        const up = Math.round(m.actualBoundingBoxAscent);
+        const down = Math.round(m.actualBoundingBoxDescent);
+        return `up${up}/down${down}/w${Math.round(m.width)}`;
+      } catch (err) { return ''; }
+    }
+
+    function vtDescribe(el) {
+      if (!el || el.nodeType !== 1) return null;
+      const cs = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      const out = {
+        tag: el.tagName.toLowerCase(),
+        cls: el.getAttribute('class') || '',
+        label: el.getAttribute('aria-label') || el.getAttribute('title') || '',
+        text: (el.textContent || '').trim().slice(0, 40),
+        size: `${Math.round(r.width)}x${Math.round(r.height)}`,
+        bg: cs.backgroundColor,
+        bgImage: cs.backgroundImage === 'none' ? '' : cs.backgroundImage.slice(0, 90),
+        radius: cs.borderRadius,
+        cornerShape: cs.getPropertyValue('corner-shape') || '',
+        shadow: cs.boxShadow === 'none' ? '' : cs.boxShadow.slice(0, 140),
+        border: `${cs.borderTopWidth} ${cs.borderTopStyle} ${cs.borderTopColor}`,
+        opacity: cs.opacity,
+        z: cs.zIndex,
+        pos: cs.position,
+        overflow: cs.overflow,
+        left: cs.left,
+        translate: cs.translate,
+        anchorName: cs.getPropertyValue('anchor-name') || '',
+        positionAnchor: cs.getPropertyValue('position-anchor') || '',
+        font: `${cs.fontSize}/${cs.fontWeight}/${cs.lineHeight}`,
+        family: String(cs.fontFamily).split(',')[0].replace(/["']/g, ''),
+        tracking: cs.letterSpacing,
+        color: cs.color,
+        ink: vtInk(el),
+      };
+      for (const pseudo of ['::before', '::after']) {
+        const p = getComputedStyle(el, pseudo);
+        if (!p.content || p.content === 'none') continue;
+        out[pseudo] = `${p.content}|${p.backgroundColor}|${p.borderRadius}|${p.width}x${p.height}|${p.inset}`;
+      }
+      return out;
+    }
+
+    /**
+     * CJK vs Latin ink at the composer's own font and size.
+     *
+     * `font-size` is the em box, not how big a glyph looks. Ideographs fill most
+     * of the em vertically; Latin lowercase only fills the x-height. Measuring
+     * both with the same font quantifies the difference instead of asserting it.
+     */
+    function vtFontMetrics() {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        const family = getComputedStyle(document.body).fontFamily || 'sans-serif';
+        const out = { family };
+        for (const weight of ['400', '500']) {
+          ctx.font = `${weight} 13px ${family}`;
+          const cjk = ctx.measureText('自动审查');
+          out[`w${weight}`] = {
+            cjkUp: Math.round(cjk.actualBoundingBoxAscent),
+            cjkWidthPerChar: +(cjk.width / 4).toFixed(1),
+            lowerX: Math.round(ctx.measureText('e').actualBoundingBoxAscent),
+            capHeight: Math.round(ctx.measureText('D').actualBoundingBoxAscent),
+          };
+        }
+        return out;
+      } catch (err) { return null; }
+    }
+
+    /** Which stylesheet hosts the given class — document list or adopted sheet? */
+    function vtSheetScan(needles) {
+      const sheets = vtStyleSheets();
+      const found = {};
+      for (const needle of needles) found[needle] = 0;
+      vtWalkRules(sheets, (rule) => {
+        for (const needle of needles) {
+          if (rule.selectorText.includes(needle)) found[needle] += 1;
+        }
+      });
+      return {
+        total: sheets.length,
+        document: document.styleSheets.length,
+        adopted: (document.adoptedStyleSheets || []).length,
+        found,
+      };
+    }
+
+    function vtPath(el, depth) {
+      const parts = [];
+      let node = el;
+      for (let i = 0; node && i < depth; i += 1, node = node.parentElement) {
+        const cls = String(node.className || '').split(/\s+/).filter(Boolean).join('.');
+        parts.push(`${node.tagName.toLowerCase()}${cls ? '.' + cls.slice(0, 70) : ''}`);
+      }
+      return parts.join(' < ');
+    }
+
+    /** Static inventory, or hovered-element forensics when `target` is given. */
+    function vtCollect(readState, kind, target) {
+      // The composer is the card that owns the text input; other components
+      // also use `_card`, so anchor discovery on the input instead.
+      const inputEl = document.querySelector('textarea, [contenteditable="true"]');
+      const cardEl = (inputEl && inputEl.closest('[class*="_card"]'))
+        || document.querySelector('[class*="_card"]');
+      const payload = { kind, at: new Date().toISOString(), href: location.href };
+      if (cardEl) {
+        payload.card = vtDescribe(cardEl);
+        payload.controls = [];
+        for (const el of Array.from(cardEl.querySelectorAll('button, [class*="_trigger"], [class*="_activity"]'))) {
+          const d = vtDescribe(el);
+          if (!d || d.size.startsWith('0x0')) continue;
+          d.hoverRules = vtHoverRules(el).slice(0, 8);
+          payload.controls.push(d);
+          if (payload.controls.length >= 26) break;
+        }
+        payload.myCss = Array.from(document.querySelectorAll('style[data-plugin-css]'))
+          .filter((node) => String(node.dataset.pluginCss || '').startsWith(`${PLUGIN_ID}/`))
+          .map((node) => node.textContent || '')
+          .join('\n')
+          .slice(0, 12000);
+      }
+      // Resolved selectors and patch states, handed in by the engine: the ground
+      // truth for "which element did this patch actually land on".
+      const state = readState() || {};
+      payload.selectors = state.selectors || {};
+      payload.patches = {};
+      for (const [id, value] of Object.entries(state.status || {})) {
+        payload.patches[id] = String(value);
+      }
+      // Read back the tokens this plugin owns, so a theme-layer change can be
+      // verified without opening the surface that consumes it.
+      const bodyStyle = getComputedStyle(document.body);
+      payload.tokens = {};
+      for (const name of [
+        '--dsw-menu-surface-fill', '--dsw-specific-menu', '--dsw-menu-backdrop-filter',
+        '--dsw-elevation-prominent', '--dsw-elevation-soft',
+      ]) {
+        payload.tokens[name] = bodyStyle.getPropertyValue(name).trim();
+      }
+      // Capability check: CSS anchor positioning decides whether popover
+      // alignment can be corrected in CSS or needs a JS hook.
+      try {
+        payload.support = {
+          anchorName: CSS.supports('anchor-name: --vt-probe'),
+          positionAnchor: CSS.supports('position-anchor: --vt-probe'),
+          anchorFn: CSS.supports('left: anchor(center)'),
+          translatePct: CSS.supports('translate: -50% 0'),
+          hasSelector: CSS.supports('selector(:has(*))'),
+        };
+      } catch (err) { payload.support = null; }
+      payload.metrics = vtFontMetrics();
+      payload.sheets = vtSheetScan(['pn0E2q_trigger', 'kKSgSq_chip', '_ghost_1rv3m_', 'SJRB_q_trigger']);
+      // Every rule we emit carries !important; nothing shipped upstream does in
+      // the same place. Reading them back proves the sheet's real selectors and
+      // therefore its blast radius.
+      payload.sheetRules = [];
+      vtWalkRules(vtStyleSheets(), (rule) => {
+        if (rule.selectorText.includes('_panel') && /min-width:\s*min\(300px/.test(rule.style.cssText || '')) {
+          payload.sheetRules.push(`SCAN ${rule.selectorText} => ${(rule.style.cssText || '').replace(/\s+/g, ' ').slice(0, 260)}`);
+        }
+        if (rule.style.getPropertyPriority('corner-shape') !== 'important') return;
+        payload.sheetRules.push(`${rule.selectorText.replace(/\s+/g, ' ')} => ${(rule.style.cssText || '').replace(/\s+/g, ' ').slice(0, 300)}`);
+      });
+      if (target && target.nodeType === 1) {
+        payload.hovered = vtDescribe(target);
+        payload.hoveredPath = vtPath(target, 5);
+        payload.hoveredHoverRules = vtHoverRules(target);
+        payload.chain = [];
+        let node = target;
+        for (let i = 0; node && i < 5 && node !== cardEl; i += 1, node = node.parentElement) {
+          payload.chain.push(vtDescribe(node));
+        }
+      }
+      // Numeric verdict for "is this panel centred over its trigger". The anchor
+      // is looked up through the panel's own `position-anchor`, so this works for
+      // every dialog the plugin re-centres without naming any of them here.
+      if (target && target.nodeType === 1 && target.getAttribute('role') === 'dialog') {
+        let active = null;
+        const anchorToken = getComputedStyle(target).getPropertyValue('position-anchor').trim();
+        if (anchorToken && anchorToken !== 'auto' && anchorToken !== 'none') {
+          const candidates = document.querySelectorAll('[class*="_root"], [data-composer-stat]');
+          active = Array.from(candidates).find(
+            (el) => getComputedStyle(el).getPropertyValue('anchor-name').includes(anchorToken),
+          ) || null;
+        }
+        if (active) {
+          const ar = active.getBoundingClientRect();
+          const pr = target.getBoundingClientRect();
+          payload.alignment = {
+            anchorRect: `${Math.round(ar.width)}x${Math.round(ar.height)}@${Math.round(ar.left)}`,
+            panelRect: `${Math.round(pr.width)}x${Math.round(pr.height)}@${Math.round(pr.left)}`,
+            anchorCenter: Math.round(ar.left + ar.width / 2),
+            panelCenter: Math.round(pr.left + pr.width / 2),
+            delta: Math.round(pr.left + pr.width / 2 - (ar.left + ar.width / 2)),
+            anchorName: getComputedStyle(active).getPropertyValue('anchor-name'),
+          };
+        }
+      }
+      postDump(payload);
+      return payload;
+    }
+
+    /**
+     * Owns every probe timer, listener and observer, so the engine only ever
+     * calls one thing. `readState` hands over the engine's live resolution
+     * (`{ status, selectors }`) instead of the probe reaching back into the
+     * diagnostics object — the dependency arrow points one way.
+     */
+    function createProbe(readState) {
+      const timeouts = [];
+      const disposers = [];
+      const collect = (kind, target) => {
+        try { return vtCollect(readState, kind, target); } catch (err) { return null; }
+      };
+
+      // 1. One inventory once the composer has mounted.
+      timeouts.push(setTimeout(() => collect('static'), 2500));
+
+      // 2. Forensics for whatever the pointer lands on inside the composer. Wait
+      //    for :hover to settle; the pointer is still on the element by then.
+      let hoverTimer;
+      const onHover = (event) => {
+        const target = event.target;
+        if (!target || !target.closest) return;
+        const cardEl = document.querySelector('[class*="_card"]');
+        if (!cardEl || !cardEl.contains(target)) return;
+        clearTimeout(hoverTimer);
+        hoverTimer = setTimeout(() => collect('hover', target), 90);
+      };
+      document.addEventListener('mouseover', onHover, true);
+      disposers.push(() => document.removeEventListener('mouseover', onHover, true));
+
+      // 3. The plan chip only renders while plan mode is on, so capture the
+      //    composer the first time one appears.
+      let planCaptured = false;
+      const bodyObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+        if (planCaptured) return;
+        const known = ((readState().selectors || {})['composer-plan-indicator'] || []).join(',');
+        const chipEl = document.querySelector(known || '[class*="_chip"]');
+        if (!chipEl) return;
+        planCaptured = true;
+        collect('static', chipEl);
+      });
+      if (bodyObserver) bodyObserver.observe(document.body, { childList: true, subtree: true });
+      disposers.push(() => { if (bodyObserver) bodyObserver.disconnect(); });
+
+      // 4. Popovers mount on demand inside a portal, so they never appear in the
+      //    composer snapshot: capture each glass surface once, on first sight.
+      const seenSurfaces = new WeakSet();
+      let captured = 0;
+      const sweepSurfaces = () => {
+        if (captured >= 12) return;
+        const nodes = document.querySelectorAll(
+          '[data-menu-material], [class*="_material_"], [class*="_menu"], [class*="_panel"]',
+        );
+        for (const el of Array.from(nodes)) {
+          if (captured >= 12) break;
+          if (seenSurfaces.has(el)) continue;
+          const cs = getComputedStyle(el);
+          if (cs.backdropFilter === 'none' && cs.backgroundColor === 'rgba(0, 0, 0, 0)') continue;
+          seenSurfaces.add(el);
+          captured += 1;
+          collect('surface', el);
+        }
+      };
+      const sweepTimer = setInterval(sweepSurfaces, 700);
+      sweepSurfaces();
+      disposers.push(() => clearInterval(sweepTimer));
+
+      return {
+        dump: () => collect('manual'),
+        dispose() {
+          timeouts.forEach((t) => clearTimeout(t));
+          clearTimeout(hoverTimer);
+          for (const fn of disposers) {
+            try { fn(); } catch (err) { /* probe only */ }
+          }
+        },
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENGINE — lifetimes, late stylesheets, diagnostics. Knows no DSH details.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    function mount(ctx) {
+      const disposers = [];
+      const componentPatches = PATCHES.filter((p) => p.kind === 'component');
+      const variablePatches = PATCHES.filter((p) => p.kind === 'variables');
+      const tokenPatches = PATCHES.filter((p) => p.kind === 'tokens');
+
+      // Tokens: one service call each; the service revokes on dispose.
+      for (const patch of tokenPatches) {
+        try { disposers.push(applyTokens(patch, ctx)); } catch (err) { /* keep going */ }
+      }
+
+      if (typeof document === 'undefined') {
+        return { dispose() { for (const d of disposers.reverse()) safeCall(d); }, status: () => ({}) };
+      }
+
+      const host = createStyleHost(ctx);
+      let resolution = {};
+      /** Extra CSS from the live-tuning API; appended after the composed sheet. */
+      let extra = '';
+      /** Selectors of the last resolution, kept so the report can be re-measured. */
+      let lastSelectors = {};
+
+      const sync = () => {
+        const { css, status, selectors } = renderComponents(componentPatches);
+        resolution = status;
+        lastSelectors = selectors;
+        host.set([...variablePatches.map(renderVariables), css, extra].join('\n'));
+        publishReport(ctx, status, selectors);
+      };
+
+      sync();
+
+      // Plugin stylesheets are injected asynchronously during boot, so the first
+      // discovery pass may legitimately find nothing. Re-resolve when style
+      // elements arrive, and once more on load.
+      let timer;
+      const schedule = () => {
+        clearTimeout(timer);
+        timer = setTimeout(sync, 200);
+      };
+      const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(schedule);
+      if (observer) observer.observe(document.head, { childList: true });
+      window.addEventListener('load', schedule);
+
+      // An adopted stylesheet can be installed without touching <head>, so the
+      // observer above never fires for it. Retry resolution a couple of times
+      // while any patch is still on its shipped constant, then stop.
+      let retryTimer;
+      const retryResolve = (attempt) => {
+        if (attempt > 2) return;
+        const stuck = Object.values(resolution).some((state) => state === 'fallback');
+        if (!stuck) return;
+        retryTimer = setTimeout(() => {
+          sync();
+          retryResolve(attempt + 1);
+        }, attempt === 0 ? 1200 : 3000);
+      };
+      retryResolve(0);
+
+      // The composer mounts after the plugin does and remounts per session, so a
+      // measurement taken at mount time reports "none". Re-measure whenever the
+      // body changes; this only republishes the report, it never re-renders CSS.
+      let reportTimer;
+      const bodyObserver = typeof MutationObserver === 'undefined'
+        ? null
+        : new MutationObserver(() => {
+          clearTimeout(reportTimer);
+          reportTimer = setTimeout(() => publishReport(ctx, resolution, lastSelectors), 600);
+        });
+      if (bodyObserver) bodyObserver.observe(document.body, { childList: true, subtree: true });
+
+      // Forensics are opt-in: off unless PROBE_ENABLED or a runtime call asks.
+      let probe = null;
+      const startProbe = () => {
+        if (probe) return probe;
+        probe = createProbe(() => ({ status: resolution, selectors: lastSelectors }));
+        return probe;
+      };
+      if (PROBE_ENABLED) startProbe();
+
+      // Verification hook: the user can type __vtInterface.status() in DevTools
+      // to see which patches resolved, instead of judging by eye.
+      const diagnostics = {
+        version: VERSION,
+        patches: PATCHES.map((p) => ({ id: p.id, kind: p.kind })),
+        status: () => ({ ...resolution }),
+        /**
+         * Live tuning without restarting the app: replaces the extra block of the
+         * injected sheet. Pass '' to clear. Use for value iteration only — the
+         * next app start re-reads client.js and discards this.
+         */
+        css(text) {
+          extra = typeof text === 'string' ? text : '';
+          sync();
+          return 'applied';
+        },
+        /** Resolved selectors per patch, for auditing what each patch targets. */
+        selectors() {
+          return { ...lastSelectors };
+        },
+        /** Re-run target discovery (after the app injected more stylesheets). */
+        resync() {
+          sync();
+          return { ...resolution };
+        },
+        /** Stack an extra theme-token layer, e.g. { '--dsw-alias-bg-base': { light, dark } }. */
+        tokens(map) {
+          ctx.theme.overrideTokens('vt-interface:tune', map);
+          return 'applied';
+        },
+        /**
+         * Start or stop the forensics probe. Off by default so a shipped patch
+         * runs no timers it does not need; on, it posts measurements to the local
+         * receiver in `tools/dump-receiver.mjs`.
+         */
+        probe(on) {
+          if (on) startProbe();
+          else if (probe) { probe.dispose(); probe = null; }
+          return Boolean(probe);
+        },
+        /** Post one measurement immediately; requires the probe to be on. */
+        dump() {
+          return probe ? probe.dump() : 'probe off — call __vtInterface.probe(true) first';
+        },
+      };
+      window.__vtInterface = diagnostics;
+
+      return {
+        dispose() {
+          if (probe) probe.dispose();
+          clearTimeout(timer);
+          clearTimeout(retryTimer);
+          clearTimeout(reportTimer);
+          window.removeEventListener('load', schedule);
+          if (observer) observer.disconnect();
+          host.dispose();
+          if (window.__vtInterface === diagnostics) delete window.__vtInterface;
+          for (const d of disposers.reverse()) safeCall(d);
+        },
+        status: diagnostics.status,
+      };
+    }
+
+    function safeCall(fn) {
+      try { fn(); } catch (err) { /* a failed disposer must not block the rest */ }
+    }
+
+    return {
+      inject: ['theme'],
+
+      apply(ctx) {
+        try {
+          const mounted = mount(ctx);
+          ctx.effect(() => () => mounted.dispose(), `${PLUGIN_ID}: ui patches`);
+        } catch (err) {
+          // A visual plugin must never take the app down; surface the reason in
+          // DevTools instead of failing silently.
+          if (typeof console !== 'undefined') console.error(`[${PLUGIN_ID}] apply failed`, err);
+        }
+      },
+    };
+  },
+});
