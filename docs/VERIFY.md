@@ -12,7 +12,7 @@
 | # | 失败点 | 判据 | 修法 |
 |---|---|---|---|
 | 1 | **代码没被加载** | `--vt-report-build-<version>` 不等于 `client.js` 的 `VERSION` | 保存文件触发客户端模块热更新；确认文件真的写盘了 |
-| 2 | **补丁没解析到目标** | 该补丁报 `fallback`，或 `-el-none` / `-s0-n-0` | 改签名（见 DESIGN.md 陷阱 2）或改 fallback |
+| 2 | **补丁没解析到目标** | 该补丁报 `fallback`，或 `-el-none` / `-s0-n-0` | 改签名（见 `DEVELOPMENT.md` 陷阱 2）或改 fallback |
 | 3 | **解析到了但没赢得级联** | 补丁 `discovered`、元素 `-s0-n-1`，但计算值不变 | 进「通道 B」读该元素的真实计算值，看是谁在覆盖 |
 
 第 3 类只能靠计算值判断 —— 样式表文本里写着你的规则，不代表它赢了。
@@ -24,7 +24,7 @@
 Harness 的 inspect provider 只列 token **名字**不列值，所以客户端把测量结果编码进名字：
 
 ```
---vt-report-build-1-2-0                     当前模块的 VERSION
+--vt-report-build-<version>                  当前模块的 VERSION
 --vt-report-composer-submit-discovered-1    该补丁解析状态
 --vt-report-composer-submit-size-28x28      命中元素的首个尺寸
 --vt-report-composer-submit-radius-999px    命中元素的计算圆角
@@ -38,8 +38,11 @@ Harness 的 inspect provider 只列 token **名字**不列值，所以客户端�
 cordis_inspect_query(platform="client", provider="Theme", method="listTokens")
 ```
 
-扫 `--vt-report-` 前缀即可。**完成判据**：每条补丁都有 `discovered-N`（`fallback` 表示仍在兜底工作，
-可接受但要记录原因），且 `build` 与代码一致。
+扫 `--vt-report-` 前缀即可。**完成判据**：每个 `component` 补丁都有 `discovered-N`（`fallback` 表示仍在
+兜底工作，可接受但要记录原因），且 `build` 与代码一致。
+
+`behavior` 补丁在这里**不会出现** —— 它不解析选择器。它的判据是
+`__vtInterface.behaviors()` 返回 `installed === total` 且 `errors` 为空，见下一条通道。
 
 这个通道每次 body 变动后 600ms 重发一次，只测「解析到没有 + 首个元素的尺寸/圆角」，
 刻意保持廉价。
@@ -70,7 +73,7 @@ node tools/dump-receiver.mjs        # 127.0.0.1:8899，落到 /tmp/vt-dump.jsonl
 tail -f /tmp/vt-dump.jsonl | jq -c 'select(.kind=="hover") | .hovered'
 ```
 
-每次 POST 是一条 JSON，`kind` 分四类：
+每次 POST 是一条 JSON，`kind` 分五类：
 
 | kind | 何时发 | 内容 |
 |---|---|---|
@@ -91,13 +94,14 @@ tail -f /tmp/vt-dump.jsonl | jq -c 'select(.kind=="hover") | .hovered'
 | `controls[].svg` | 输入框内每个按钮图标：盒子尺寸、计算描边、第一个图形的墨迹盒。改图标大小时三个数一起看 |
 | `rail` | 轮次跳转条：条本身/所在容器/侧栏/正文墨迹左缘的位置与尺寸，单根刻度的计算值（长度、颜色、`scaleX`、缓动），预览卡与 `:has()` 波峰规则是否被浏览器保留 |
 | `convo` | 会话视口：滚动容器/输入框座/视区的矩形与计算值、`scrollTop` 与两端是否到头、注入的渐隐覆盖层是否在位（两条带的 24px 高度与不透明度、底带偏移） |
-| `viewSwitch` | 视图切换入口：`header`（会话 header 实测高，应从 76 掉到 51）、`tabs`（标签行的 `display`、当前标签、**仍在 DOM 里的标签文案**）、`entry`（入口按钮的类名/几何/图标/`aria-label`）、`dock`（状态行成员的文案与顺序） |
+| `viewSwitch` | 视图切换入口：`header`（会话 header 实测高，应从 76 掉到 51）、`tabs`（标签行实测高、当前标签、**仍在 DOM 里的标签文案**）、`entry`（入口按钮的类名/几何/图标/`aria-label`）、`dock`（状态行成员的文案与顺序） |
 
 `viewSwitch` 要按顺序读三个值，缺一个都会误判：
 
 - `tabs.labels` 必须有两个（对话 + 轨迹）。只剩一个说明标签行被 `display:none`，React 的宽度预算塌成 1，
-  第二个标签被挪进「…」菜单 —— 入口也就点不到它了（见 `DEVELOPMENT.md` 陷阱 9）。**不要看 `display`**：
-  正确的隐藏方式是压高度，`display` 仍然是 `flex`。
+  第二个标签被挪进「…」菜单 —— 入口也就点不到它了（见 `DEVELOPMENT.md` 陷阱 9）。
+- `tabs.height` 必须是 `0`。隐藏靠的是压高度，标签行的 `display` 仍然是 `flex` —— 看 `display` 会误判成
+  「没藏住」，看 `header` 又会漏掉「藏了但没还高度」。
 - `entry` 不为 `null`，`text` 与 `aria-label` 等于当前**不在**的那个视图名，`svg` 的墨迹盒在两个方向不同
   （列表 7×8 / 左箭头 3×7）—— 这对数能证明图标真的换了。
 - `dock` 里入口必须排第一，后面才是「N 轮 N 步」与用量。
@@ -134,3 +138,5 @@ tail -f /tmp/vt-dump.jsonl | jq -c 'select(.kind=="hover") | .hovered'
 探针只打印带 `!important` 的规则，而 Harness 上游不这么写 —— 所以打印出来的就是本插件实际发出的
 **全部** CSS 规则。新增补丁后跑一次 `static` dump，确认规则数量和选择器都在预期内，就能证明没有
 波及到输入框以外的组件。
+
+`myCss` 截断在 12000 字符（当前约 8.7k）。余量过半时先抬高截断值，否则上面那句「全部」就不成立了。

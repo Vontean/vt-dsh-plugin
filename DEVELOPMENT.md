@@ -15,8 +15,12 @@
 | 改具体控件的几何/形状/对齐 | `component` | 没有 token 能表达，必须命中元素 |
 | 换掉浏览器/原生绘制的东西（如原生 tooltip） | `behavior` | CSS 完全够不到，只能接管属性或事件；必须自带完整回退 |
 
-`behavior` 是唯一会改 DOM 的一类，因此附带两条硬要求：作用域限制在一个容器内（如输入框卡片），
-释放时把改动原样写回。
+`behavior` 会碰到 React 管不到的东西，有两种形态，硬要求不同：
+
+| 形态 | 例子 | 硬要求 |
+|---|---|---|
+| 接管 DOM | `native-tooltip`、`scroll-edges` | 作用域限制在一个容器内；释放时把改动原样写回 |
+| 贡献 slot | `view-switch` | 只经 `ctx.slots.register` 增加自己的节点，不碰别人的；释放即 dispose 注册 |
 
 新增 `component` 时：
 
@@ -25,7 +29,17 @@
 3. 需要同一控件的第二个状态类时用 `moduleSibling()` 推导，不猜类名。
 4. 弹窗类、由 `useAnchoredPosition` 摆放的面板，直接套 `anchoredDialog()`。
 
-**完成判据**：报告 token 里该补丁是 `discovered:1`；`fallback` 是可接受的降级但要记录原因。
+新增 `behavior` 时：
+
+1. 先确认 CSS 真的够不到。判据是「这件事需要读状态或响应事件」，不是「写起来麻烦」——
+   够得到就退回 `component`。
+2. 补丁里写 `behavior: '<名字>'`，实现进适配器的 `BEHAVIORS` 表。数据段只留名字，不留函数引用。
+3. 选形态：要覆盖浏览器/原生绘制的东西走「接管 DOM」，要往官方列表里加一项走「贡献 slot」。
+4. 失败必须看得见：让异常抛到 `installBehaviors` 的 catch 里（进 `behaviorErrors`），不要自己吞掉。
+
+**完成判据**：`component` 是报告 token 里的 `discovered-N`（`fallback` 是可接受的降级但要记录原因）；
+`behavior` 是 `__vtInterface.behaviors()` 里 `installed === total` 且 `errors` 为空 —— 这两条只管
+「装上了」，界面是否真的变了要另看探针（`docs/VERIFY.md`）。
 
 ---
 

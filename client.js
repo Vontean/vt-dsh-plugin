@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-interface';
-    const VERSION = '2.6.0';
+    const VERSION = '2.6.1';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -245,6 +245,14 @@ window.__ModuleLoader__.load({
       fallback: '.TQ0rwa_pill',
       /** The label follows the view; recomputing faster than the eye buys nothing. */
       settleMs: 150,
+      /**
+       * Icon box and stroke. 14px is what `.pill svg` already forces on its
+       * children, so the entry matches its neighbours without a rule of its own;
+       * 1 is the icon set's regular stroke, which renders at 14/16 of a unit.
+       * Both live here rather than in the behaviour, because they are the two
+       * numbers to revisit together if the entry ever changes size (trap 8).
+       */
+      glyph: { box: 14, stroke: 1 },
     };
 
     /**
@@ -1634,12 +1642,12 @@ ${responseLine} {
         };
 
         const glyph = (paths) => React.createElement('svg', {
-          width: 14,
-          height: 14,
+          width: VIEW_SWITCH.glyph.box,
+          height: VIEW_SWITCH.glyph.box,
           viewBox: '0 0 16 16',
           fill: 'none',
           stroke: 'currentColor',
-          strokeWidth: 1,
+          strokeWidth: VIEW_SWITCH.glyph.stroke,
           strokeLinecap: 'round',
           'aria-hidden': true,
         }, paths.map((d) => React.createElement('path', { key: d, d })));
@@ -1715,10 +1723,10 @@ ${responseLine} {
        * the data instead would mean the data section has to reach into this
        * closure — the exact coupling this layer exists to prevent.
        */
-        const BEHAVIORS = {
-      'native-tooltip': (readSelectors) => installNativeTitleTakeover(readSelectors),
-      'scroll-edges': () => installScrollEdgeFade(),
-      'view-switch': () => installViewSwitch(ctx),
+      const BEHAVIORS = {
+        'native-tooltip': (readSelectors) => installNativeTitleTakeover(readSelectors),
+        'scroll-edges': () => installScrollEdgeFade(),
+        'view-switch': () => installViewSwitch(ctx),
       };
 
       return {
@@ -2204,17 +2212,22 @@ ${responseLine} {
       // cannot see it. Two separate claims need two readings: the header height
       // proves the tab row gave its space back, and the dock entry proves the
       // slot registration landed and is first.
+      //
+      // The tab row is located through this plugin's own resolution rather than a
+      // substring class name: `view-tabs` already discovered it, and
+      // `[class*="_tabs"]` is the broad selector trap 4 exists to prevent.
       const headerEl = document.querySelector('header[data-window-drag]');
       const tabRow = document.querySelector('[data-conversation-tabs]');
-      const tabsWrap = tabRow ? tabRow.closest('[class*="_tabs"]') : null;
+      const tabsSelector = (payload.selectors['view-tabs'] || []).join(',');
+      const tabsWrap = tabsSelector ? document.querySelector(tabsSelector) : null;
       const dockEl = document.querySelector('[data-composer-dock]');
       const entryEl = dockEl ? dockEl.querySelector('[data-vt-view-switch]') : null;
       const entryButton = entryEl ? entryEl.querySelector('button') : null;
       payload.viewSwitch = {
         header: headerEl ? Math.round(headerEl.getBoundingClientRect().height) : null,
-        tabs: tabsWrap
+        tabs: tabsWrap && tabRow
           ? {
-            display: getComputedStyle(tabsWrap).display,
+            height: Math.round(tabsWrap.getBoundingClientRect().height),
             active: (tabRow.querySelector('[aria-selected="true"]') || {}).textContent || null,
             labels: Array.from(tabRow.querySelectorAll('button[role="tab"]')).map((tab) => (tab.textContent || '').trim()),
           }

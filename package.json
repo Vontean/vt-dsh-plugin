@@ -1,9 +1,9 @@
 {
   "name": "dsh-vt-interface",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "private": true,
   "type": "module",
-  "description": "dsh-vt-Interface: UI/UX improvements for DeepSeek Harness — a clean-white warm-grey palette plus a Codex-style composer elevation. Reverts completely when disabled.",
+  "description": "dsh-vt-Interface: UI/UX refinements for DeepSeek Harness, shipped as reversible patches over its own tokens, slots and styles. Disabling the plugin restores the shipped interface exactly.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
