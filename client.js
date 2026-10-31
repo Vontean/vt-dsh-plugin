@@ -1014,7 +1014,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
     // network egress it does not need.
     // ═══════════════════════════════════════════════════════════════════════
 
-    const PROBE_ENABLED = true;
+    const PROBE_ENABLED = false;
     const DUMP_URL = 'http://127.0.0.1:8899/vt';
     const VT_PROPS = ['border-radius', 'background', 'background-color', 'box-shadow', 'corner-shape', 'width', 'height', 'padding'];
 
