@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-interface';
-    const VERSION = '2.3.0';
+    const VERSION = '2.4.0';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -162,6 +162,16 @@ window.__ModuleLoader__.load({
       glideMs: 100,
       springMs: 160,
     };
+
+    /**
+     * Transcript edge fade.
+     *
+     * 24px, not 40: this is a hint that the list continues, not a mask that hides
+     * content. The app's own scroll panels fade over 24px (`_fadeTop` /
+     * `_fadeBottom` in the chat and trajectory modules), so 24px is the house
+     * size; a band only appears on the side that has content beyond it.
+     */
+    const EDGE_FADE = { size: 24, settleMs: 140 };
 
     /** Codex's spring: linear() with a 0.8% overshoot instead of a bezier. */
     const RAIL_SPRING = 'linear(0, .398 10%, .682 20%, .843 30%, .925 40%, .972 50%, 1.004 60%, 1.008 70%, 1.003 80%, 1)';
@@ -742,6 +752,60 @@ ${responseLine} {
 }
 .vt-interface-tip[data-visible='true'] { opacity: 1; }`,
       },
+      {
+        kind: 'behavior',
+        id: 'scroll-edges',
+        /**
+         * The transcript is clipped by the header line above and by the composer
+         * below. Both edges cut a line of text in half.
+         *
+         * A mask on the scrollport cannot fix the bottom edge: the composer seat
+         * is a sticky CHILD of that scroller, so masking the scroller would fade
+         * the composer card itself. The seat does ship its own 36px gradient, but
+         * the card starts ~8px below the seat's top, so only those 8px are ever
+         * visible — the rest is painted behind an opaque card. That is why this
+         * one is a `behavior`: it needs the scroll position (CSS cannot read it)
+         * and a band anchored to the seat's top edge (CSS cannot find it).
+         *
+         * The injected node is inert (pointer-events: none, aria-hidden) and
+         * below the composer in z-order, so a fade can never cover a control.
+         * Releasing removes the node, its listeners and its attributes.
+         */
+        behavior: 'scroll-edges',
+        css: () => `
+.vt-edge-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+.vt-edge-fade::before,
+.vt-edge-fade::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: ${EDGE_FADE.size}px;
+  opacity: 0;
+  transition: opacity ${EDGE_FADE.settleMs}ms ease-out;
+}
+.vt-edge-fade::before {
+  top: 0;
+  background: linear-gradient(to bottom, var(--dsw-alias-bg-base), transparent);
+}
+.vt-edge-fade::after {
+  bottom: var(--vt-fade-bottom, 0px);
+  background: linear-gradient(to top, var(--dsw-alias-bg-base), transparent);
+}
+.vt-edge-fade[data-top='true']::before,
+.vt-edge-fade[data-bottom='true']::after {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vt-edge-fade::before,
+  .vt-edge-fade::after { transition: none; }
+}`,
+      },
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1195,6 +1259,111 @@ ${responseLine} {
 
 
       /**
+       * Soft edges for the transcript viewport.
+       *
+       * One inert overlay in the conversation body, two gradient bands, both fed
+       * by the scrollport's own metrics:
+       *
+       *   top     scrollTop > 0 — content is hidden above
+       *   bottom  not within 2px of the end — content is hidden below
+       *
+       * The bottom band is anchored to the composer seat's top edge, measured
+       * live, because the seat is a sticky child of the same scroller (see the
+       * `scroll-edges` patch). Nothing here runs when the conversation is absent,
+       * and everything is removed on dispose.
+       */
+      function installScrollEdgeFade() {
+        const CLASS = 'vt-edge-fade';
+        const EPSILON = 2;
+        let scroller = null;
+        let overlay = null;
+        let frame = 0;
+        let hostObserver = null;
+
+        const seatOf = (el) => el.lastElementChild || null;
+
+        const paint = () => {
+          frame = 0;
+          if (!scroller || !overlay || !scroller.isConnected) return;
+          // Read first, then write: `paint` also runs while a turn streams, and a
+          // write followed by a rect read would force a second layout per frame.
+          const max = scroller.scrollHeight - scroller.clientHeight;
+          const top = scroller.scrollTop > EPSILON;
+          const bottom = max > EPSILON && scroller.scrollTop < max - EPSILON;
+          // The band ends where the composer begins: the seat's own 36px gradient
+          // is mostly painted behind an opaque card.
+          const seat = seatOf(scroller);
+          const host = overlay.parentElement;
+          const offset = seat && host
+            ? Math.max(0, Math.round(host.getBoundingClientRect().bottom - seat.getBoundingClientRect().top))
+            : 0;
+          if (overlay.dataset.top !== String(top)) overlay.dataset.top = String(top);
+          if (overlay.dataset.bottom !== String(bottom)) overlay.dataset.bottom = String(bottom);
+          overlay.style.setProperty('--vt-fade-bottom', `${offset}px`);
+        };
+
+        const schedule = () => {
+          if (frame) return;
+          frame = requestAnimationFrame(paint);
+        };
+
+        const unbind = () => {
+          if (frame) { cancelAnimationFrame(frame); frame = 0; }
+          if (scroller) scroller.removeEventListener('scroll', schedule);
+          window.removeEventListener('resize', schedule);
+          if (overlay) overlay.remove();
+          scroller = null;
+          overlay = null;
+        };
+
+        /**
+         * The main transcript is the largest scrollport on screen: the app can
+         * render a second conversation (sidebar preview, embedded panel), and
+         * taking the first match would fade the wrong one.
+         */
+        const pick = () => {
+          const all = [...document.querySelectorAll('[data-conversation-scroll]')];
+          const visible = all.filter((el) => el.clientHeight > 0 && el.parentElement);
+          if (visible.length === 0) return null;
+          return visible.reduce((best, el) => (el.clientHeight > best.clientHeight ? el : best));
+        };
+
+        const bind = () => {
+          const next = pick();
+          if (!next || next === scroller || !next.parentElement) return false;
+          unbind();
+          scroller = next;
+          overlay = document.createElement('div');
+          overlay.className = CLASS;
+          overlay.setAttribute('aria-hidden', 'true');
+          overlay.dataset.top = 'false';
+          overlay.dataset.bottom = 'false';
+          next.parentElement.appendChild(overlay);
+          scroller.addEventListener('scroll', schedule, { passive: true });
+          window.addEventListener('resize', schedule);
+          paint();
+          return true;
+        };
+
+        bind();
+
+        // The conversation root remounts per session, and the scroller arrives
+        // after this behaviour installs. Re-bind on structural changes only; the
+        // paint itself is a no-op until the scroller exists.
+        hostObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+          if (!scroller || !scroller.isConnected) bind();
+          else schedule();
+        });
+        if (hostObserver) hostObserver.observe(document.body, { childList: true, subtree: true });
+
+        return () => {
+          if (hostObserver) hostObserver.disconnect();
+          unbind();
+        };
+      }
+
+
+      /**
        * Owns the single injected stylesheet. Styled with the loader's documented
        * markers so the client module loader can reclaim it, and removed on dispose.
        */
@@ -1226,6 +1395,7 @@ ${responseLine} {
        */
         const BEHAVIORS = {
       'native-tooltip': (readSelectors) => installNativeTitleTakeover(readSelectors),
+      'scroll-edges': () => installScrollEdgeFade(),
       };
 
       return {
@@ -1572,6 +1742,63 @@ ${responseLine} {
       };
     }
 
+    /**
+     * The conversation viewport: what clips the transcript, what is sticky over
+     * it, and whether either edge already fades. "Hard cut" is a statement about
+     * these boxes, so measure them before styling anything.
+     */
+    function vtConvo() {
+      const scroller = document.querySelector('[data-conversation-scroll]');
+      if (!scroller) return null;
+      const box = (el) => {
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        return {
+          y: Math.round(r.top),
+          h: Math.round(r.height),
+          x: Math.round(r.left),
+          w: Math.round(r.width),
+          mask: cs.maskImage === 'none' ? null : cs.maskImage.slice(0, 90),
+          background: cs.backgroundImage === 'none' ? cs.backgroundColor : cs.backgroundImage.slice(0, 110),
+          position: cs.position,
+          overflow: `${cs.overflowY}/${cs.overflowX}`,
+          z: cs.zIndex,
+        };
+      };
+      const seat = scroller.querySelector('[data-conversation-composer-overlay], [class*="composerSeat"]');
+      const view = scroller.querySelector('[data-slot="conversation.session"], [class*="viewArea"]');
+      const cs = getComputedStyle(scroller);
+      return {
+        cls: String(scroller.className).slice(0, 40),
+        scroll: {
+          top: Math.round(scroller.scrollTop),
+          height: Math.round(scroller.scrollHeight),
+          client: scroller.clientHeight,
+          atTop: scroller.scrollTop <= 0,
+          atBottom: scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1,
+        },
+        scroller: { ...box(scroller), padding: cs.padding },
+        seat: seat ? { ...box(seat), padding: getComputedStyle(seat).padding } : null,
+        seatKids: seat ? [...seat.children].slice(0, 3).map((el) => ({ cls: String(el.className).slice(0, 36), ...box(el) })) : [],
+        view: box(view),
+        phase: document.querySelector('[data-phase]')?.getAttribute('data-phase') ?? null,
+        fade: (() => {
+          const el = document.querySelector('.vt-edge-fade');
+          if (!el) return null;
+          const top = getComputedStyle(el, '::before');
+          const bottom = getComputedStyle(el, '::after');
+          return {
+            top: el.dataset.top,
+            bottom: el.dataset.bottom,
+            z: getComputedStyle(el).zIndex,
+            bandTop: { height: top.height, opacity: top.opacity },
+            bandBottom: { height: bottom.height, opacity: bottom.opacity, offset: getComputedStyle(el).getPropertyValue('--vt-fade-bottom').trim() },
+          };
+        })(),
+      };
+    }
+
     function vtPath(el, depth) {
       const parts = [];
       let node = el;
@@ -1651,6 +1878,7 @@ ${responseLine} {
         : null;
       payload.metrics = vtFontMetrics();
       payload.rail = vtRail();
+      payload.convo = vtConvo();
       payload.sheets = vtSheetScan(['pn0E2q_trigger', 'kKSgSq_chip', '_ghost_1rv3m_', 'SJRB_q_trigger']);
       // Every rule we emit carries !important; nothing shipped upstream does in
       // the same place. Reading them back proves the sheet's real selectors and

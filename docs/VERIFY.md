@@ -86,9 +86,13 @@ tail -f /tmp/vt-dump.jsonl | jq -c 'select(.kind=="hover") | .hovered'
 | `tipCss` | 自绘 tooltip 的 CSS 是否已注入 |
 | `tip` | 自绘气泡节点当前状态（未 hover 时为 `null`） |
 | `rail` | 轮次跳转条：条本身/所在容器/侧栏/正文墨迹左缘的位置与尺寸，单根刻度的计算值（长度、颜色、`scaleX`、缓动），预览卡与 `:has()` 波峰规则是否被浏览器保留 |
+| `convo` | 会话视口：滚动容器/输入框座/视区的矩形与计算值、`scrollTop` 与两端是否到头、注入的渐隐覆盖层是否在位（两条带的 24px 高度与不透明度、底带偏移） |
 
 `rail` 里有两个字段不看数值也要看一眼：`textLeft`（正文墨迹左缘）与 `frame.x`。
 两者之差就是跳转条和文字之间的余量；改成负数说明它压到正文上了。
+
+`convo.fade` 的三个值要一起看：`top`/`bottom` 是「这一侧还有隐藏内容」的判定，`bandBottom.offset`
+必须等于输入框座的高度（实测 122px）—— 偏移错了，底带就会压在卡片上或飘在半空。
 
 **关**：`__vtInterface.probe(false)`，或把常量改回 `false`。接收端可以一直开着，空闲无开销。
 
