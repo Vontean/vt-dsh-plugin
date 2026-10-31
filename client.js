@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-interface';
-    const VERSION = '2.6.1';
+    const VERSION = '2.6.2';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -78,19 +78,25 @@ window.__ModuleLoader__.load({
     /**
      * Reference neutral ramp: scheme-neutral, exactly like the shipped one
      * (dark mode gets its depth by pointing aliases at the low-numbered steps).
-     * Very low chroma (×1.3, capped 0.008) at hue 70°: removes the blue cast
-     * from dividers and mid greys without tinting any surface.
+     *
+     * Two temperature bands, and the split is deliberate: **fills are neutral,
+     * ink is warm**. Steps 50–200 paint surfaces — hover, selection, secondary
+     * buttons — where any warm cast reads as dirty instead of cosy (100 used to
+     * be `#f1ede8`, R−B = 9, and that ~8% bias is plainly visible on the
+     * settings panel's selected row). Steps 500 and up paint text, where the same
+     * slight warmth is what keeps a white canvas from feeling cold. 300/400 sit
+     * on the seam as borders, so they keep a token 3 of warmth.
      */
     const WARM_RAMP = {
       '00': '#ffffff',
-      '50': '#fbfaf8',
-      '60': '#f7f6f4',
-      '75': '#f5f2f0',
-      '100': '#f1ede8',
-      '150': '#f0ebe6',
-      '200': '#e9e4df',
-      '300': '#d6d2cd',
-      '400': '#b5b1ac',
+      '50': '#fafafa',
+      '60': '#f7f7f7',
+      '75': '#f5f5f5',
+      '100': '#f1f1f1',
+      '150': '#eeeeee',
+      '200': '#e8e8e8',
+      '300': '#d5d2d0',
+      '400': '#b4b1af',
       '500': '#a09c97',
       '550': '#938f8b',
       '600': '#888480',
