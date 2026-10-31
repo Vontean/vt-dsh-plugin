@@ -538,7 +538,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
          * (`._bubble_44yfq_1`): 3px 7px padding, radius-sm, 13/20 type, dark
          * `--dsw-alias-tooltip-bg` on `--dsw-static-neutral-bluish-00`.
          */
-        install: () => installNativeTitleTakeover(),
+        install: (readSelectors) => installNativeTitleTakeover(readSelectors),
         css: () => `
 .vt-interface-tip {
   position: fixed;
@@ -774,18 +774,18 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
      * that copies the app's own tooltip geometry and tokens — see the `css()` of
      * the `composer-tooltip` patch. Reverting restores every original attribute.
      */
-    function installNativeTitleTakeover() {
+    function installNativeTitleTakeover(readSelectors) {
       const TIP_CLASS = 'vt-interface-tip';
       const DELAY_MS = 380;
       const GAP = 6;
       const MARGIN = 8;
 
+      /** element -> { text (what the bubble shows), aria, fromTitle } */
       const stash = new Map();
       let tip = null;
       let showTimer;
       let hideTimer;
       let showing = null;
-      /** Text currently painted, to detect a stale bubble after a mode switch. */
       let shownText = null;
 
       // Another component also uses `_card`; anchor discovery on the input itself,
@@ -795,29 +795,63 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
         return (input && input.closest('[class*="_card"]')) || document.querySelector('[class*="_card"]');
       };
 
-      /** Walk up a few ancestors looking for an element we adopted. */
+      /**
+       * Which controls get a bubble. Taken from the patches that own them, so the
+       * takeover cannot drift onto every button in the composer.
+       */
+      const watchedSelectors = () => {
+        const map = (typeof readSelectors === 'function' && readSelectors()) || {};
+        const list = [...(map['composer-select-chips'] || []), ...(map['composer-model-trigger'] || [])];
+        return list.length ? list : ['.JZLxKW_select'];
+      };
+
+      const arm = (el) => {
+        const title = el.getAttribute('title');
+        const aria = el.getAttribute('aria-label') || '';
+        if (title) {
+          // Remember the pair: React will not restore a prop whose value never
+          // changed, so after a plugin remount the attribute is gone for good.
+          // The pair lets the next generation tell "same mode, attribute lost"
+          // apart from "the mode switched".
+          el.dataset.vtTitle = title;
+          el.dataset.vtTitleAria = aria;
+          stash.set(el, { text: title, aria, fromTitle: true });
+          el.removeAttribute('title');
+          return;
+        }
+        // Same mode as when the title was captured: we removed the attribute,
+        // nothing changed, so keep reading the richer title text.
+        if (el.dataset.vtTitle && el.dataset.vtTitleAria === aria) {
+          stash.set(el, { text: el.dataset.vtTitle, aria, fromTitle: true });
+          return;
+        }
+        // A preset that ships no native title at all (three of the four
+        // permission modes), or a mode switch: describe it with aria-label.
+        if (aria) stash.set(el, { text: aria, aria, fromTitle: false });
+      };
+
+      const sweep = () => {
+        const root = card();
+        if (!root) return;
+        // 1. Everything in the composer that still carries a native title, so the
+        //    composer never mixes two tooltip looks (add / mic / send included).
+        for (const el of Array.from(root.querySelectorAll('[title]'))) arm(el);
+        // 2. Controls that may ship no native title at all — three of the four
+        //    permission presets — are named by the patches that own them.
+        for (const selector of watchedSelectors()) {
+          let list;
+          try { list = root.querySelectorAll(selector); } catch (err) { continue; }
+          for (const el of Array.from(list)) arm(el);
+        }
+      };
+
+      /** Walk up a few ancestors looking for an element we manage. */
       const tracked = (node) => {
         let el = node instanceof Element ? node : null;
         for (let i = 0; el && i < 8; i += 1, el = el.parentElement) {
           if (stash.has(el)) return el;
         }
         return null;
-      };
-
-      const adopt = (el) => {
-        const text = el.getAttribute('title');
-        if (!text) return;
-        // Always overwrite. The same chip carries different help text per mode
-        // (each permission preset has its own description), and keeping the
-        // first value showed stale copy after switching.
-        stash.set(el, text);
-        el.removeAttribute('title');
-      };
-
-      const sweep = () => {
-        const root = card();
-        if (!root) return;
-        for (const el of Array.from(root.querySelectorAll('[title]'))) adopt(el);
       };
 
       const node = () => {
@@ -855,24 +889,20 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       };
 
       const show = (el) => {
-        const text = stash.get(el);
-        if (!text) return;
+        const entry = stash.get(el);
+        if (!entry || !entry.text) return;
         const bubble = node();
-        bubble.textContent = text;
+        bubble.textContent = entry.text;
         showing = el;
-        shownText = text;
+        shownText = entry.text;
         place(el);
         bubble.setAttribute('data-visible', 'true');
       };
 
       const onOver = (event) => {
-        // Safety net: a control rendered between sweeps still carries `title`.
-        // Adopt it here so the native tooltip never gets the chance to appear.
-        // (React replaces nodes on some re-renders, so this path is not rare.)
-        let fresh = event.target instanceof Element ? event.target : null;
-        for (let i = 0; fresh && i < 8; i += 1, fresh = fresh.parentElement) {
-          if (fresh.hasAttribute && fresh.hasAttribute('title')) adopt(fresh);
-        }
+        // Safety net: a control rendered between sweeps is armed right here, so
+        // the native tooltip never gets the chance to appear.
+        sweep();
         const el = tracked(event.target);
         if (!el) { if (showing && !tracked(event.relatedTarget)) hide(); return; }
         if (el === showing) return;
@@ -900,19 +930,29 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       window.addEventListener('resize', onDismiss);
 
       sweep();
-      // React re-renders put `title` back, so re-adopt on every mutation.
+      // React re-renders rewrite these attributes, so re-arm on every mutation.
+      // `aria-label` is watched because a preset without a native title changes
+      // only that attribute when the mode switches.
       //
-      // Deliberately do NOT hide here. The app mutates the body constantly while
-      // a turn streams, and hiding on any mutation killed the bubble the instant
-      // it appeared — which reads as "the tooltip stopped working".
+      // Deliberately do NOT hide here: the app mutates the body constantly while a
+      // turn streams, and hiding on any mutation killed the bubble the instant it
+      // appeared.
       const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
         sweep();
         // The anchor can also be replaced rather than updated; follow it.
         if (showing && !showing.isConnected) hide();
         // The help text is per-mode, so a visible bubble can go stale.
-        if (showing && stash.get(showing) !== shownText) hide();
+        const entry = showing ? stash.get(showing) : null;
+        if (showing && entry && entry.text !== shownText) hide();
       });
-      if (observer) observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['title'] });
+      if (observer) {
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['title', 'aria-label'],
+        });
+      }
 
       return () => {
         clearTimeout(showTimer);
@@ -924,8 +964,13 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
         window.removeEventListener('resize', onDismiss);
         if (observer) observer.disconnect();
         if (tip) { tip.remove(); tip = null; }
-        for (const [el, text] of stash) {
-          try { el.setAttribute('title', text); } catch (err) { /* detached */ }
+        // Only attributes we removed are restored; aria-label was never touched.
+        for (const [el, entry] of stash) {
+          try {
+            delete el.dataset.vtTitle;
+            delete el.dataset.vtTitleAria;
+            if (entry.fromTitle) el.setAttribute('title', entry.text);
+          } catch (err) { /* detached */ }
         }
         stash.clear();
       };
@@ -969,7 +1014,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
     // network egress it does not need.
     // ═══════════════════════════════════════════════════════════════════════
 
-    const PROBE_ENABLED = false;
+    const PROBE_ENABLED = true;
     const DUMP_URL = 'http://127.0.0.1:8899/vt';
     const VT_PROPS = ['border-radius', 'background', 'background-color', 'box-shadow', 'corner-shape', 'width', 'height', 'padding'];
 
@@ -1272,6 +1317,8 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       // 1. One inventory once the composer has mounted.
       timeouts.push(setTimeout(() => collect('static'), 2500));
 
+      }, 3000));
+
 
       // 2. Forensics for whatever the pointer lands on inside the composer. Wait
       //    for :hover to settle; the pointer is still on the element by then.
@@ -1356,10 +1403,6 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
         return { dispose() { for (const d of disposers.reverse()) safeCall(d); }, status: () => ({}) };
       }
 
-      for (const patch of behaviorPatches) {
-        try { disposers.push(patch.install(ctx)); } catch (err) { /* keep going */ }
-      }
-
       const host = createStyleHost(ctx);
       let resolution = {};
       /** Extra CSS from the live-tuning API; appended after the composed sheet. */
@@ -1377,6 +1420,13 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       };
 
       sync();
+
+      // Behaviours install last: they need the resolved selectors, which only
+      // exist after the first discovery pass. The getter keeps them live across
+      // re-resolutions instead of freezing the first answer.
+      for (const patch of behaviorPatches) {
+        try { disposers.push(patch.install(() => lastSelectors)); } catch (err) { /* keep going */ }
+      }
 
       // Plugin stylesheets are injected asynchronously during boot, so the first
       // discovery pass may legitimately find nothing. Re-resolve when style

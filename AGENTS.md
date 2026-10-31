@@ -7,11 +7,12 @@ DeepSeek Harness 的 UI/UX 改善插件（Cordis bundle + client 半边）。
 
 | 要做的事 | 先读 |
 |---|---|
-| 改配色、圆角、阴影、间距、对齐 | `DESIGN.md` → 再读 `client.js` 的 `PATCHES` |
-| 新增一个界面修复 | `DESIGN.md`「选哪一类补丁」→ `client.js` 的 `anchoredDialog()` 与 `PATCHES` |
-| 判断改动到底生效没有 | `docs/VERIFY.md` |
-| 遇到「改了完全没变化」 | `docs/VERIFY.md`「三种失败先分清」 |
-| 想知道 Harness 侧的机制（token 分层、浮层原语、锚点定位） | `DESIGN.md`「Harness 机制备忘」 |
+| 想清楚要什么观感、否过什么方案 | `DESIGN.md` |
+| 写或改一个补丁 | `DEVELOPMENT.md`「选哪一类补丁」→ `client.js` 的 `PATCHES` |
+| 补丁写完却没生效 | `DEVELOPMENT.md`「陷阱」 |
+| 判断改动到底加载了没有 | `docs/VERIFY.md`「三种失败先分清」 |
+| 想知道 Harness 侧的机制（token 分层、浮层原语、锚点定位） | `DEVELOPMENT.md`「Harness 机制备忘」 |
+| 想把代码拆成多文件 | `DEVELOPMENT.md`「打包与装载约束」——客户端半边只能是一个文件 |
 
 单个补丁「为什么是这个值」写在它自己的代码注释里，不在文档里重复。
 
@@ -24,7 +25,7 @@ DeepSeek Harness 的 UI/UX 改善插件（Cordis bundle + client 半边）。
 5. **视觉数值集中**：新数字写进 DOMAIN 常量或 `PATCHES` 字段，不在 `rules()` 模板里现写。
 6. **探针默认关闭**。要数据先 `__vtInterface.probe(true)`，用完再关。
 
-理由与失效方式都在 `DESIGN.md` 的「陷阱」。
+理由与失效方式都在 `DEVELOPMENT.md` 的「陷阱」。
 
 ## 改动循环
 
@@ -42,6 +43,7 @@ DeepSeek Harness 的 UI/UX 改善插件（Cordis bundle + client 半边）。
 ## 环境
 
 - 插件本体：本目录（软链进 `~/.dsh/profiles/desktop/node_modules`）。
+- 客户端半边只能是一个文件（装载器拼装下发），见 `DEVELOPMENT.md`「打包与装载约束」。
 - 运行中的应用：DeepSeek Harness 桌面端，Harness 版本 `0.2.1-rc.5`。
 - 代码索引：`.codegraph/`（`codegraph explore "<问题>"` 查符号与调用链）。本地产物，已 gitignore。
 - 版本控制：git，分支 `main`。
