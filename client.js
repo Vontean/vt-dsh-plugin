@@ -785,6 +785,8 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       let showTimer;
       let hideTimer;
       let showing = null;
+      /** Text currently painted, to detect a stale bubble after a mode switch. */
+      let shownText = null;
 
       // Another component also uses `_card`; anchor discovery on the input itself,
       // otherwise the sweep quietly walks the wrong subtree and adopts nothing.
@@ -805,7 +807,10 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       const adopt = (el) => {
         const text = el.getAttribute('title');
         if (!text) return;
-        if (!stash.has(el)) stash.set(el, text);
+        // Always overwrite. The same chip carries different help text per mode
+        // (each permission preset has its own description), and keeping the
+        // first value showed stale copy after switching.
+        stash.set(el, text);
         el.removeAttribute('title');
       };
 
@@ -845,6 +850,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
         clearTimeout(showTimer);
         clearTimeout(hideTimer);
         showing = null;
+        shownText = null;
         if (tip) tip.removeAttribute('data-visible');
       };
 
@@ -854,6 +860,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
         const bubble = node();
         bubble.textContent = text;
         showing = el;
+        shownText = text;
         place(el);
         bubble.setAttribute('data-visible', 'true');
       };
@@ -902,6 +909,8 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
         sweep();
         // The anchor can also be replaced rather than updated; follow it.
         if (showing && !showing.isConnected) hide();
+        // The help text is per-mode, so a visible bubble can go stale.
+        if (showing && stash.get(showing) !== shownText) hide();
       });
       if (observer) observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['title'] });
 
