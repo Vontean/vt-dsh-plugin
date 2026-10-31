@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-interface';
-    const VERSION = '2.2.0';
+    const VERSION = '2.3.0';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -118,6 +118,56 @@ window.__ModuleLoader__.load({
       // Shipped #2631480f is blue (R38 G49 B72); a neutral alpha drops the cast.
       '--dsw-alias-interactive-bg-hover': { light: '#0000000d', dark: '#ffffff14' },
     };
+
+    /**
+     * Turn rail ("piano") — the vertical strip of turn marks beside the
+     * transcript, used to jump between turns.
+     *
+     * Transcribed from the local Codex desktop build
+     * (`ChatGPT.app/Contents/Resources/app.asar` →
+     * `webview/assets/thread-user-message-navigation-rail`, module CSS
+     * `k7ebw`), because "like Codex" has to mean numbers, not a vibe:
+     *
+     *   bar     26px long, 2px tall, square ends, grown from the LEFT edge by
+     *           `transform: scaleX` — rest length 6px (x .2308), so the rail is
+     *           a row of ticks at rest, not a column of dashes
+     *   wave    hovered bar 26px, neighbours 20/14/10px (x .7/.4/.2), animated
+     *           over 160ms with a slight-overshoot `linear()` curve; the whole
+     *           wave snaps (0ms) while the pointer is scrubbing
+     *   row     10px pitch, 36px hit area, 12px in from the pane edge, vertically
+     *           centred, internally scrollable with masked fades at both ends
+     *   preview 320px card on the side away from the rail, 8px padding, 12px
+     *           radius, hairline ring, 13/18 prompt over 12/18 clamped response
+     *
+     * Values are kept in pixels and converted to `scaleX` in one place
+     * (`railScale`), because every state expresses a *length*; a bare ratio
+     * hides why the numbers differ.
+     */
+    const RAIL = {
+      left: 12,
+      width: 36,
+      bar: 26,
+      rest: 6,
+      /** The turn in view: between rest and hover so the eye can find it. */
+      active: 10,
+      /** Wave plateaus for the neighbours at ±1, ±2, ±3. */
+      neighbors: [20, 14, 10],
+      radius: 1,
+      gap: 8,
+      previewWidth: 320,
+      previewPadding: '8px 10px',
+      previewRadius: 12,
+      previewMaxHeight: 128,
+      /** Preview travel per hovered row; Codex anchors per row, we glide. */
+      glideMs: 100,
+      springMs: 160,
+    };
+
+    /** Codex's spring: linear() with a 0.8% overshoot instead of a bezier. */
+    const RAIL_SPRING = 'linear(0, .398 10%, .682 20%, .843 30%, .925 40%, .972 50%, 1.004 60%, 1.008 70%, 1.003 80%, 1)';
+
+    /** Bar length in px → the scaleX that produces it (0.2308 … 1). */
+    const railScale = (px) => String(+(px / RAIL.bar).toFixed(4));
 
     /**
      * PATCHES — the domain's registry. Adding a UI fix means adding an entry
@@ -525,6 +575,137 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
         fallback: '.X0HXfW_panel',
         anchor: (selector) => `${moduleSibling(selector, 'root')}:has(button[aria-expanded="true"])`,
       }),
+      {
+        kind: 'component',
+        id: 'turn-rail',
+        role: 'turn-rail',
+        /**
+         * Shipped: a 28px strip pinned 12px inside the pane's RIGHT edge, every
+         * mark a 20px bar grown from its right end. The turn in view draws 20px,
+         * the hovered one 18px — shorter than the one you are already on, so the
+         * pointer pushes the wrong way — and the neighbours never move. Position
+         * is a 2px difference on a 20px bar: unreadable, and the strip sits on
+         * the far side of the reading column from the sidebar.
+         *
+         * Codex reads the same information as a wave: every turn is a 6px tick,
+         * the pointer grows the tick it is on to 26px, its neighbours step down
+         * (20/14/10px) and settle back on a 160ms spring. Position is carried by
+         * LENGTH (a scan line you can feel while moving); colour only separates
+         * "here" from "hovered".
+         *
+         * Selector discovery targets the frame rule — the only rule in the app
+         * that combines a 28px width with `contain: layout` and `right: 12px`.
+         * Every other class comes from the same CSS-module prefix via
+         * `moduleSibling`, so no substring selector ever touches another
+         * component's marks.
+         */
+        signature: ['width:28px', 'contain:layout', 'position:absolute', 'right:12px'],
+        selectorFilter: '_frame$',
+        fallback: '._4if9eW_frame',
+        rules: (selector) => {
+          const mark = moduleSibling(selector, 'mark');
+          const active = moduleSibling(selector, 'markActive');
+          const unloaded = moduleSibling(selector, 'markUnloaded');
+          const preview = moduleSibling(selector, 'preview');
+          const promptLine = moduleSibling(selector, 'previewPrompt');
+          const responseLine = moduleSibling(selector, 'previewResponse');
+          /** One bar length as a scaleX transform, always around the left edge. */
+          const bar = (px) => `transform: translateY(-50%) scaleX(${railScale(px)}) !important;`;
+          /**
+           * Marks at `level` rows from the hovered one, in both directions. Built
+           * from the resolved class so the wave cannot leak to another rail.
+           *
+           * The list is virtualised with `overscan: 3`, so only ±3 rows exist in
+           * the DOM at any time — exactly the depth the wave needs. Deeper
+           * plateaus would silently clip at the rendered window's edge.
+           */
+          const around = (level) => {
+            const chain = Array(level).fill(mark).join(' + ');
+            return [
+              `${mark}:has(+ ${chain}:hover)::before`,
+              `${mark}:hover + ${chain}::before`,
+            ].join(',\n');
+          };
+          return `
+${selector} {
+  left: ${RAIL.left}px !important;
+  right: auto !important;
+  width: ${RAIL.width}px !important;
+}
+/* Rest: a tick, not a dash. The 2px height and the module's own colour fall
+ * through; length, growing edge, end radius and easing are replaced. */
+${mark}::before {
+  left: 0 !important;
+  right: auto !important;
+  width: ${RAIL.bar}px !important;
+  border-radius: ${RAIL.radius}px !important;
+  transform-origin: 0 50% !important;
+  background-color: var(--dsw-alias-border-l4) !important;
+  ${bar(RAIL.rest)}
+  transition-property: transform, background-color !important;
+  transition-duration: ${RAIL.springMs}ms !important;
+  transition-timing-function: ${RAIL_SPRING} !important;
+}
+${unloaded}::before {
+  opacity: 0.5 !important;
+}
+/* Turns paged in from history: readable, but not competing with the wave. */
+${active}::before {
+  ${bar(RAIL.active)}
+  background-color: var(--dsw-alias-label-tertiary) !important;
+}
+/* The pointer owns the emphasis — this is the bar that reads as "piano". */
+${mark}:hover::before {
+  ${bar(RAIL.bar)}
+  background-color: var(--dsw-alias-label-primary) !important;
+}
+${around(1)} { ${bar(RAIL.neighbors[0])} }
+${around(2)} { ${bar(RAIL.neighbors[1])} }
+${around(3)} { ${bar(RAIL.neighbors[2])} }
+/* Keyboard users get the same emphasis without a pointer. */
+${mark}:focus-visible::before {
+  ${bar(RAIL.bar)}
+  background-color: var(--dsw-alias-label-primary) !important;
+}
+/* Preview now opens away from the rail, i.e. to the right, and takes the
+ * popover recipe the menu surfaces already use. */
+${preview} {
+  left: calc(100% + ${RAIL.gap}px) !important;
+  right: auto !important;
+  width: ${RAIL.previewWidth}px !important;
+  max-height: ${RAIL.previewMaxHeight}px !important;
+  padding: ${RAIL.previewPadding} !important;
+  border-radius: ${RAIL.previewRadius}px !important;
+  background: var(--dsw-menu-surface-fill) !important;
+  -webkit-backdrop-filter: var(--dsw-menu-backdrop-filter) !important;
+  backdrop-filter: var(--dsw-menu-backdrop-filter) !important;
+  box-shadow: var(--dsw-elevation-prominent), inset 0 0 0 0.5px var(--dsw-alias-border-l2) !important;
+  transition: top ${RAIL.glideMs}ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  animation: 120ms ease-out vt-turn-preview-in !important;
+}
+@keyframes vt-turn-preview-in {
+  from { opacity: 0; translate: -4px 0; }
+  to { opacity: 1; translate: 0 0; }
+}
+${promptLine} {
+  font-size: 13px !important;
+  line-height: 18px !important;
+  font-weight: 500 !important;
+}
+${responseLine} {
+  font-size: 12px !important;
+  line-height: 18px !important;
+  margin-top: 2px !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  ${mark}::before,
+  ${preview} {
+    transition-duration: 0s !important;
+    animation: none !important;
+  }
+}`;
+        },
+      },
       {
         kind: 'behavior',
         id: 'composer-tooltip',
@@ -1283,6 +1464,114 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       };
     }
 
+    /**
+     * Geometry of the turn rail and the gutter it has to live in: the strip, the
+     * pane it is positioned against, and where the transcript column starts. The
+     * last number decides whether a left-hand rail sits in the margin or lands on
+     * top of the text.
+     */
+    function vtRail() {
+      const markEl = document.querySelector('button[data-index]');
+      const frame = markEl && markEl.closest('nav');
+      if (!frame) return null;
+      const box = (el) => {
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        return {
+          x: Math.round(r.left),
+          y: Math.round(r.top),
+          size: `${Math.round(r.width)}x${Math.round(r.height)}`,
+          padding: cs.padding,
+          margin: cs.margin,
+        };
+      };
+      const pane = frame.parentElement;
+      // The transcript column: the readable content this rail must not cover.
+      const chatRoot = pane ? pane.querySelector('[data-chat-following-tail]') || pane.querySelector('[class*="_root"]') : null;
+      // Transcript text: every text block currently rendered in the pane, so the
+      // leftmost ink is the number the rail has to clear.
+      const blocks = [...document.querySelectorAll('p, li, h1, h2, h3')].filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 40 && r.top > 60 && r.bottom < window.innerHeight - 120 && (el.textContent || '').trim().length > 8;
+      });
+      const lefts = blocks.map((el) => Math.round(el.getBoundingClientRect().left)).sort((a, b) => a - b);
+      const block = blocks[0] || null;
+      const composer = document.querySelector('[class*="_card"]');
+      const sidebar = document.querySelector('aside, [class*="sidebar"]');
+      const frameStyle = getComputedStyle(frame);
+      const bar = getComputedStyle(markEl, '::before');
+      return {
+        count: frame.querySelectorAll('button[data-index]').length,
+        // Wave rules must survive the parser: a dropped :has() selector would
+        // look like "the new CSS simply did nothing".
+        wave: (() => {
+          const tag = document.querySelector('style[data-plugin-css$="vt-interface.css"]');
+          const sheet = tag && tag.sheet;
+          if (!sheet) return null;
+          let rules = 0;
+          for (const rule of sheet.cssRules) {
+            if (rule.selectorText && rule.selectorText.includes(':has(+')) rules += 1;
+          }
+          return {
+            parsedHasRules: rules,
+            supportsHas: CSS.supports('selector(.a:has(+ .b:hover))'),
+          };
+        })(),
+        frame: box(frame),
+        frameStyle: {
+          left: frameStyle.left,
+          right: frameStyle.right,
+          top: frameStyle.top,
+          width: frameStyle.width,
+          maxHeight: frameStyle.maxHeight,
+          transform: frameStyle.transform,
+        },
+        pane: box(pane),
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        sidebar: box(sidebar),
+        paneClass: pane ? String(pane.className).slice(0, 60) : null,
+        parentClass: pane && pane.parentElement ? String(pane.parentElement.className).slice(0, 60) : null,
+        chatRoot: box(chatRoot),
+        text: box(block),
+        textLeft: block ? Math.round(block.getBoundingClientRect().left) : null,
+        inkLefts: lefts.slice(0, 5),
+        composer: box(composer),
+        mark: box(markEl),
+        bar: {
+          width: bar.width,
+          height: bar.height,
+          transform: bar.transform,
+          background: bar.backgroundColor,
+          radius: bar.borderRadius,
+          transition: bar.transition,
+        },
+        preview: (() => {
+          const el = frame.querySelector('[class*="_preview_"], [class*="_preview"]');
+          if (!el) return null;
+          const cs = getComputedStyle(el);
+          return {
+            ...box(el),
+            style: {
+              padding: cs.padding,
+              radius: cs.borderRadius,
+              background: cs.backgroundColor,
+              shadow: cs.boxShadow.slice(0, 90),
+              width: cs.width,
+              maxHeight: cs.maxHeight,
+              transition: cs.transition.slice(0, 60),
+            },
+            promptFont: (() => {
+              const line = el.querySelector('[class*="_previewPrompt"]');
+              if (!line) return null;
+              const ls = getComputedStyle(line);
+              return `${ls.fontSize}/${ls.lineHeight} w${ls.fontWeight}`;
+            })(),
+          };
+        })(),
+      };
+    }
+
     function vtPath(el, depth) {
       const parts = [];
       let node = el;
@@ -1361,6 +1650,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
         ? { visible: tipEl.getAttribute('data-visible'), text: (tipEl.textContent || '').slice(0, 60) }
         : null;
       payload.metrics = vtFontMetrics();
+      payload.rail = vtRail();
       payload.sheets = vtSheetScan(['pn0E2q_trigger', 'kKSgSq_chip', '_ghost_1rv3m_', 'SJRB_q_trigger']);
       // Every rule we emit carries !important; nothing shipped upstream does in
       // the same place. Reading them back proves the sheet's real selectors and
@@ -1443,6 +1733,17 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       };
       document.addEventListener('mouseover', onHover, true);
       disposers.push(() => document.removeEventListener('mouseover', onHover, true));
+
+      // 2b. The rail's preview card only mounts while a mark is hovered. A
+      //     synthetic pointermove drives the same React handler a real pointer
+      //     does, so its geometry can be measured without taking the pointer.
+      timeouts.push(setTimeout(() => {
+        const marks = [...document.querySelectorAll('button[data-index]')];
+        const target = marks[Math.floor(marks.length / 2)];
+        if (!target) return;
+        target.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
+        timeouts.push(setTimeout(() => collect('rail-preview'), 300));
+      }, 4000));
 
       // 3. The plan chip only renders while plan mode is on, so capture the
       //    composer the first time one appears.

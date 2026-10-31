@@ -74,6 +74,7 @@ tail -f /tmp/vt-dump.jsonl | jq -c 'select(.kind=="hover") | .hovered'
 | `static` | 挂载后 2.5s，及计划模式 chip 首次出现 | 输入框内所有控件的尺寸/圆角/形状/背景/阴影/字体/墨迹高，加每个控件会命中的 hover 规则 |
 | `hover` | 指针进入输入框内某元素后 90ms | 该元素 + 5 层祖先 + 其 hover 规则全集（回答「谁在画这个底」） |
 | `surface` | 出现新的浮层面板时 | 面板的材质、圆角、阴影、滤镜，加居中判定（锚点中心 vs 面板中心） |
+| `rail-preview` | 挂载后 4s，用合成 `pointermove` 打开轮次条预览 | 预览卡的几何、材质、字体（`static`/`manual` 里也有 `rail` 块） |
 | `manual` | 调用 `__vtInterface.dump()` | 同上，按需 |
 
 `static` 里另有几个直读字段，用来免交互确认：
@@ -84,8 +85,16 @@ tail -f /tmp/vt-dump.jsonl | jq -c 'select(.kind=="hover") | .hovered'
 | `titlesDoc` | 全文档的 `title` 数量，用于确认接管范围只落在输入框 |
 | `tipCss` | 自绘 tooltip 的 CSS 是否已注入 |
 | `tip` | 自绘气泡节点当前状态（未 hover 时为 `null`） |
+| `rail` | 轮次跳转条：条本身/所在容器/侧栏/正文墨迹左缘的位置与尺寸，单根刻度的计算值（长度、颜色、`scaleX`、缓动），预览卡与 `:has()` 波峰规则是否被浏览器保留 |
+
+`rail` 里有两个字段不看数值也要看一眼：`textLeft`（正文墨迹左缘）与 `frame.x`。
+两者之差就是跳转条和文字之间的余量；改成负数说明它压到正文上了。
 
 **关**：`__vtInterface.probe(false)`，或把常量改回 `false`。接收端可以一直开着，空闲无开销。
+
+**悬停态是个例外。** `:hover` 不是声明，计算值里读不出来，探针只能证明「规则被浏览器保留」
+（`rail.wave.parsedHasRules`）和「预览卡挂载后的样子」（`rail-preview`）。波峰本身要真指针
+滑一遍才能确认 —— 录屏或直接上手，别用探针冒充。
 
 依赖只有 `node`。探针只往 `127.0.0.1` 发数据，不出网。
 
