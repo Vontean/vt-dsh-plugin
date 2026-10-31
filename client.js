@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-interface';
-    const VERSION = '2.4.0';
+    const VERSION = '2.5.0';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -162,6 +162,20 @@ window.__ModuleLoader__.load({
       glideMs: 100,
       springMs: 160,
     };
+
+    /**
+     * The composer's leading "+" and its glyph.
+     *
+     * The shipped button is a filled 28px plate (`--dsw-specific-selector`) with a
+     * 14px glyph whose arms span 11px at stroke 1.3. Measured against the rest of
+     * the row — mic 7x10 ink at 1px, permission icon 10x11 at 1px, send 9x9 at
+     * 1.5 — an 11x11 plus becomes the heaviest glyph in the row the moment the
+     * plate that used to justify it is removed.
+     *
+     * 13px box scales the 14-unit artwork by .93: arms 10.2px, and a 1.5 stroke
+     * renders at 1.39px, i.e. between the mic and the send arrow.
+     */
+    const ADD_GLYPH = { size: 13, stroke: 1.5 };
 
     /**
      * Transcript edge fade.
@@ -546,6 +560,48 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
   color: var(--dsw-alias-label-tertiary) !important;
 }`;
         },
+      },
+      {
+        kind: 'component',
+        id: 'composer-add-button',
+        role: 'composer-add',
+        /**
+         * DSH ships the composer's "+" as a filled plate: a 247,246,244 circle
+         * behind an 11x11 plus. Every other control in the row is a bare glyph
+         * that only paints a plate on hover (mic, permission chip, model name),
+         * so the one button that adds something is also the only one that looks
+         * permanently pressed — it reads as a badge, not as an action.
+         *
+         * Codex keeps its "+" quiet until hovered. Same treatment here: drop the
+         * fill, reuse the mic's own hover token so the two icon buttons respond
+         * identically, and scale the glyph down to the row's optical size (see
+         * ADD_GLYPH).
+         *
+         * Signature is the plate itself: `--dsw-specific-selector` as a background
+         * plus a 28px height and centred grid is the only rule in the app that
+         * matches. The glyph rules are scoped under the resolved selector.
+         */
+        signature: ['background:var(--dsw-specific-selector)', 'height:28px', 'place-items:center'],
+        selectorFilter: '_add$',
+        fallback: '.JZLxKW_add',
+        rules: (selector) => `
+${selector} {
+  background: transparent !important;
+  border-radius: 999px !important;
+  ${CONTROL_SHAPE}
+}
+/* Same token the mic uses, so the two icon buttons answer the pointer alike. */
+${selector}:hover:not(:disabled),
+${selector}:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover) !important;
+}
+${selector} svg {
+  width: ${ADD_GLYPH.size}px !important;
+  height: ${ADD_GLYPH.size}px !important;
+}
+${selector} svg * {
+  stroke-width: ${ADD_GLYPH.stroke} !important;
+}`,
       },
       anchoredDialog({
         id: 'stat-dialog-anchor',
@@ -1579,6 +1635,18 @@ ${responseLine} {
         tracking: cs.letterSpacing,
         color: cs.color,
         ink: vtInk(el),
+        // Icon geometry: with no plate behind it, a glyph is judged alone, so the
+        // size and stroke of the first svg have to be numbers, not "looks small".
+        svg: (() => {
+          const icon = el.querySelector('svg');
+          if (!icon) return null;
+          const ir = icon.getBoundingClientRect();
+          const shape = icon.querySelector('path, line, rect, circle, polyline');
+          const stroke = shape ? getComputedStyle(shape).strokeWidth : '?';
+          const inkRect = shape ? shape.getBoundingClientRect() : null;
+          const ink = inkRect ? `${Math.round(inkRect.width)}x${Math.round(inkRect.height)}` : '?';
+          return `${Math.round(ir.width)}x${Math.round(ir.height)} stroke=${stroke} ink=${ink}`;
+        })(),
       };
       for (const pseudo of ['::before', '::after']) {
         const p = getComputedStyle(el, pseudo);
