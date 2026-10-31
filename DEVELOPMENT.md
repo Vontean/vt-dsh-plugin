@@ -153,6 +153,9 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
   `backing`（仅 macOS，填不透明底给模糊用）。所有 popover 共用同一套，改 token 即全站生效。
 - **弹窗定位**：`useAnchoredPosition` 只接受 `align: 'start' | 'end'`，没有居中；它把结果写成
   内联 `left/top`。`!important` 的作者样式优先于普通内联声明，这是用 CSS 接管水平定位的依据。
+- **队列面板借浮层材质上色**：`[data-queue-dock]` 里那个 `_panel::before` 的背景是
+  `var(--dsw-specific-menu)`，和所有 popover 同一个 token。改浮层材质会连带改它 —— 但它不是浮层，
+  所以两者要分开处理（`queue-surface` 补丁读自己的 `--vt-queue-fill`）。
 - **消息流分隔线**用 `--dsw-alias-border-l2`（`_ioDivider`、`_divider` 都是它），输入框内的竖分隔线取这个色。
 - **轮次跳转条是虚拟列表**（`overscan: 3`）：DOM 里只有渲染窗口内的刻度，容器内滚动由组件自己接管。
   推论：用 CSS 兄弟选择器做「邻居」效果时，可见深度上限就是 3（`±1/±2/±3`），更远的会静默消失。

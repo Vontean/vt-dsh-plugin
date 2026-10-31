@@ -95,6 +95,7 @@ tail -f /tmp/vt-dump.jsonl | jq -c 'select(.kind=="hover") | .hovered'
 | `rail` | 轮次跳转条：条本身/所在容器/侧栏/正文墨迹左缘的位置与尺寸，单根刻度的计算值（长度、颜色、`scaleX`、缓动），预览卡与 `:has()` 波峰规则是否被浏览器保留 |
 | `convo` | 会话视口：滚动容器/输入框座/视区的矩形与计算值、`scrollTop` 与两端是否到头、注入的渐隐覆盖层是否在位（两条带的 24px 高度与不透明度、底带偏移） |
 | `viewSwitch` | 视图切换入口：`header`（会话 header 实测高，应从 76 掉到 51）、`tabs`（标签行实测高、当前标签、**仍在 DOM 里的标签文案**）、`entry`（入口按钮的类名/几何/图标/`aria-label`）、`dock`（状态行成员的文案与顺序） |
+| `queue` | 排队消息面板：类名、`::before` 的实际背景色、读到的 `--vt-queue-fill`。它只在 agent 忙碌时存在，平时为 `null` —— 发一条排队消息后取 `manual` dump |
 
 `viewSwitch` 要按顺序读三个值，缺一个都会误判：
 

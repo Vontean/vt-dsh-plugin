@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-interface';
-    const VERSION = '2.6.2';
+    const VERSION = '2.6.3';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -124,6 +124,20 @@ window.__ModuleLoader__.load({
       // Shipped #2631480f is blue (R38 G49 B72); a neutral alpha drops the cast.
       '--dsw-alias-interactive-bg-hover': { light: '#0000000d', dark: '#ffffff14' },
     };
+
+    /**
+     * The queued-message panel above the composer.
+     *
+     * It is not a popover, but it borrows the popover material: its `::before`
+     * paints `var(--dsw-specific-menu)`, the very token the menu-surface patch
+     * pushes to near-white. So the panel lost its surface and kept only the
+     * hairline — it read as white on white. One step of grey puts it back above
+     * the canvas instead of inside it.
+     *
+     * Dark keeps the material value: there the panel already contrasts with the
+     * composer card, and a darker fill would sink it into the page.
+     */
+    const QUEUE_FILL = { light: '#f5f5f5', dark: '#232324f5' };
 
     /**
      * Turn rail ("piano") — the vertical strip of turn marks beside the
@@ -367,6 +381,12 @@ ${selector} {
             tokens[`--dsw-static-neutral-bluish-${step}`] = { light: hex, dark: hex };
           }
           return Object.assign(tokens, ALIAS, {
+            /**
+             * A surface this plugin owns: the queue panel must not inherit the
+             * popover material, so it reads a token we control instead of
+             * overriding the shared one and restyling every menu with it.
+             */
+            '--vt-queue-fill': { light: QUEUE_FILL.light, dark: QUEUE_FILL.dark },
             /**
              * Build marker: a custom property nothing consumes, so it has no
              * visual effect. It shows up in Theme.listTokens, which makes it the
@@ -990,6 +1010,24 @@ ${responseLine} {
             `${header}:has(${selector}) { min-height: 0 !important; padding-bottom: ${VIEW_TABS.headerBottom}px !important; }`,
           ].join('\n');
         },
+      },
+      {
+        kind: 'component',
+        id: 'queue-surface',
+        /**
+         * The queued-message panel is a step above the canvas, not a popover —
+         * but it paints `var(--dsw-specific-menu)`, the shared popover material,
+         * so the menu-surface patch flattened it to white along with every menu.
+         *
+         * Scoped by `[data-queue-dock]` rather than by the class alone: the goal
+         * is one panel, and the signature (`isolation`/`width:100%`/`overflow`
+         * on a `_panel` rule) could in principle also describe a future menu
+         * panel. The dock attribute keeps the blast radius to this one surface.
+         */
+        signature: ['isolation:isolate', 'width:100%', 'overflow:hidden', 'position:relative'],
+        selectorFilter: '_panel$',
+        fallback: '._6DJyyG_panel',
+        rules: (selector) => `[data-queue-dock] ${selector}::before { background: var(--vt-queue-fill) !important; }`,
       },
       {
         kind: 'behavior',
@@ -2246,6 +2284,18 @@ ${responseLine} {
             .map((node) => (node.textContent || '').trim().slice(0, 24))
           : null,
       };
+      // The queue panel only exists while a message is waiting for a busy agent,
+      // so this reads null most of the time — send one, then take a `manual` dump.
+      // `fill` is the ::before background, which is what actually paints it.
+      const queueDock = document.querySelector('[data-queue-dock]');
+      const queuePanel = queueDock ? queueDock.firstElementChild : null;
+      payload.queue = queuePanel
+        ? {
+          cls: String(queuePanel.className || ''),
+          fill: getComputedStyle(queuePanel, '::before').backgroundColor,
+          token: getComputedStyle(queuePanel).getPropertyValue('--vt-queue-fill').trim(),
+        }
+        : null;
       payload.behavior = window.__vtInterface && window.__vtInterface.behaviors
         ? window.__vtInterface.behaviors()
         : null;
