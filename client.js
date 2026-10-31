@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-interface';
-    const VERSION = '2.5.2';
+    const VERSION = '2.6.0';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -201,6 +201,68 @@ window.__ModuleLoader__.load({
      * size; a band only appears on the side that has content beyond it.
      */
     const EDGE_FADE = { size: 24, settleMs: 140 };
+
+    /**
+     * The conversation header's second row: view tabs (对话 / 轨迹 / …).
+     *
+     * Hiding that row is easy; hiding it *without* changing the app is not. It is
+     * also a layout input: React derives how many tabs fit from the row's own
+     * `clientWidth`, and moves the rest into the "…" menu, which unmounts their
+     * buttons. `display:none` measures 0, so 轨迹 left the DOM entirely —
+     * measured, not guessed. Hence zero height with the width intact.
+     *
+     * Giving the height back is the other half. The shipped
+     * `.header:where(:not(:has(.tabs)))` states the no-tab geometry —
+     * `min-height: 0` plus 10px of bottom padding — but the element stays in the
+     * tree, so `:has()` keeps matching and that rule never fires. The header
+     * would stay at 76px with ~36px of empty band under the title. Restating the
+     * same numbers is the only way to buy the shipped look back: 10 padding-top
+     * + 30 title row + 10 padding-bottom, which measures 51px.
+     *
+     * The separator is not ours to draw: it is `.header`'s own
+     * `border-bottom: .5px` — the tab row never owned it.
+     */
+    const VIEW_TABS = { headerBottom: 10 };
+
+    /**
+     * 「轨迹」entry in the composer's status row.
+     *
+     * That row is the official `conversation.composer.dock` list slot; both
+     * shipped items (turn/step counts, token usage) are registered into it, and
+     * so is this one — order -1 puts it first, since upstream uses 0 and 1.
+     *
+     * Its look is borrowed, not copied: the signature finds the chat package's
+     * own pill class, and anchor/label come from the same CSS-module family. A
+     * local copy of the font size, the 6px icon gap and the 1px/8px padding
+     * would drift with the theme tokens and with every DSH release; sharing the
+     * classes means it cannot.
+     */
+    const VIEW_SWITCH = {
+      id: 'vt-view-switch',
+      order: -1,
+      signature: ['display:inline-flex', 'white-space:nowrap', 'gap:6px', 'padding:1px8px'],
+      selectorFilter: '_pill$',
+      fallback: '.TQ0rwa_pill',
+      /** The label follows the view; recomputing faster than the eye buys nothing. */
+      settleMs: 150,
+    };
+
+    /**
+     * Glyphs, transcribed from the app's own icon set
+     * (`@deepseek-ai/dsh-client-ui-primitives`: 16-unit art, stroke 1,
+     * `currentColor`). One is not enough — the entry is bidirectional, pointing
+     * at 轨迹 from the conversation and back at 对话 from the trajectory, and a
+     * list glyph meaning "go to the conversation" would be a lie.
+     *
+     * The `<svg>` box is 14px, matching `.pill svg{width:14px}`, so the stroke
+     * lands at 14/16 of one unit exactly like every neighbouring icon.
+     */
+    const VIEW_SWITCH_GLYPH = {
+      /** IconFlatList — three rows, three dots: one line per record. */
+      toTrajectory: ['M6 3.5h7.5M6 8h7.5M6 12.5h7.5', 'M2.6 3.5h.01M2.6 8h.01M2.6 12.5h.01'],
+      /** IconChevronLeft — the return trip, drawn as the gesture. */
+      toConversation: ['M10 4L6.70711 7.29289C6.31658 7.68342 6.31658 8.31658 6.70711 8.70711L10 12'],
+    };
 
     /** Codex's spring: linear() with a 0.8% overshoot instead of a bezier. */
     const RAIL_SPRING = 'linear(0, .398 10%, .682 20%, .843 30%, .925 40%, .972 50%, 1.004 60%, 1.008 70%, 1.003 80%, 1)';
@@ -878,6 +940,63 @@ ${responseLine} {
   .vt-edge-fade::after { transition: none; }
 }`,
       },
+      {
+        kind: 'component',
+        id: 'view-tabs',
+        /**
+         * The header's tab row is a slot consumer, not a slot: `conversation.view`
+         * supplies what the tabs *say*, but their container, spacing, indicator
+         * and the "…" menu are hard-coded in `ConversationSessionHeader`. There is
+         * no official switch to remove them — so this patch only takes them off
+         * screen and hands the height back (see VIEW_TABS for why `min-height`
+         * needs restating).
+         *
+         * The tabs stay in the DOM on purpose: their `onClick` is the only route
+         * into a view that does not require the conversation package's private
+         * store, and the composer entry clicks them (see `installViewSwitch`).
+         */
+        signature: ['flex-wrap:wrap', 'gap:16px20px', 'margin-top:10px', 'padding-left:8px'],
+        selectorFilter: '_tabs$',
+        fallback: '.kiGsTW_tabs',
+        rules: (selector) => {
+          const header = moduleSibling(selector, 'header');
+          return [
+            /**
+             * Zero height, not `display:none`. The row's own width is a React
+             * input: `visibleViewLimit = floor((row.clientWidth - 48) / 120)` and
+             * anything past the limit is moved into the "…" menu, which unmounts
+             * its button. Hiding the row with `display:none` measures 0, so the
+             * limit collapses to 1 and 轨迹 leaves the DOM — measured, not
+             * assumed. Keeping the width and taking the height leaves the tab
+             * buttons mounted for the composer entry to click.
+             */
+            `${selector} { height: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; }`,
+            // Same geometry the shipped no-tab variant states, said louder: our
+            // rule ties with `.header:where(:not(:has(.tabs)))` on specificity.
+            `${header}:has(${selector}) { min-height: 0 !important; padding-bottom: ${VIEW_TABS.headerBottom}px !important; }`,
+          ].join('\n');
+        },
+      },
+      {
+        kind: 'behavior',
+        id: 'view-switch',
+        /**
+         * 「轨迹」is a low-frequency view that was spending a permanent 36px row
+         * of header on every conversation. The entry below the composer costs
+         * nothing when it is not used, and it sits where the other per-session
+         * readings already are.
+         *
+         * A behaviour, not a component patch: the entry is a live control whose
+         * label and direction follow the active view. CSS cannot read that state
+         * and cannot carry a click handler.
+         *
+         * Its node comes from the slot system rather than a DOM injection because
+         * React owns this row: the two shipped readings are slot entries, and a
+         * hand-inserted sibling would be reordered or dropped on the next render.
+         */
+        behavior: 'view-switch',
+        css: () => '',
+      },
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1458,6 +1577,137 @@ ${responseLine} {
       }
 
       /**
+       * 「轨迹」 entry in the composer's status row.
+       *
+       * Why a slot: `conversation.composer.dock` is the official list slot that
+       * already hosts the turn/step and usage readings. React owns that row, so a
+       * hand-inserted sibling is reordered or dropped on the next render; order
+       * -1 makes the entry first without touching the shipped two.
+       *
+       * Why the click targets a hidden tab: switching a view writes twice — the
+       * conversation store's `view` field and
+       * `uiConversation.binding(sessionId).activate()` — and both live inside the
+       * conversation package's closure. No command, shortcut, route or public
+       * service reaches them; the tab's own onClick is `selectView`, which is
+       * exactly those two writes. Clicking it is the only route that stays out of
+       * that package's internals, which is why `view-tabs` leaves the tabs in the
+       * DOM instead of unmounting them.
+       *
+       * Failure surface: without the `slots` service or a `react` module this
+       * throws and `__vtInterface.behaviors()` says so; the visual layer is
+       * untouched. When the trajectory view is not registered — it is filtered
+       * out unless Developer tools are on — no tab exists, so the entry renders
+       * nothing rather than a dead control.
+       */
+      function installViewSwitch(ctx) {
+        const slots = ctx.get('slots');
+        if (!slots || typeof slots.inject !== 'function') throw new Error('slots service unavailable');
+        const React = require('react');
+
+        // Borrow the chat package's pill: same size, icon gap, padding and hover
+        // fill as the readings beside it, and it follows the theme for free.
+        const discovered = resolveTarget(
+          { signature: VIEW_SWITCH.signature, selectorFilter: VIEW_SWITCH.selectorFilter },
+          null,
+        ) || [];
+        const selector = discovered[0] || VIEW_SWITCH.fallback;
+        const pill = selector.slice(1);
+        const anchor = moduleSibling(selector, 'anchor').slice(1);
+        const label = moduleSibling(selector, 'label').slice(1);
+
+        /**
+         * The conversation is pinned first (`resolveActiveView` falls back to it),
+         * so the entry is simply "the other tab": forward from the conversation,
+         * back from the trajectory. Reading that tab's own text keeps the label
+         * localized without a translation of our own.
+         */
+        const readTarget = () => {
+          const list = document.querySelector('[data-conversation-tabs]');
+          const tabs = list ? Array.from(list.querySelectorAll('button[role="tab"]')) : [];
+          if (tabs.length < 2) return null;
+          const current = tabs.findIndex((tab) => tab.getAttribute('aria-selected') === 'true');
+          if (current < 0) return null;
+          const index = current === 0 ? 1 : 0;
+          const text = (tabs[index].textContent || '').trim();
+          if (!text) return null;
+          return { index, label: text, forward: index !== 0 };
+        };
+
+        const glyph = (paths) => React.createElement('svg', {
+          width: 14,
+          height: 14,
+          viewBox: '0 0 16 16',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1,
+          strokeLinecap: 'round',
+          'aria-hidden': true,
+        }, paths.map((d) => React.createElement('path', { key: d, d })));
+
+        function ViewSwitch() {
+          const [target, setTarget] = React.useState(readTarget);
+          React.useEffect(() => {
+            // Three different things change the answer: our own click, a view
+            // restored when a session opens, and the Developer-tools filter coming
+            // or going. One coalesced observer covers all three; the delay exists
+            // because the transcript mutates continuously while streaming.
+            let settle = 0;
+            const sync = () => {
+              settle = 0;
+              const next = readTarget();
+              setTarget((previous) => (
+                previous && next && previous.index === next.index && previous.label === next.label
+                  ? previous
+                  : next
+              ));
+            };
+            const observer = new MutationObserver(() => {
+              if (settle) return;
+              settle = setTimeout(sync, VIEW_SWITCH.settleMs);
+            });
+            observer.observe(document.body, {
+              childList: true,
+              subtree: true,
+              attributes: true,
+              attributeFilter: ['aria-selected'],
+            });
+            sync();
+            return () => {
+              observer.disconnect();
+              clearTimeout(settle);
+            };
+          }, []);
+
+          if (target === null) return null;
+          return React.createElement(
+            'span',
+            { className: anchor, 'data-vt-view-switch': '' },
+            React.createElement(
+              'button',
+              {
+                type: 'button',
+                className: pill,
+                'aria-label': target.label,
+                onClick: () => {
+                  const list = document.querySelector('[data-conversation-tabs]');
+                  const tabs = list ? Array.from(list.querySelectorAll('button[role="tab"]')) : [];
+                  if (tabs[target.index]) tabs[target.index].click();
+                },
+              },
+              glyph(target.forward ? VIEW_SWITCH_GLYPH.toTrajectory : VIEW_SWITCH_GLYPH.toConversation),
+              React.createElement('span', { className: label }, target.label),
+            ),
+          );
+        }
+
+        return slots.inject('conversation.composer.dock', () => slots.register({
+          name: 'conversation.composer.dock',
+          id: VIEW_SWITCH.id,
+          order: VIEW_SWITCH.order,
+        }, ViewSwitch));
+      }
+
+      /**
        * Behaviour implementations, keyed by the name a patch declares.
        *
        * The data section names the intent (`behavior: 'native-tooltip'`); only this
@@ -1468,6 +1718,7 @@ ${responseLine} {
         const BEHAVIORS = {
       'native-tooltip': (readSelectors) => installNativeTitleTakeover(readSelectors),
       'scroll-edges': () => installScrollEdgeFade(),
+      'view-switch': () => installViewSwitch(ctx),
       };
 
       return {
@@ -1949,6 +2200,33 @@ ${responseLine} {
       // Native titles should be gone from the composer once the takeover runs.
       payload.titles = cardEl ? cardEl.querySelectorAll('[title]').length : -1;
       payload.titlesDoc = document.querySelectorAll('[title]').length;
+      // The view switcher sits below the composer card, so the card snapshot
+      // cannot see it. Two separate claims need two readings: the header height
+      // proves the tab row gave its space back, and the dock entry proves the
+      // slot registration landed and is first.
+      const headerEl = document.querySelector('header[data-window-drag]');
+      const tabRow = document.querySelector('[data-conversation-tabs]');
+      const tabsWrap = tabRow ? tabRow.closest('[class*="_tabs"]') : null;
+      const dockEl = document.querySelector('[data-composer-dock]');
+      const entryEl = dockEl ? dockEl.querySelector('[data-vt-view-switch]') : null;
+      const entryButton = entryEl ? entryEl.querySelector('button') : null;
+      payload.viewSwitch = {
+        header: headerEl ? Math.round(headerEl.getBoundingClientRect().height) : null,
+        tabs: tabsWrap
+          ? {
+            display: getComputedStyle(tabsWrap).display,
+            active: (tabRow.querySelector('[aria-selected="true"]') || {}).textContent || null,
+            labels: Array.from(tabRow.querySelectorAll('button[role="tab"]')).map((tab) => (tab.textContent || '').trim()),
+          }
+          : null,
+        entry: entryButton
+          ? { ...vtDescribe(entryButton), text: (entryButton.textContent || '').trim(), aria: entryButton.getAttribute('aria-label') }
+          : null,
+        dock: dockEl
+          ? Array.from(dockEl.querySelectorAll('[data-composer-stat], [data-vt-view-switch]'))
+            .map((node) => (node.textContent || '').trim().slice(0, 24))
+          : null,
+      };
       payload.behavior = window.__vtInterface && window.__vtInterface.behaviors
         ? window.__vtInterface.behaviors()
         : null;

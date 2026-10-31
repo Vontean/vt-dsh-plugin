@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-interface",
-  "version": "2.5.2",
+  "version": "2.6.0",
   "private": true,
   "type": "module",
   "description": "dsh-vt-Interface: UI/UX improvements for DeepSeek Harness — a clean-white warm-grey palette plus a Codex-style composer elevation. Reverts completely when disabled.",
@@ -29,7 +29,8 @@
       "platform": "web",
       "immediately": true,
       "inject": [
-        "@deepseek-ai/dsh-client-ui-theme"
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-ui-renderer"
       ]
     }
   }

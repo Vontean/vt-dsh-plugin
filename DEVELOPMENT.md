@@ -116,6 +116,17 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
   （`ADD_GLYPH`），不散落在规则里。
 - 复核：探针的 `controls[].svg` 同时给出盒子、描边和墨迹盒 —— 三个数一起看才是「光学尺寸」。
 
+### 9. React 用 DOM 宽度做布局决策时，`display:none` 会改变界面
+
+会话 header 的标签行不是纯展示：「显示几个视图标签」由
+`floor((tabRow.clientWidth - 48) / 120)` 算出，超出的标签被挪进「…」菜单，而菜单项只在菜单打开时才渲染。
+标签行 `display:none` 之后 `clientWidth` 为 0，预算塌成 1，第二个视图的按钮从 DOM 里消失 ——
+于是「点它」这条路径本身失效，而且不报任何错。
+
+- 现象：标签行确实不见了、高度也对了，但别的补丁查不到第二个标签，功能入口静默缺失。
+- 做法：要隐藏又必须保留度量时，用 `height: 0 + overflow: hidden`（宽度不变），不要用 `display: none`。
+- 复核：探针 `viewSwitch.tabs.labels` 列出仍在 DOM 的标签；只剩一个就是预算塌了。
+
 ---
 
 ## Harness 机制备忘
@@ -135,6 +146,21 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
   36px 的渐隐渐变，但卡片只在下沿 8px 处开始，其余部分被卡片盖住 —— 所以底部实际上仍是硬边。
   推论：不要给滚动容器整体加 `mask-image`，那会把输入框卡片一起渐隐；遮住卡片的边缘只能靠
   一张位于卡片与内容之间、锚在座顶边的覆盖层（`scroll-edges` 补丁）。
+- **会话视图是一个 slot 列表**（`conversation.view`，list / session scope）：对话用 `order: 0`、
+  轨迹用 `order: 10` 各自注册，`label` 是随语言变化的 thunk。但**标签行的 DOM 与样式写死在
+  `ConversationSessionHeader` 里**，没有开关能换形态 —— 改它只能覆盖 CSS。
+  另外轨迹条目在「开发者工具」关闭时会被过滤掉：这时轨迹视图根本不存在，
+  指向它的入口必须自动隐藏，不能留一个点了没反应的控件。
+- **切视图要写两处**：conversation store 的 `view` 字段 + `uiConversation.binding(sessionId).activate(id)`，
+  两者合在 `selectView` 里，都在 conversation 包的闭包内。没有命令、快捷键、路由或公共服务能触达。
+  能触达的只有标签按钮自己的 `onClick` —— 所以切换路径就是让那个（已隐藏的）button 被 `.click()`。
+- **`conversation.composer.dock` 是 list slot**：状态行里的「50 轮 845 步」「用量」两项就是它的条目
+  （order 0 / 1），容器是 `display:flex; justify-content:center; gap:12px`，条目高 22px、距卡片 4px。
+  新增一项走 `ctx.slots.register` 即可，不必注入 DOM；视觉可以借 chat 包的 pill 类
+  （`_pill` / `_anchor` / `_label`），字号、6px 图标间距、hover 底色因此与原生项同源。
+- **header 的 `:has()` 变体是一对**：`.header{min-height:76px}` 与
+  `.header:where(:not(:has(.tabs))){min-height:0;padding-bottom:10px}`。元素只要还在树里（哪怕零高），
+  `:has()` 就继续匹配，后者永不生效 —— 覆盖时必须自己把高度压回去。
 
 ---
 
