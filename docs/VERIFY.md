@@ -76,6 +76,15 @@ tail -f /tmp/vt-dump.jsonl | jq -c 'select(.kind=="hover") | .hovered'
 | `surface` | 出现新的浮层面板时 | 面板的材质、圆角、阴影、滤镜，加居中判定（锚点中心 vs 面板中心） |
 | `manual` | 调用 `__vtInterface.dump()` | 同上，按需 |
 
+`static` 里另有几个直读字段，用来免交互确认：
+
+| 字段 | 含义 |
+|---|---|
+| `titles` | 输入框内还残留多少个原生 `title`；接管生效时应为 `0` |
+| `titlesDoc` | 全文档的 `title` 数量，用于确认接管范围只落在输入框 |
+| `tipCss` | 自绘 tooltip 的 CSS 是否已注入 |
+| `tip` | 自绘气泡节点当前状态（未 hover 时为 `null`） |
+
 **关**：`__vtInterface.probe(false)`，或把常量改回 `false`。接收端可以一直开着，空闲无开销。
 
 依赖只有 `node`。探针只往 `127.0.0.1` 发数据，不出网。

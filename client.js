@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-interface';
-    const VERSION = '2.0.0';
+    const VERSION = '2.1.0';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -525,6 +525,41 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
         fallback: '.X0HXfW_panel',
         anchor: (selector) => `${moduleSibling(selector, 'root')}:has(button[aria-expanded="true"])`,
       }),
+      {
+        kind: 'behavior',
+        id: 'composer-tooltip',
+        /**
+         * The permission and model chips carry their help text in a native `title`
+         * attribute, which the OS draws as a square grey box that ignores the
+         * whole design system. The stat pills next to them use the app's own
+         * <Tooltip>, so the composer ends up with two unrelated tooltip looks.
+         *
+         * Bubble geometry and tokens copied from the app's tooltip surface
+         * (`._bubble_44yfq_1`): 3px 7px padding, radius-sm, 13/20 type, dark
+         * `--dsw-alias-tooltip-bg` on `--dsw-static-neutral-bluish-00`.
+         */
+        install: () => installNativeTitleTakeover(),
+        css: () => `
+.vt-interface-tip {
+  position: fixed;
+  z-index: 3000;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(50vw, calc(100vw - 24px));
+  padding: 3px 7px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-tooltip-bg);
+  color: var(--dsw-static-neutral-bluish-00);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: pre-line;
+  overflow-wrap: break-word;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.vt-interface-tip[data-visible='true'] { opacity: 1; }`,
+      },
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -726,6 +761,160 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       } catch (error) {
         /* diagnostics must never break the visual layer */
       }
+    }
+
+    /**
+     * Native `title` tooltips cannot be styled: the browser/OS draws them, so no
+     * selector, property or token reaches them. The app's own <Tooltip> is a React
+     * component, so a plugin cannot wrap the chips in it either.
+     *
+     * The only route left is to take the attribute over. Inside the composer, the
+     * text is moved off `title` into a private map (the element keeps its
+     * `aria-label`, so assistive tech is unaffected) and re-rendered as a bubble
+     * that copies the app's own tooltip geometry and tokens — see the `css()` of
+     * the `composer-tooltip` patch. Reverting restores every original attribute.
+     */
+    function installNativeTitleTakeover() {
+      const TIP_CLASS = 'vt-interface-tip';
+      const DELAY_MS = 380;
+      const GAP = 6;
+      const MARGIN = 8;
+
+      const stash = new Map();
+      let tip = null;
+      let showTimer;
+      let hideTimer;
+      let showing = null;
+
+      // Another component also uses `_card`; anchor discovery on the input itself,
+      // otherwise the sweep quietly walks the wrong subtree and adopts nothing.
+      const card = () => {
+        const input = document.querySelector('textarea, [contenteditable="true"]');
+        return (input && input.closest('[class*="_card"]')) || document.querySelector('[class*="_card"]');
+      };
+
+      /** Walk up a few ancestors looking for an element we adopted. */
+      const tracked = (node) => {
+        let el = node instanceof Element ? node : null;
+        for (let i = 0; el && i < 8; i += 1, el = el.parentElement) {
+          if (stash.has(el)) return el;
+        }
+        return null;
+      };
+
+      const adopt = (el) => {
+        const text = el.getAttribute('title');
+        if (!text) return;
+        if (!stash.has(el)) stash.set(el, text);
+        el.removeAttribute('title');
+      };
+
+      const sweep = () => {
+        const root = card();
+        if (!root) return;
+        for (const el of Array.from(root.querySelectorAll('[title]'))) adopt(el);
+      };
+
+      const node = () => {
+        if (tip) return tip;
+        tip = document.createElement('div');
+        tip.className = TIP_CLASS;
+        tip.setAttribute('role', 'tooltip');
+        // The visible text duplicates aria-label; keep screen readers on one.
+        tip.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(tip);
+        return tip;
+      };
+
+      const place = (el) => {
+        const bubble = node();
+        const rect = el.getBoundingClientRect();
+        const w = bubble.offsetWidth;
+        const h = bubble.offsetHeight;
+        const left = Math.min(
+          Math.max(rect.left + rect.width / 2 - w / 2, MARGIN),
+          Math.max(MARGIN, window.innerWidth - w - MARGIN),
+        );
+        let top = rect.top - GAP - h;
+        if (top < MARGIN) top = rect.bottom + GAP; // flip below when there is no room above
+        bubble.style.left = `${Math.round(left)}px`;
+        bubble.style.top = `${Math.round(top)}px`;
+      };
+
+      const hide = () => {
+        clearTimeout(showTimer);
+        clearTimeout(hideTimer);
+        showing = null;
+        if (tip) tip.removeAttribute('data-visible');
+      };
+
+      const show = (el) => {
+        const text = stash.get(el);
+        if (!text) return;
+        const bubble = node();
+        bubble.textContent = text;
+        showing = el;
+        place(el);
+        bubble.setAttribute('data-visible', 'true');
+      };
+
+      const onOver = (event) => {
+        // Safety net: a control rendered between sweeps still carries `title`.
+        // Adopt it here so the native tooltip never gets the chance to appear.
+        let fresh = event.target instanceof Element ? event.target : null;
+        for (let i = 0; fresh && i < 8; i += 1, fresh = fresh.parentElement) {
+          if (fresh.hasAttribute && fresh.hasAttribute('title')) adopt(fresh);
+        }
+        const el = tracked(event.target);
+        if (!el) { if (showing && !tracked(event.relatedTarget)) hide(); return; }
+        if (el === showing) return;
+        clearTimeout(showTimer);
+        clearTimeout(hideTimer);
+        if (showing) hide();
+        showTimer = setTimeout(() => show(el), DELAY_MS);
+      };
+
+      const onOut = (event) => {
+        const el = tracked(event.target);
+        if (!el) return;
+        if (tracked(event.relatedTarget) === el) return;
+        clearTimeout(showTimer);
+        hideTimer = setTimeout(hide, 60);
+      };
+
+      // Any movement of the page invalidates a fixed-position bubble.
+      const onDismiss = () => hide();
+
+      document.addEventListener('pointerover', onOver, true);
+      document.addEventListener('pointerout', onOut, true);
+      document.addEventListener('pointerdown', onDismiss, true);
+      window.addEventListener('scroll', onDismiss, true);
+      window.addEventListener('resize', onDismiss);
+
+      sweep();
+      // React re-renders put `title` back; adopt again whenever the composer
+      // subtree or its attributes change.
+      const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+        sweep();
+        if (showing) hide();
+      });
+      if (observer) observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['title'] });
+
+      return () => {
+        clearTimeout(showTimer);
+        clearTimeout(hideTimer);
+        document.removeEventListener('pointerover', onOver, true);
+        document.removeEventListener('pointerout', onOut, true);
+        document.removeEventListener('pointerdown', onDismiss, true);
+        window.removeEventListener('scroll', onDismiss, true);
+        window.removeEventListener('resize', onDismiss);
+        if (observer) observer.disconnect();
+        if (tip) { tip.remove(); tip = null; }
+        for (const [el, text] of stash) {
+          try { el.setAttribute('title', text); } catch (err) { /* detached */ }
+        }
+        stash.clear();
+      };
     }
 
     /**
@@ -990,6 +1179,17 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
           hasSelector: CSS.supports('selector(:has(*))'),
         };
       } catch (err) { payload.support = null; }
+      // Native titles should be gone from the composer once the takeover runs.
+      payload.titles = cardEl ? cardEl.querySelectorAll('[title]').length : -1;
+      payload.titlesDoc = document.querySelectorAll('[title]').length;
+      payload.tipCss = false;
+      vtWalkRules(vtStyleSheets(), (rule) => {
+        if ((rule.selectorText || '').includes('.vt-interface-tip')) payload.tipCss = true;
+      });
+      const tipEl = document.querySelector('.vt-interface-tip');
+      payload.tip = tipEl
+        ? { visible: tipEl.getAttribute('data-visible'), text: (tipEl.textContent || '').slice(0, 60) }
+        : null;
       payload.metrics = vtFontMetrics();
       payload.sheets = vtSheetScan(['pn0E2q_trigger', 'kKSgSq_chip', '_ghost_1rv3m_', 'SJRB_q_trigger']);
       // Every rule we emit carries !important; nothing shipped upstream does in
@@ -1130,6 +1330,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       const componentPatches = PATCHES.filter((p) => p.kind === 'component');
       const variablePatches = PATCHES.filter((p) => p.kind === 'variables');
       const tokenPatches = PATCHES.filter((p) => p.kind === 'tokens');
+      const behaviorPatches = PATCHES.filter((p) => p.kind === 'behavior');
 
       // Tokens: one service call each; the service revokes on dispose.
       for (const patch of tokenPatches) {
@@ -1138,6 +1339,10 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
 
       if (typeof document === 'undefined') {
         return { dispose() { for (const d of disposers.reverse()) safeCall(d); }, status: () => ({}) };
+      }
+
+      for (const patch of behaviorPatches) {
+        try { disposers.push(patch.install(ctx)); } catch (err) { /* keep going */ }
       }
 
       const host = createStyleHost(ctx);
@@ -1151,7 +1356,8 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
         const { css, status, selectors } = renderComponents(componentPatches);
         resolution = status;
         lastSelectors = selectors;
-        host.set([...variablePatches.map(renderVariables), css, extra].join('\n'));
+        const behaviorCss = behaviorPatches.map((p) => (p.css ? p.css() : '')).join('\n');
+        host.set([...variablePatches.map(renderVariables), css, behaviorCss, extra].join('\n'));
         publishReport(ctx, status, selectors);
       };
 
