@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-interface';
-    const VERSION = '2.5.0';
+    const VERSION = '2.5.1';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -176,6 +176,19 @@ window.__ModuleLoader__.load({
      * renders at 1.39px, i.e. between the mic and the send arrow.
      */
     const ADD_GLYPH = { size: 13, stroke: 1.5 };
+
+    /**
+     * How far the "+" is pulled toward the permission chip.
+     *
+     * The row's rhythm is 12px box-to-box, and that is right everywhere except
+     * here: the plus is a 13px glyph centred in a 28px hit box (7.5px of empty on
+     * each side), while the chip starts with 8px of its own padding before its
+     * shield glyph. Boxes 12px apart therefore read as ~27px between the two
+     * glyphs, i.e. the left cluster looks split in two. Pulling the button 4px
+     * closes that optical gap without touching the row gap or any other pair; the
+     * hover plates still keep 8px between them.
+     */
+    const ADD_PULL = 4;
 
     /**
      * Transcript edge fade.
@@ -588,6 +601,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
 ${selector} {
   background: transparent !important;
   border-radius: 999px !important;
+  margin-right: -${ADD_PULL}px !important;
   ${CONTROL_SHAPE}
 }
 /* Same token the mic uses, so the two icon buttons answer the pointer alike. */
