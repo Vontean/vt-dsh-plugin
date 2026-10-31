@@ -141,3 +141,27 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
   `exports["./client"]` 与独立装载生命周期。
 - `index.js`（host 半边）与 `client.js` 之间没有 import 关系：它们是 Cordis bundle 的两半，
   各自被装载器单独加载。这不是耦合，是契约。
+
+## 模块面（v2.2 起）
+
+`client.js` 只能是一个文件，所以模块边界靠**闭包 + 单一入口**表达，不靠文件。
+四段各有且只有一个对外面，段间只通过它往来：
+
+| 段 | 对外面 | 说明 |
+|---|---|---|
+| DOMAIN | `PATCHES` | 纯数据：要改什么。不含选择器逻辑、不含 DOM 操作 |
+| CSSOM 基底 | `collectStyleSheets()` / `walkRules()` | 唯一有两个真实消费者的底层：适配器做 discovery，探针做审计 |
+| ADAPTERS | `createAdapters(ctx, patches)` | 返回 `applyTokenPatches` / `sync` / `installBehaviors` / `behaviorErrors` / `dispose` |
+| PROBE | `createProbe(readState)` | 返回 `dump` / `dispose`；引擎只传一个状态读取器 |
+| ENGINE | `mount(ctx)` | 只管生命周期、重试、诊断；不认任何 DSH 概念 |
+
+两条硬规则：
+
+1. **数据段只说「要什么」，适配器决定「怎么做」。** 例如 `behavior: 'native-tooltip'` 是行为名，
+   实现放在适配器闭包内的 `BEHAVIORS` 表里。若反过来把函数引用写进补丁数据，数据段就必须
+   伸进适配器闭包 —— 那正是这一层要挡住的耦合。
+2. **跨段只走入口。** 引擎不再直接调用 `resolveTarget` / `renderVariables` / `createStyleHost`；
+   探针不再回头读引擎内部状态，而是拿一个 `readState` 回调。
+
+行为安装失败会在 `__vtInterface.behaviors()` 里留下 `{ installed, total, errors }`。
+历史上这类失败被 try/catch 静默吞掉，表现是「界面上完全没变化」，排查代价很高。

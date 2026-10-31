@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-interface';
-    const VERSION = '2.1.0';
+    const VERSION = '2.2.0';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -538,7 +538,8 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
          * (`._bubble_44yfq_1`): 3px 7px padding, radius-sm, 13/20 type, dark
          * `--dsw-alias-tooltip-bg` on `--dsw-static-neutral-bluish-00`.
          */
-        install: (readSelectors) => installNativeTitleTakeover(readSelectors),
+        /** Named, not wired: the adapter layer owns the implementation. */
+        behavior: 'native-tooltip',
         css: () => `
 .vt-interface-tip {
   position: fixed;
@@ -563,31 +564,12 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ADAPTERS — the anti-corruption layer. Each takes one patch and returns a
-    // disposer. They are the only code allowed to know how DSH works.
+    // CSSOM SUBSTRATE — the only two primitives with two real consumers:
+    // adapter discovery walks the sheets to resolve a target, the probe walks
+    // them to audit which rule won. Shared instead of duplicated, and free of
+    // policy: they answer "what is reachable", never "what should change".
     // ═══════════════════════════════════════════════════════════════════════
 
-    /** Theme service: light/dark token pairs, revoked by dropping the layer. */
-    function applyTokens(patch, ctx) {
-      return ctx.theme.overrideTokens(patch.source, patch.tokens());
-    }
-
-    /**
-     * DSH declares these properties on `body, body *`, so every element
-     * re-declares them and an inline value on `body` never reaches a descendant.
-     * Redeclaring on the same selector pair with !important is the only way in,
-     * and it avoids hashed class names entirely.
-     */
-    function renderVariables(patch) {
-      const valueFor = (name, scheme) => patch.variables[name][scheme];
-      const names = Object.keys(patch.variables);
-      const light = names.map((n) => `  ${n}: ${valueFor(n, 'light')} !important;`).join('\n');
-      const dark = names.map((n) => `  ${n}: ${valueFor(n, 'dark')} !important;`).join('\n');
-      return [
-        `body, body * {\n${light}\n}`,
-        `body[data-ds-dark-theme], body[data-ds-dark-theme] * {\n${dark}\n}`,
-      ].join('\n');
-    }
 
     /**
      * Every stylesheet reachable from the document.
@@ -599,7 +581,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
      * voice-button patch reports `fallback` while still working: only the shipped
      * hash keeps it alive. Shadow roots are walked for the same reason.
      */
-    function vtStyleSheets() {
+    function collectStyleSheets() {
       if (typeof document === 'undefined') return [];
       const sheets = [];
       const seen = new Set();
@@ -620,8 +602,9 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       return sheets;
     }
 
+
     /** Depth-first walk over plain rules and grouping rules (@media, @layer). */
-    function vtWalkRules(sheets, visit) {
+    function walkRules(sheets, visit) {
       const walk = (rules) => {
         for (const rule of Array.from(rules || [])) {
           if (!rule.selectorText && rule.cssRules) { walk(rule.cssRules); continue; }
@@ -636,364 +619,489 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       }
     }
 
-    /**
-     * Resolve a component target from the live CSSOM by rule signature, so the
-     * result survives CSS-module hash changes. Returns null when no candidate is
-     * readable yet; callers fall back to the shipped constant.
-     *
-     * `sheets` is passed in so one discovery pass reads every sheet once instead
-     * of once per patch.
-     */
-    function resolveTarget(patch, sheets) {
-      if (typeof document === 'undefined') return null;
-      const found = [];
-      vtWalkRules(sheets || vtStyleSheets(), (rule) => {
-        const probe = (rule.style.cssText || '').replace(/\s+/g, '').toLowerCase();
-        if (!patch.signature.every((token) => probe.includes(token))) return;
-        // Optional exclusions: a rule carrying a rejected token is not a match.
-        if (patch.reject && patch.reject.some((token) => probe.includes(token))) return;
-        // Optional selector constraint, for families whose bodies look alike.
-        if (patch.selectorFilter && !new RegExp(patch.selectorFilter).test(rule.selectorText)) return;
-        for (const match of rule.selectorText.matchAll(/\.([A-Za-z0-9_-]+)/g)) found.push(match[1]);
-      });
-      if (found.length === 0) return [];
-      const unique = [...new Set(found)];
-      unique.sort((a, b) => {
-        const pa = /_primary$/.test(a) ? 0 : 1;
-        const pb = /_primary$/.test(b) ? 0 : 1;
-        return pa - pb || a.length - b.length;
-      });
-      return unique.map((name) => `.${name}`);
-    }
+    // ═══════════════════════════════════════════════════════════════════════
+    // ADAPTERS — the anti-corruption layer, behind a single face.
+    //
+    // The engine never sees a resolver, a selector, a stylesheet or a token
+    // name: it asks for `applyTokenPatches` / `sync` / `installBehaviors` and
+    // gets back the state it has to report. Everything DSH-specific — hashed
+    // classes, `body, body *` declarations, literal geometry — stops inside
+    // this closure.
+    // ═══════════════════════════════════════════════════════════════════════
 
-    /**
-     * Render every component patch. A patch declares how many matches it wants:
-     *   match: 'first' (default) — the single best candidate;
-     *   match: 'all'             — every rule carrying the signature, for families
-     *                              of controls that repeat across components.
-     * Unresolved targets fall back to the shipped constant, and if even that is
-     * stale the selector simply matches nothing.
-     */
-    function renderComponents(patches) {
-      const blocks = [];
-      const status = {};
-      const selectorsById = {};
-      // Read the stylesheet graph once per pass: adopted sheets are invisible to
-      // a per-patch scan that rebuilds the list, and the walk is not free.
-      const sheets = (typeof document === 'undefined') ? [] : vtStyleSheets();
-      for (const patch of patches) {
-        const discovered = resolveTarget(patch, sheets);
-        const selectors = discovered.length
-          ? (patch.match === 'all' ? discovered : discovered.slice(0, 1))
-          : [patch.fallback];
-        status[patch.id] = discovered.length
-          ? `discovered:${selectors.length}`
-          : 'fallback';
-        selectorsById[patch.id] = selectors;
-        blocks.push(patch.rules(selectors.join(',\n')));
-      }
-      return { css: blocks.join('\n'), status, selectors: selectorsById };
-    }
+    function createAdapters(ctx, patches) {
+      /** Disposers for everything the adapters acquire, released in reverse. */
+      const disposers = [];
+      /** Why a behaviour failed to install; surfaced through diagnostics. */
+      const behaviorErrors = [];
+      /** Created on first sync, so a document-less host never touches the DOM. */
+      let sheet = null;
+      const ensureSheet = () => sheet || (sheet = createStyleHost(ctx));
 
-    /**
-     * Remote diagnostics without any DOM access from the maintainer's side.
-     *
-     * The Theme inspect provider lists token NAMES but not values, so the measured
-     * result is encoded INTO the name: radius, size and padding of the first
-     * element each component patch resolved to. Values are empty strings, so
-     * nothing consumes these properties and nothing renders differently.
-     *
-     * Reading `--vt-report-<patch>-radius-<value>` is therefore enough to verify
-     * that a patch both resolved AND won the cascade.
-     */
-    function sanitize(text) {
-      return String(text)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 150);
-    }
 
-    /**
-     * The always-on verification channel: the resolved state of every patch,
-     * encoded into theme-token NAMES because the inspect provider lists names and
-     * not values.
-     *
-     * Scope is deliberately narrow — "did this patch resolve, and did its
-     * selector land on an element of a plausible size" — because it runs on every
-     * body mutation. Anything richer (computed styles, hover rules, pseudo
-     * elements) belongs to the opt-in probe, which pays for itself only while
-     * debugging.
-     */
-    function publishReport(ctx, status, selectorsById) {
-      if (typeof getComputedStyle !== 'function') return;
-      const report = { build: VERSION };
-      for (const [id, value] of Object.entries(status)) report[id] = value;
-      for (const [id, selectors] of Object.entries(selectorsById)) {
-        let firstElement = null;
-        selectors.forEach((selector, index) => {
-          let count = 0;
-          let element = null;
-          try {
-            const list = document.querySelectorAll(selector);
-            count = list.length;
-            element = list[0] || null;
-          } catch (error) {
-            count = -1;
-          }
-          report[`${id}-s${index}-n`] = count;
-          if (!firstElement && element) firstElement = element;
-        });
-        if (!firstElement) { report[`${id}-el`] = 'none'; continue; }
-        const style = getComputedStyle(firstElement);
-        const rect = firstElement.getBoundingClientRect();
-        report[`${id}-radius`] = style.borderRadius;
-        report[`${id}-size`] = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
-        if (id.includes('row')) report[`${id}-pad`] = style.padding;
+      // ═══════════════════════════════════════════════════════════════════════
+      // ADAPTERS — the anti-corruption layer. Each takes one patch and returns a
+      // disposer. They are the only code allowed to know how DSH works.
+      // ═══════════════════════════════════════════════════════════════════════
+
+      /** Theme service: light/dark token pairs, revoked by dropping the layer. */
+      function applyTokens(patch, ctx) {
+        return ctx.theme.overrideTokens(patch.source, patch.tokens());
       }
 
-      const tokens = {};
-      for (const [key, value] of Object.entries(report)) {
-        tokens[`--vt-report-${sanitize(key)}-${sanitize(value)}`] = { light: '', dark: '' };
-      }
-      try {
-        ctx.theme.overrideTokens('vt-interface:report', tokens);
-      } catch (error) {
-        /* diagnostics must never break the visual layer */
-      }
-    }
-
-    /**
-     * Native `title` tooltips cannot be styled: the browser/OS draws them, so no
-     * selector, property or token reaches them. The app's own <Tooltip> is a React
-     * component, so a plugin cannot wrap the chips in it either.
-     *
-     * The only route left is to take the attribute over. Inside the composer, the
-     * text is moved off `title` into a private map (the element keeps its
-     * `aria-label`, so assistive tech is unaffected) and re-rendered as a bubble
-     * that copies the app's own tooltip geometry and tokens — see the `css()` of
-     * the `composer-tooltip` patch. Reverting restores every original attribute.
-     */
-    function installNativeTitleTakeover(readSelectors) {
-      const TIP_CLASS = 'vt-interface-tip';
-      const DELAY_MS = 380;
-      const GAP = 6;
-      const MARGIN = 8;
-
-      /** element -> { text (what the bubble shows), aria, fromTitle } */
-      const stash = new Map();
-      let tip = null;
-      let showTimer;
-      let hideTimer;
-      let showing = null;
-      let shownText = null;
-
-      // Another component also uses `_card`; anchor discovery on the input itself,
-      // otherwise the sweep quietly walks the wrong subtree and adopts nothing.
-      const card = () => {
-        const input = document.querySelector('textarea, [contenteditable="true"]');
-        return (input && input.closest('[class*="_card"]')) || document.querySelector('[class*="_card"]');
-      };
 
       /**
-       * Which controls get a bubble. Taken from the patches that own them, so the
-       * takeover cannot drift onto every button in the composer.
+       * DSH declares these properties on `body, body *`, so every element
+       * re-declares them and an inline value on `body` never reaches a descendant.
+       * Redeclaring on the same selector pair with !important is the only way in,
+       * and it avoids hashed class names entirely.
        */
-      const watchedSelectors = () => {
-        const map = (typeof readSelectors === 'function' && readSelectors()) || {};
-        const list = [...(map['composer-select-chips'] || []), ...(map['composer-model-trigger'] || [])];
-        return list.length ? list : ['.JZLxKW_select'];
-      };
-
-      const arm = (el) => {
-        const title = el.getAttribute('title');
-        const aria = el.getAttribute('aria-label') || '';
-        if (title) {
-          // Remember the pair: React will not restore a prop whose value never
-          // changed, so after a plugin remount the attribute is gone for good.
-          // The pair lets the next generation tell "same mode, attribute lost"
-          // apart from "the mode switched".
-          el.dataset.vtTitle = title;
-          el.dataset.vtTitleAria = aria;
-          stash.set(el, { text: title, aria, fromTitle: true });
-          el.removeAttribute('title');
-          return;
-        }
-        // Same mode as when the title was captured: we removed the attribute,
-        // nothing changed, so keep reading the richer title text.
-        if (el.dataset.vtTitle && el.dataset.vtTitleAria === aria) {
-          stash.set(el, { text: el.dataset.vtTitle, aria, fromTitle: true });
-          return;
-        }
-        // A preset that ships no native title at all (three of the four
-        // permission modes), or a mode switch: describe it with aria-label.
-        if (aria) stash.set(el, { text: aria, aria, fromTitle: false });
-      };
-
-      const sweep = () => {
-        const root = card();
-        if (!root) return;
-        // 1. Everything in the composer that still carries a native title, so the
-        //    composer never mixes two tooltip looks (add / mic / send included).
-        for (const el of Array.from(root.querySelectorAll('[title]'))) arm(el);
-        // 2. Controls that may ship no native title at all — three of the four
-        //    permission presets — are named by the patches that own them.
-        for (const selector of watchedSelectors()) {
-          let list;
-          try { list = root.querySelectorAll(selector); } catch (err) { continue; }
-          for (const el of Array.from(list)) arm(el);
-        }
-      };
-
-      /** Walk up a few ancestors looking for an element we manage. */
-      const tracked = (node) => {
-        let el = node instanceof Element ? node : null;
-        for (let i = 0; el && i < 8; i += 1, el = el.parentElement) {
-          if (stash.has(el)) return el;
-        }
-        return null;
-      };
-
-      const node = () => {
-        if (tip) return tip;
-        tip = document.createElement('div');
-        tip.className = TIP_CLASS;
-        tip.setAttribute('role', 'tooltip');
-        // The visible text duplicates aria-label; keep screen readers on one.
-        tip.setAttribute('aria-hidden', 'true');
-        document.body.appendChild(tip);
-        return tip;
-      };
-
-      const place = (el) => {
-        const bubble = node();
-        const rect = el.getBoundingClientRect();
-        const w = bubble.offsetWidth;
-        const h = bubble.offsetHeight;
-        const left = Math.min(
-          Math.max(rect.left + rect.width / 2 - w / 2, MARGIN),
-          Math.max(MARGIN, window.innerWidth - w - MARGIN),
-        );
-        let top = rect.top - GAP - h;
-        if (top < MARGIN) top = rect.bottom + GAP; // flip below when there is no room above
-        bubble.style.left = `${Math.round(left)}px`;
-        bubble.style.top = `${Math.round(top)}px`;
-      };
-
-      const hide = () => {
-        clearTimeout(showTimer);
-        clearTimeout(hideTimer);
-        showing = null;
-        shownText = null;
-        if (tip) tip.removeAttribute('data-visible');
-      };
-
-      const show = (el) => {
-        const entry = stash.get(el);
-        if (!entry || !entry.text) return;
-        const bubble = node();
-        bubble.textContent = entry.text;
-        showing = el;
-        shownText = entry.text;
-        place(el);
-        bubble.setAttribute('data-visible', 'true');
-      };
-
-      const onOver = (event) => {
-        // Safety net: a control rendered between sweeps is armed right here, so
-        // the native tooltip never gets the chance to appear.
-        sweep();
-        const el = tracked(event.target);
-        if (!el) { if (showing && !tracked(event.relatedTarget)) hide(); return; }
-        if (el === showing) return;
-        clearTimeout(showTimer);
-        clearTimeout(hideTimer);
-        if (showing) hide();
-        showTimer = setTimeout(() => show(el), DELAY_MS);
-      };
-
-      const onOut = (event) => {
-        const el = tracked(event.target);
-        if (!el) return;
-        if (tracked(event.relatedTarget) === el) return;
-        clearTimeout(showTimer);
-        hideTimer = setTimeout(hide, 60);
-      };
-
-      // Any movement of the page invalidates a fixed-position bubble.
-      const onDismiss = () => hide();
-
-      document.addEventListener('pointerover', onOver, true);
-      document.addEventListener('pointerout', onOut, true);
-      document.addEventListener('pointerdown', onDismiss, true);
-      window.addEventListener('scroll', onDismiss, true);
-      window.addEventListener('resize', onDismiss);
-
-      sweep();
-      // React re-renders rewrite these attributes, so re-arm on every mutation.
-      // `aria-label` is watched because a preset without a native title changes
-      // only that attribute when the mode switches.
-      //
-      // Deliberately do NOT hide here: the app mutates the body constantly while a
-      // turn streams, and hiding on any mutation killed the bubble the instant it
-      // appeared.
-      const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
-        sweep();
-        // The anchor can also be replaced rather than updated; follow it.
-        if (showing && !showing.isConnected) hide();
-        // The help text is per-mode, so a visible bubble can go stale.
-        const entry = showing ? stash.get(showing) : null;
-        if (showing && entry && entry.text !== shownText) hide();
-      });
-      if (observer) {
-        observer.observe(document.body, {
-          childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['title', 'aria-label'],
-        });
+      function renderVariables(patch) {
+        const valueFor = (name, scheme) => patch.variables[name][scheme];
+        const names = Object.keys(patch.variables);
+        const light = names.map((n) => `  ${n}: ${valueFor(n, 'light')} !important;`).join('\n');
+        const dark = names.map((n) => `  ${n}: ${valueFor(n, 'dark')} !important;`).join('\n');
+        return [
+          `body, body * {\n${light}\n}`,
+          `body[data-ds-dark-theme], body[data-ds-dark-theme] * {\n${dark}\n}`,
+        ].join('\n');
       }
 
-      return () => {
-        clearTimeout(showTimer);
-        clearTimeout(hideTimer);
-        document.removeEventListener('pointerover', onOver, true);
-        document.removeEventListener('pointerout', onOut, true);
-        document.removeEventListener('pointerdown', onDismiss, true);
-        window.removeEventListener('scroll', onDismiss, true);
-        window.removeEventListener('resize', onDismiss);
-        if (observer) observer.disconnect();
-        if (tip) { tip.remove(); tip = null; }
-        // Only attributes we removed are restored; aria-label was never touched.
-        for (const [el, entry] of stash) {
-          try {
-            delete el.dataset.vtTitle;
-            delete el.dataset.vtTitleAria;
-            if (entry.fromTitle) el.setAttribute('title', entry.text);
-          } catch (err) { /* detached */ }
-        }
-        stash.clear();
-      };
-    }
 
-    /**
-     * Owns the single injected stylesheet. Styled with the loader's documented
-     * markers so the client module loader can reclaim it, and removed on dispose.
-     */
-    function createStyleHost(ctx) {
-      const tag = document.createElement('style');
-      tag.dataset.plugin = PLUGIN_ID;
-      tag.dataset.pluginCss = `${PLUGIN_ID}/vt-interface.css`;
-      document.head.appendChild(tag);
-      let current = null;
+      /**
+       * Resolve a component target from the live CSSOM by rule signature, so the
+       * result survives CSS-module hash changes. Returns null when no candidate is
+       * readable yet; callers fall back to the shipped constant.
+       *
+       * `sheets` is passed in so one discovery pass reads every sheet once instead
+       * of once per patch.
+       */
+      function resolveTarget(patch, sheets) {
+        if (typeof document === 'undefined') return null;
+        const found = [];
+        walkRules(sheets || collectStyleSheets(), (rule) => {
+          const probe = (rule.style.cssText || '').replace(/\s+/g, '').toLowerCase();
+          if (!patch.signature.every((token) => probe.includes(token))) return;
+          // Optional exclusions: a rule carrying a rejected token is not a match.
+          if (patch.reject && patch.reject.some((token) => probe.includes(token))) return;
+          // Optional selector constraint, for families whose bodies look alike.
+          if (patch.selectorFilter && !new RegExp(patch.selectorFilter).test(rule.selectorText)) return;
+          for (const match of rule.selectorText.matchAll(/\.([A-Za-z0-9_-]+)/g)) found.push(match[1]);
+        });
+        if (found.length === 0) return [];
+        const unique = [...new Set(found)];
+        unique.sort((a, b) => {
+          const pa = /_primary$/.test(a) ? 0 : 1;
+          const pb = /_primary$/.test(b) ? 0 : 1;
+          return pa - pb || a.length - b.length;
+        });
+        return unique.map((name) => `.${name}`);
+      }
+
+
+      /**
+       * Render every component patch. A patch declares how many matches it wants:
+       *   match: 'first' (default) — the single best candidate;
+       *   match: 'all'             — every rule carrying the signature, for families
+       *                              of controls that repeat across components.
+       * Unresolved targets fall back to the shipped constant, and if even that is
+       * stale the selector simply matches nothing.
+       */
+      function renderComponents(patches) {
+        const blocks = [];
+        const status = {};
+        const selectorsById = {};
+        // Read the stylesheet graph once per pass: adopted sheets are invisible to
+        // a per-patch scan that rebuilds the list, and the walk is not free.
+        const sheets = (typeof document === 'undefined') ? [] : collectStyleSheets();
+        for (const patch of patches) {
+          const discovered = resolveTarget(patch, sheets);
+          const selectors = discovered.length
+            ? (patch.match === 'all' ? discovered : discovered.slice(0, 1))
+            : [patch.fallback];
+          status[patch.id] = discovered.length
+            ? `discovered:${selectors.length}`
+            : 'fallback';
+          selectorsById[patch.id] = selectors;
+          blocks.push(patch.rules(selectors.join(',\n')));
+        }
+        return { css: blocks.join('\n'), status, selectors: selectorsById };
+      }
+
+
+      /**
+       * Remote diagnostics without any DOM access from the maintainer's side.
+       *
+       * The Theme inspect provider lists token NAMES but not values, so the measured
+       * result is encoded INTO the name: radius, size and padding of the first
+       * element each component patch resolved to. Values are empty strings, so
+       * nothing consumes these properties and nothing renders differently.
+       *
+       * Reading `--vt-report-<patch>-radius-<value>` is therefore enough to verify
+       * that a patch both resolved AND won the cascade.
+       */
+      function sanitize(text) {
+        return String(text)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 150);
+      }
+
+
+      /**
+       * The always-on verification channel: the resolved state of every patch,
+       * encoded into theme-token NAMES because the inspect provider lists names and
+       * not values.
+       *
+       * Scope is deliberately narrow — "did this patch resolve, and did its
+       * selector land on an element of a plausible size" — because it runs on every
+       * body mutation. Anything richer (computed styles, hover rules, pseudo
+       * elements) belongs to the opt-in probe, which pays for itself only while
+       * debugging.
+       */
+      function publishReport(ctx, status, selectorsById) {
+        if (typeof getComputedStyle !== 'function') return;
+        const report = { build: VERSION };
+        for (const [id, value] of Object.entries(status)) report[id] = value;
+        for (const [id, selectors] of Object.entries(selectorsById)) {
+          let firstElement = null;
+          selectors.forEach((selector, index) => {
+            let count = 0;
+            let element = null;
+            try {
+              const list = document.querySelectorAll(selector);
+              count = list.length;
+              element = list[0] || null;
+            } catch (error) {
+              count = -1;
+            }
+            report[`${id}-s${index}-n`] = count;
+            if (!firstElement && element) firstElement = element;
+          });
+          if (!firstElement) { report[`${id}-el`] = 'none'; continue; }
+          const style = getComputedStyle(firstElement);
+          const rect = firstElement.getBoundingClientRect();
+          report[`${id}-radius`] = style.borderRadius;
+          report[`${id}-size`] = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
+          if (id.includes('row')) report[`${id}-pad`] = style.padding;
+        }
+
+        const tokens = {};
+        for (const [key, value] of Object.entries(report)) {
+          tokens[`--vt-report-${sanitize(key)}-${sanitize(value)}`] = { light: '', dark: '' };
+        }
+        try {
+          ctx.theme.overrideTokens('vt-interface:report', tokens);
+        } catch (error) {
+          /* diagnostics must never break the visual layer */
+        }
+      }
+
+
+      /**
+       * Native `title` tooltips cannot be styled: the browser/OS draws them, so no
+       * selector, property or token reaches them. The app's own <Tooltip> is a React
+       * component, so a plugin cannot wrap the chips in it either.
+       *
+       * The only route left is to take the attribute over. Inside the composer, the
+       * text is moved off `title` into a private map (the element keeps its
+       * `aria-label`, so assistive tech is unaffected) and re-rendered as a bubble
+       * that copies the app's own tooltip geometry and tokens — see the `css()` of
+       * the `composer-tooltip` patch. Reverting restores every original attribute.
+       */
+      function installNativeTitleTakeover(readSelectors) {
+        const TIP_CLASS = 'vt-interface-tip';
+        const DELAY_MS = 380;
+        const GAP = 6;
+        const MARGIN = 8;
+
+        /** element -> { text (what the bubble shows), aria, fromTitle } */
+        const stash = new Map();
+        let tip = null;
+        let showTimer;
+        let hideTimer;
+        let showing = null;
+        let shownText = null;
+
+        // Another component also uses `_card`; anchor discovery on the input itself,
+        // otherwise the sweep quietly walks the wrong subtree and adopts nothing.
+        const card = () => {
+          const input = document.querySelector('textarea, [contenteditable="true"]');
+          return (input && input.closest('[class*="_card"]')) || document.querySelector('[class*="_card"]');
+        };
+
+        /**
+         * Which controls get a bubble. Taken from the patches that own them, so the
+         * takeover cannot drift onto every button in the composer.
+         */
+        const watchedSelectors = () => {
+          const map = (typeof readSelectors === 'function' && readSelectors()) || {};
+          const list = [...(map['composer-select-chips'] || []), ...(map['composer-model-trigger'] || [])];
+          return list.length ? list : ['.JZLxKW_select'];
+        };
+
+        const arm = (el) => {
+          const title = el.getAttribute('title');
+          const aria = el.getAttribute('aria-label') || '';
+          if (title) {
+            // Remember the pair: React will not restore a prop whose value never
+            // changed, so after a plugin remount the attribute is gone for good.
+            // The pair lets the next generation tell "same mode, attribute lost"
+            // apart from "the mode switched".
+            el.dataset.vtTitle = title;
+            el.dataset.vtTitleAria = aria;
+            stash.set(el, { text: title, aria, fromTitle: true });
+            el.removeAttribute('title');
+            return;
+          }
+          // Same mode as when the title was captured: we removed the attribute,
+          // nothing changed, so keep reading the richer title text.
+          if (el.dataset.vtTitle && el.dataset.vtTitleAria === aria) {
+            stash.set(el, { text: el.dataset.vtTitle, aria, fromTitle: true });
+            return;
+          }
+          // A preset that ships no native title at all (three of the four
+          // permission modes), or a mode switch: describe it with aria-label.
+          if (aria) stash.set(el, { text: aria, aria, fromTitle: false });
+        };
+
+        const sweep = () => {
+          const root = card();
+          if (!root) return;
+          // 1. Everything in the composer that still carries a native title, so the
+          //    composer never mixes two tooltip looks (add / mic / send included).
+          for (const el of Array.from(root.querySelectorAll('[title]'))) arm(el);
+          // 2. Controls that may ship no native title at all — three of the four
+          //    permission presets — are named by the patches that own them.
+          for (const selector of watchedSelectors()) {
+            let list;
+            try { list = root.querySelectorAll(selector); } catch (err) { continue; }
+            for (const el of Array.from(list)) arm(el);
+          }
+        };
+
+        /** Walk up a few ancestors looking for an element we manage. */
+        const tracked = (node) => {
+          let el = node instanceof Element ? node : null;
+          for (let i = 0; el && i < 8; i += 1, el = el.parentElement) {
+            if (stash.has(el)) return el;
+          }
+          return null;
+        };
+
+        const node = () => {
+          if (tip) return tip;
+          tip = document.createElement('div');
+          tip.className = TIP_CLASS;
+          tip.setAttribute('role', 'tooltip');
+          // The visible text duplicates aria-label; keep screen readers on one.
+          tip.setAttribute('aria-hidden', 'true');
+          document.body.appendChild(tip);
+          return tip;
+        };
+
+        const place = (el) => {
+          const bubble = node();
+          const rect = el.getBoundingClientRect();
+          const w = bubble.offsetWidth;
+          const h = bubble.offsetHeight;
+          const left = Math.min(
+            Math.max(rect.left + rect.width / 2 - w / 2, MARGIN),
+            Math.max(MARGIN, window.innerWidth - w - MARGIN),
+          );
+          let top = rect.top - GAP - h;
+          if (top < MARGIN) top = rect.bottom + GAP; // flip below when there is no room above
+          bubble.style.left = `${Math.round(left)}px`;
+          bubble.style.top = `${Math.round(top)}px`;
+        };
+
+        const hide = () => {
+          clearTimeout(showTimer);
+          clearTimeout(hideTimer);
+          showing = null;
+          shownText = null;
+          if (tip) tip.removeAttribute('data-visible');
+        };
+
+        const show = (el) => {
+          const entry = stash.get(el);
+          if (!entry || !entry.text) return;
+          const bubble = node();
+          bubble.textContent = entry.text;
+          showing = el;
+          shownText = entry.text;
+          place(el);
+          bubble.setAttribute('data-visible', 'true');
+        };
+
+        const onOver = (event) => {
+          // Safety net: a control rendered between sweeps is armed right here, so
+          // the native tooltip never gets the chance to appear.
+          sweep();
+          const el = tracked(event.target);
+          if (!el) { if (showing && !tracked(event.relatedTarget)) hide(); return; }
+          if (el === showing) return;
+          clearTimeout(showTimer);
+          clearTimeout(hideTimer);
+          if (showing) hide();
+          showTimer = setTimeout(() => show(el), DELAY_MS);
+        };
+
+        const onOut = (event) => {
+          const el = tracked(event.target);
+          if (!el) return;
+          if (tracked(event.relatedTarget) === el) return;
+          clearTimeout(showTimer);
+          hideTimer = setTimeout(hide, 60);
+        };
+
+        // Any movement of the page invalidates a fixed-position bubble.
+        const onDismiss = () => hide();
+
+        document.addEventListener('pointerover', onOver, true);
+        document.addEventListener('pointerout', onOut, true);
+        document.addEventListener('pointerdown', onDismiss, true);
+        window.addEventListener('scroll', onDismiss, true);
+        window.addEventListener('resize', onDismiss);
+
+        sweep();
+        // React re-renders rewrite these attributes, so re-arm on every mutation.
+        // `aria-label` is watched because a preset without a native title changes
+        // only that attribute when the mode switches.
+        //
+        // Deliberately do NOT hide here: the app mutates the body constantly while a
+        // turn streams, and hiding on any mutation killed the bubble the instant it
+        // appeared.
+        const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+          sweep();
+          // The anchor can also be replaced rather than updated; follow it.
+          if (showing && !showing.isConnected) hide();
+          // The help text is per-mode, so a visible bubble can go stale.
+          const entry = showing ? stash.get(showing) : null;
+          if (showing && entry && entry.text !== shownText) hide();
+        });
+        if (observer) {
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['title', 'aria-label'],
+          });
+        }
+
+        return () => {
+          clearTimeout(showTimer);
+          clearTimeout(hideTimer);
+          document.removeEventListener('pointerover', onOver, true);
+          document.removeEventListener('pointerout', onOut, true);
+          document.removeEventListener('pointerdown', onDismiss, true);
+          window.removeEventListener('scroll', onDismiss, true);
+          window.removeEventListener('resize', onDismiss);
+          if (observer) observer.disconnect();
+          if (tip) { tip.remove(); tip = null; }
+          // Only attributes we removed are restored; aria-label was never touched.
+          for (const [el, entry] of stash) {
+            try {
+              delete el.dataset.vtTitle;
+              delete el.dataset.vtTitleAria;
+              if (entry.fromTitle) el.setAttribute('title', entry.text);
+            } catch (err) { /* detached */ }
+          }
+          stash.clear();
+        };
+      }
+
+
+      /**
+       * Owns the single injected stylesheet. Styled with the loader's documented
+       * markers so the client module loader can reclaim it, and removed on dispose.
+       */
+      function createStyleHost(ctx) {
+        const tag = document.createElement('style');
+        tag.dataset.plugin = PLUGIN_ID;
+        tag.dataset.pluginCss = `${PLUGIN_ID}/vt-interface.css`;
+        document.head.appendChild(tag);
+        let current = null;
+        return {
+          set(css) {
+            if (css === current) return;
+            current = css;
+            tag.textContent = css;
+          },
+          dispose() {
+            tag.remove();
+          },
+        };
+      }
+
+      /**
+       * Behaviour implementations, keyed by the name a patch declares.
+       *
+       * The data section names the intent (`behavior: 'native-tooltip'`); only this
+       * layer knows what that costs in DOM work. Wiring a function reference into
+       * the data instead would mean the data section has to reach into this
+       * closure — the exact coupling this layer exists to prevent.
+       */
+        const BEHAVIORS = {
+      'native-tooltip': (readSelectors) => installNativeTitleTakeover(readSelectors),
+      };
+
       return {
-        set(css) {
-          if (css === current) return;
-          current = css;
-          tag.textContent = css;
+        /** One Theme call per token patch; the service revokes on dispose. */
+        applyTokenPatches() {
+          for (const patch of patches.tokens) {
+            try { disposers.push(applyTokens(patch, ctx)); } catch (err) { /* keep going */ }
+          }
         },
+
+        /**
+         * Re-resolve every component patch, rewrite the injected sheet, and
+         * republish the report. Returns the state the engine must remember.
+         */
+        sync(extra) {
+          const { css, status, selectors } = renderComponents(patches.components);
+          const behaviorCss = patches.behaviors.map((p) => (p.css ? p.css() : '')).join('\n');
+          ensureSheet().set([
+            ...patches.variables.map(renderVariables),
+            css,
+            behaviorCss,
+            extra,
+          ].join('\n'));
+          publishReport(ctx, status, selectors);
+          return { status, selectors };
+        },
+
+        /**
+         * Behaviours install after the first sync: they need resolved selectors.
+         * The getter keeps them live across re-resolutions instead of freezing
+         * the first answer.
+         */
+        installBehaviors(readSelectors) {
+          let installed = 0;
+          for (const patch of patches.behaviors) {
+            try {
+              const factory = BEHAVIORS[patch.behavior];
+              if (typeof factory !== 'function') throw new Error(`unknown behaviour "${patch.behavior}"`);
+              disposers.push(factory(readSelectors));
+              installed += 1;
+            } catch (err) {
+              // A behaviour that throws must not take the visual layer down, but
+              // it must be visible: silently swallowing it looks like "no effect".
+              behaviorErrors.push(`${patch.id}: ${err && err.message ? err.message : String(err)}`);
+            }
+          }
+          return { installed, total: patches.behaviors.length, errors: behaviorErrors };
+        },
+
+        /** Why behaviours failed; empty when all of them installed. */
+        behaviorErrors() {
+          return [...behaviorErrors];
+        },
+
         dispose() {
-          tag.remove();
+          if (sheet) sheet.dispose();
+          for (const d of disposers.reverse()) safeCall(d);
         },
       };
     }
@@ -1038,7 +1146,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
     function vtHoverRules(el) {
       const hits = [];
       let order = 0;
-      for (const sheet of vtStyleSheets()) {
+      for (const sheet of collectStyleSheets()) {
         let rules;
         try { rules = sheet.cssRules; } catch (err) { continue; }
         if (!rules) continue;
@@ -1159,10 +1267,10 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
 
     /** Which stylesheet hosts the given class — document list or adopted sheet? */
     function vtSheetScan(needles) {
-      const sheets = vtStyleSheets();
+      const sheets = collectStyleSheets();
       const found = {};
       for (const needle of needles) found[needle] = 0;
-      vtWalkRules(sheets, (rule) => {
+      walkRules(sheets, (rule) => {
         for (const needle of needles) {
           if (rule.selectorText.includes(needle)) found[needle] += 1;
         }
@@ -1241,8 +1349,11 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       // Native titles should be gone from the composer once the takeover runs.
       payload.titles = cardEl ? cardEl.querySelectorAll('[title]').length : -1;
       payload.titlesDoc = document.querySelectorAll('[title]').length;
+      payload.behavior = window.__vtInterface && window.__vtInterface.behaviors
+        ? window.__vtInterface.behaviors()
+        : null;
       payload.tipCss = false;
-      vtWalkRules(vtStyleSheets(), (rule) => {
+      walkRules(collectStyleSheets(), (rule) => {
         if ((rule.selectorText || '').includes('.vt-interface-tip')) payload.tipCss = true;
       });
       const tipEl = document.querySelector('.vt-interface-tip');
@@ -1255,7 +1366,7 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       // the same place. Reading them back proves the sheet's real selectors and
       // therefore its blast radius.
       payload.sheetRules = [];
-      vtWalkRules(vtStyleSheets(), (rule) => {
+      walkRules(collectStyleSheets(), (rule) => {
         if (rule.selectorText.includes('_panel') && /min-width:\s*min\(300px/.test(rule.style.cssText || '')) {
           payload.sheetRules.push(`SCAN ${rule.selectorText} => ${(rule.style.cssText || '').replace(/\s+/g, ' ').slice(0, 260)}`);
         }
@@ -1317,7 +1428,6 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       // 1. One inventory once the composer has mounted.
       timeouts.push(setTimeout(() => collect('static'), 2500));
 
-      }, 3000));
 
 
       // 2. Forensics for whatever the pointer lands on inside the composer. Wait
@@ -1388,22 +1498,21 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
     // ═══════════════════════════════════════════════════════════════════════
 
     function mount(ctx) {
-      const disposers = [];
-      const componentPatches = PATCHES.filter((p) => p.kind === 'component');
-      const variablePatches = PATCHES.filter((p) => p.kind === 'variables');
-      const tokenPatches = PATCHES.filter((p) => p.kind === 'tokens');
-      const behaviorPatches = PATCHES.filter((p) => p.kind === 'behavior');
+      const patches = {
+        tokens: PATCHES.filter((p) => p.kind === 'tokens'),
+        variables: PATCHES.filter((p) => p.kind === 'variables'),
+        components: PATCHES.filter((p) => p.kind === 'component'),
+        behaviors: PATCHES.filter((p) => p.kind === 'behavior'),
+      };
 
-      // Tokens: one service call each; the service revokes on dispose.
-      for (const patch of tokenPatches) {
-        try { disposers.push(applyTokens(patch, ctx)); } catch (err) { /* keep going */ }
-      }
+      const ui = createAdapters(ctx, patches);
+      ui.applyTokenPatches();
 
       if (typeof document === 'undefined') {
-        return { dispose() { for (const d of disposers.reverse()) safeCall(d); }, status: () => ({}) };
+        return { dispose: () => ui.dispose(), status: () => ({}) };
       }
 
-      const host = createStyleHost(ctx);
+      /** Patch id -> discovered | fallback, from the last resolution. */
       let resolution = {};
       /** Extra CSS from the live-tuning API; appended after the composed sheet. */
       let extra = '';
@@ -1411,22 +1520,13 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
       let lastSelectors = {};
 
       const sync = () => {
-        const { css, status, selectors } = renderComponents(componentPatches);
-        resolution = status;
-        lastSelectors = selectors;
-        const behaviorCss = behaviorPatches.map((p) => (p.css ? p.css() : '')).join('\n');
-        host.set([...variablePatches.map(renderVariables), css, behaviorCss, extra].join('\n'));
-        publishReport(ctx, status, selectors);
+        const state = ui.sync(extra);
+        resolution = state.status;
+        lastSelectors = state.selectors;
       };
 
       sync();
-
-      // Behaviours install last: they need the resolved selectors, which only
-      // exist after the first discovery pass. The getter keeps them live across
-      // re-resolutions instead of freezing the first answer.
-      for (const patch of behaviorPatches) {
-        try { disposers.push(patch.install(() => lastSelectors)); } catch (err) { /* keep going */ }
-      }
+      const behaviors = ui.installBehaviors(() => lastSelectors);
 
       // Plugin stylesheets are injected asynchronously during boot, so the first
       // discovery pass may legitimately find nothing. Re-resolve when style
@@ -1492,6 +1592,10 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
           sync();
           return 'applied';
         },
+        /** How many behaviours installed, and why the rest failed. */
+        behaviors() {
+          return { ...behaviors, errors: ui.behaviorErrors() };
+        },
         /** Resolved selectors per patch, for auditing what each patch targets. */
         selectors() {
           return { ...lastSelectors };
@@ -1531,9 +1635,9 @@ ${selector}:focus-visible${closeGlyph ? ` ${closeGlyph}` : ''} {
           clearTimeout(reportTimer);
           window.removeEventListener('load', schedule);
           if (observer) observer.disconnect();
-          host.dispose();
           if (window.__vtInterface === diagnostics) delete window.__vtInterface;
-          for (const d of disposers.reverse()) safeCall(d);
+          // The adapter face owns the stylesheet and every token layer it added.
+          ui.dispose();
         },
         status: diagnostics.status,
       };
