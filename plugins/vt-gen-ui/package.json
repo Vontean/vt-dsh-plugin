@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-gen-ui",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "description": "Generative-UI renderer for DeepSeek Harness: turns the model's `dsh-ui` fences into interactive UI (50 components, charts, diagrams, local grading, panel dock, export). A visual rework forked from @changfenhuang/dsh-genui.",
   "icon": "./assets/vt-gen-ui-icon.svg",
@@ -53,6 +53,7 @@
     "cordis.patch.yml",
     "assets",
     "LICENSE",
+    "LICENSES",
     "THIRD_PARTY_NOTICES.md",
     "README.md",
     "docs/*.md",
