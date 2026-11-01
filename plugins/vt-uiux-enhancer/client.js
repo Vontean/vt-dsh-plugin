@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.2.4';
+    const VERSION = '1.2.5';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -1813,6 +1813,61 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
 
 
       /**
+       * Mount one consumer on the main transcript scrollport.
+       *
+       * Three behaviours need the same lifecycle: pick the scrollport, notice that
+       * the conversation view remounted under it, and release everything in order.
+       * Written three times those copies drift — the rebind condition, the dispose
+       * order and the observer cancellation get fixed in one place only. This is
+       * the seam they share: a consumer says what to do with one scrollport and
+       * returns its disposer; the lifecycle stays here.
+       *
+       * @param bind - attach to a scrollport; return a disposer, or null to refuse it.
+       * @param touched - optional; called for structural changes while still bound.
+       * @returns a disposer for the whole mount.
+       */
+      function mountOnTranscript({ bind, touched }) {
+        let scroller = null;
+        let release = null;
+
+        const drop = () => {
+          const detach = release;
+          release = null;
+          scroller = null;
+          if (typeof detach === 'function') safeCall(detach);
+        };
+
+        const attach = () => {
+          const next = pickTranscriptScroller();
+          if (!next || next === scroller) return false;
+          drop();
+          const detach = bind(next);
+          // A refused scrollport (no parent to hold an overlay, say) stays
+          // unattached so the next structural change retries.
+          if (typeof detach !== 'function') return false;
+          scroller = next;
+          release = detach;
+          return true;
+        };
+
+        attach();
+
+        // The conversation view remounts per session and the scrollport arrives
+        // after install, so re-attach on structural changes only.
+        const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+          if (!scroller || !scroller.isConnected) attach();
+          else if (typeof touched === 'function') touched(scroller);
+        });
+        if (observer) observer.observe(document.body, { childList: true, subtree: true });
+
+        return () => {
+          if (observer) observer.disconnect();
+          drop();
+        };
+      }
+
+
+      /**
        * Soft edges for the transcript viewport.
        *
        * One inert overlay in the conversation body, two gradient bands, both fed
@@ -1832,7 +1887,6 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         let scroller = null;
         let overlay = null;
         let frame = 0;
-        let hostObserver = null;
 
         const seatOf = (el) => el.lastElementChild || null;
 
@@ -1861,24 +1915,9 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           frame = requestAnimationFrame(paint);
         };
 
-        const unbind = () => {
-          if (frame) { cancelAnimationFrame(frame); frame = 0; }
-          if (scroller) scroller.removeEventListener('scroll', schedule);
-          window.removeEventListener('resize', schedule);
-          if (overlay) overlay.remove();
-          scroller = null;
-          overlay = null;
-        };
-
-        /**
-         * The main transcript is the largest scrollport on screen: the app can
-         * render a second conversation (sidebar preview, embedded panel), and
-         * taking the first match would fade the wrong one.
-         */
-        const bind = () => {
-          const next = pickTranscriptScroller();
-          if (!next || next === scroller || !next.parentElement) return false;
-          unbind();
+        const mount = (next) => {
+          // The overlay lives beside the conversation body, not inside it.
+          if (!next.parentElement) return null;
           scroller = next;
           overlay = document.createElement('div');
           overlay.className = CLASS;
@@ -1886,27 +1925,19 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           overlay.dataset.top = 'false';
           overlay.dataset.bottom = 'false';
           next.parentElement.appendChild(overlay);
-          scroller.addEventListener('scroll', schedule, { passive: true });
+          next.addEventListener('scroll', schedule, { passive: true });
           window.addEventListener('resize', schedule);
           paint();
-          return true;
+          return () => {
+            if (frame) { cancelAnimationFrame(frame); frame = 0; }
+            next.removeEventListener('scroll', schedule);
+            window.removeEventListener('resize', schedule);
+            if (overlay) { overlay.remove(); overlay = null; }
+            scroller = null;
+          };
         };
 
-        bind();
-
-        // The conversation root remounts per session, and the scroller arrives
-        // after this behaviour installs. Re-bind on structural changes only; the
-        // paint itself is a no-op until the scroller exists.
-        hostObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
-          if (!scroller || !scroller.isConnected) bind();
-          else schedule();
-        });
-        if (hostObserver) hostObserver.observe(document.body, { childList: true, subtree: true });
-
-        return () => {
-          if (hostObserver) hostObserver.disconnect();
-          unbind();
-        };
+        return mountOnTranscript({ bind: mount, touched: schedule });
       }
 
 
@@ -1952,7 +1983,6 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         /** The un-shadowed setter, for the one write the app must not own. */
         let nativeWrite = null;
         let flagObserver = null;
-        let hostObserver = null;
         let revoke = null;
         let published = '';
         let publishedShape = '';
@@ -2386,10 +2416,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           publishedAt = 0;
         };
 
-        const bind = () => {
-          const next = pickTranscriptScroller();
-          if (!next || next === scroller || !next.parentElement) return false;
-          unbind();
+        const mount = (next) => {
           scroller = next;
           restoreWrites = patchWrites(next);
           flagObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(onFlag);
@@ -2397,23 +2424,15 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
             flagObserver.observe(next, { attributes: true, attributeFilter: ['data-chat-following-tail'], subtree: true });
           }
           attachLive();
-          return true;
+          return unbind;
         };
 
-        bind();
-
-        // The conversation view remounts per session, so the scrollport this patch
-        // owns is replaced under it. Re-bind on structural changes only.
-        hostObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
-          if (!scroller || !scroller.isConnected) bind();
-        });
-        if (hostObserver) hostObserver.observe(document.body, { childList: true, subtree: true });
+        const disposeMount = mountOnTranscript({ bind: mount });
 
         scrollPinReadout = snapshot;
 
         return () => {
-          if (hostObserver) hostObserver.disconnect();
-          unbind();
+          disposeMount();
           if (scrollPinReadout === snapshot) scrollPinReadout = null;
         };
       }
@@ -2434,7 +2453,6 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         let button = null;
         let hidden = false;
         let frame = 0;
-        let hostObserver = null;
 
         const findButton = () => {
           if (!scroller) return null;
@@ -2474,41 +2492,25 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           frame = requestAnimationFrame(paint);
         };
 
-        const unbind = () => {
-          if (frame) { cancelAnimationFrame(frame); frame = 0; }
-          if (scroller) scroller.removeEventListener('scroll', schedule);
-          window.removeEventListener('resize', schedule);
-          if (button) button.style.removeProperty('display');
-          scroller = null;
-          button = null;
-          hidden = false;
-        };
-
-        const bind = () => {
-          const next = pickTranscriptScroller();
-          if (!next || next === scroller) return false;
-          unbind();
+        const mount = (next) => {
           scroller = next;
           next.addEventListener('scroll', schedule, { passive: true });
           window.addEventListener('resize', schedule);
           paint();
-          return true;
+          return () => {
+            if (frame) { cancelAnimationFrame(frame); frame = 0; }
+            next.removeEventListener('scroll', schedule);
+            window.removeEventListener('resize', schedule);
+            if (button) button.style.removeProperty('display');
+            scroller = null;
+            button = null;
+            hidden = false;
+          };
         };
 
-        bind();
-
-        // The button mounts and unmounts with React's follow state, and the
-        // viewport remounts per session; re-evaluate on structural changes.
-        hostObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
-          if (!scroller || !scroller.isConnected) bind();
-          else schedule();
-        });
-        if (hostObserver) hostObserver.observe(document.body, { childList: true, subtree: true });
-
-        return () => {
-          if (hostObserver) hostObserver.disconnect();
-          unbind();
-        };
+        // The button mounts and unmounts with React's follow state, so structural
+        // changes also re-evaluate it.
+        return mountOnTranscript({ bind: mount, touched: schedule });
       }
 
 

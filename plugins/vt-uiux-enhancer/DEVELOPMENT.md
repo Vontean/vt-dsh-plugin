@@ -251,6 +251,8 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
   这是限位补丁不需要持续纠偏的原因。
 - **「正式回答」在 harness 里是事后判定的**：`ui-chat` 的 `latestAnswer()` 只认**最后一步、已
   settled、有回复内容、且不含 tool-call 块**的 assistant-step；`answerStep` 在流式期间是 `null`。
+  这条决定了一件事：**没有「回答开始了」的实时标志可读**，所以 `scroll-pin` 只能改用下面那条事件流，
+  而不是去 DOM 里找阶段属性。
   DOM 也没有阶段属性（过程组标题 `TurnProcessNodeView` 在 `turn.status !== "closed"` 时直接返回
   `null`，`data-turn-process-answer` 只在轮次结束、`!liveProcess` 时才设）。想在运行期知道阶段，
   只能用会话事件流：`sessions.binding(id).eventSource` 的最近一条 `assistant/live-chunk`，
