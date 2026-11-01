@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-uiux-enhancer",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "type": "module",
   "description": "VT UI/UX Enhancer: reversible UI/UX refinements for DeepSeek Harness — palette, elevation, control shapes and motion shipped as patches over DSH's own tokens, slots and styles. Disabling the plugin restores the shipped interface exactly.",
   "license": "MIT",

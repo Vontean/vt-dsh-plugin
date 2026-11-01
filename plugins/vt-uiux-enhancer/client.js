@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.2.2';
+    const VERSION = '1.2.3';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -1935,6 +1935,8 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
 
         let scroller = null;
         let restoreWrites = null;
+        /** The un-shadowed setter, for the one write the app must not own. */
+        let nativeWrite = null;
         let flagObserver = null;
         let hostObserver = null;
         let revoke = null;
@@ -1965,6 +1967,8 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           ceiling: null,
           /** How far the one pull-back went, in px. */
           pulled: 0,
+          /** The 1px reader nudge was issued. */
+          nudged: false,
           /** Last requested write and what it became, for the report. */
           requested: null,
           allowed: null,
@@ -2236,12 +2240,24 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
            * as its target and compensates instead.
            */
           const freeze = (top) => {
-            const nudged = Math.max(0, Math.min(top, start - 1));
             current.engaged = true;
             current.requested = Math.round(requested);
-            current.allowed = Math.round(nudged);
+            current.allowed = Math.round(top);
             publish();
-            return nudged;
+            // The 1px step has to happen OUTSIDE this setter. Inside it, the app
+            // reads our value back as its own landing, so its reader sampling sees
+            // no movement (movedByReader = 0), never concludes "the reader took
+            // over", and keeps `followingTail` true — which also means its
+            // "back to bottom" button is never rendered at all.
+            if (!current.nudged && nativeWrite) {
+              current.nudged = true;
+              requestAnimationFrame(() => {
+                if (!scroller || !scroller.isConnected) return;
+                const at = scroller.scrollTop;
+                nativeWrite.call(scroller, Math.max(0, at - 1));
+              });
+            }
+            return top;
           };
           if (ceiling >= start || crossed) {
             const next = Math.min(requested, ceiling);
@@ -2278,6 +2294,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           metrics['scroll-pin-hook'] = 'installed';
           const read = descriptor.get;
           const write = descriptor.set;
+          nativeWrite = write;
           const nativeScrollTo = element.scrollTo;
           Object.defineProperty(element, 'scrollTop', {
             configurable: true,
@@ -2342,6 +2359,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           if (flagObserver) { flagObserver.disconnect(); flagObserver = null; }
           liveSource = null;
           if (restoreWrites) { restoreWrites(); restoreWrites = null; }
+          nativeWrite = null;
           if (typeof revoke === 'function') safeCall(revoke);
           revoke = null;
           scroller = null;
