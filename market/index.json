@@ -40,6 +40,52 @@
   },
   "plugins": [
     {
+      "name": "dsh-vt-gen-ui",
+      "title": {
+        "zh": "VT GenUI 生成式界面",
+        "en": "VT GenUI"
+      },
+      "description": {
+        "zh": "把模型写在回答里的 dsh-ui 围栏渲染成可交互界面：50 种组件、图表与流程图、表单本地判分、常驻面板与导出。",
+        "en": "Renders the model's dsh-ui fences as interactive UI: 50 components, charts and diagrams, local grading, a persistent panel dock and export."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgdmlld0JveD0iMCAwIDM2IDM2IiBmaWxsPSJub25lIj4KICA8dGl0bGU+R2VuVUk8L3RpdGxlPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJnZW51aS1ncmFkaWVudCIgeDE9IjEwIiB5MT0iNyIgeDI9IjQ0IiB5Mj0iNTYiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KICAgICAgPHN0b3Agc3RvcC1jb2xvcj0iIzY4QjlGRiIvPgogICAgICA8c3RvcCBvZmZzZXQ9Ii42NSIgc3RvcC1jb2xvcj0iIzRENkJGRSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM0NDVERUQiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDYgNikgc2NhbGUoLjM3NSkiPgogICAgPHBhdGggZD0iTTE1IDdINDlDNTUuNjI3IDcgNjEgMTIuMzczIDYxIDE5VjM3QzYxIDQzLjYyNyA1NS42MjcgNDkgNDkgNDlIMjNMMTEuMiA1OC4yQzEwLjMwMiA1OC45IDkgNTguMjYgOSA1Ny4xMlY0Ny4zOUM1LjQxNCA0NS4zMTUgMyA0MS40MzggMyAzN1YxOUMzIDEyLjM3MyA4LjM3MyA3IDE1IDdaIiBmaWxsPSJ1cmwoI2dlbnVpLWdyYWRpZW50KSIvPgogICAgPGcgZmlsbD0iI0ZGRiI+CiAgICAgIDxyZWN0IHg9IjkiIHk9IjMwIiB3aWR0aD0iNiIgaGVpZ2h0PSIxMSIgcng9IjEuNyIvPgogICAgICA8cmVjdCB4PSIxNy41IiB5PSIyNCIgd2lkdGg9IjYiIGhlaWdodD0iMTciIHJ4PSIxLjciLz4KICAgICAgPHJlY3QgeD0iMjYiIHk9IjE4IiB3aWR0aD0iNiIgaGVpZ2h0PSIyMyIgcng9IjEuNyIvPgogICAgICA8cmVjdCB4PSIzNiIgeT0iMTkiIHdpZHRoPSIxOSIgaGVpZ2h0PSI0IiByeD0iMiIvPgogICAgICA8cmVjdCB4PSIzNiIgeT0iMjkiIHdpZHRoPSIxOSIgaGVpZ2h0PSIxMiIgcng9IjMuNSIvPgogICAgPC9nPgogIDwvZz4KPC9zdmc+Cg==",
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-gen-ui#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "directory": "plugins/vt-gen-ui"
+      },
+      "metadata": {
+        "category": "render",
+        "keywords": [
+          "genui",
+          "generative-ui",
+          "dsh-ui",
+          "render",
+          "chart",
+          "mermaid"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1793500848,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "dd7ba1d470f1dcdb672083bf615b961168ef0d34",
+            "path": "plugins/vt-gen-ui"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    },
+    {
       "name": "dsh-vt-quote-bar",
       "title": {
         "zh": "模型额度",

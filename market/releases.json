@@ -14,7 +14,21 @@
       }
     }
   ],
-  "dsh-vt-gen-ui": [],
+  "dsh-vt-gen-ui": [
+    {
+      "version": "1.0.0",
+      "publishTimestamp": 1793500848,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "commit": "dd7ba1d470f1dcdb672083bf615b961168ef0d34",
+        "path": "plugins/vt-gen-ui"
+      },
+      "engines": {
+        "dsh": ">=0.2.1-rc.5 <0.3.0"
+      }
+    }
+  ],
   "dsh-vt-quote-bar": [
     {
       "version": "1.0.0",
