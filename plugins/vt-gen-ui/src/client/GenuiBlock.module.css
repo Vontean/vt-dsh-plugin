@@ -1967,26 +1967,47 @@ button.ftNameBtn[aria-expanded] { cursor: pointer; }
 .skeletonBars { display: flex; gap: var(--dsl-g-gap-sm); }
 .skeletonBars > span { display: block; height: 44px; border-radius: var(--dsl-g-radius-control); }
 .skeletonBlock { display: block; height: 76px; border-radius: var(--dsl-g-radius-control); }
+/* A flat tint per placeholder plus ONE narrow highlight that travels left to
+   right. Two reasons it is a transform on ::after and not a moving background:
+   the sweep then runs on the compositor (no repaint of a 200%-wide gradient),
+   and every placeholder — they mount together — stays in phase, so the card
+   reads as one light pass instead of several shapes breathing. */
 .skeletonTitle,
 .skeletonBars > span,
 .skeletonBlock {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
+}
+.skeletonTitle::after,
+.skeletonBars > span::after,
+.skeletonBlock::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 45%;
+  border-radius: inherit;
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent) 0%,
-    color-mix(in srgb, var(--dsw-alias-label-primary) 13%, transparent) 50%,
-    color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent) 100%
+    transparent 0%,
+    color-mix(in srgb, var(--dsw-alias-label-primary) 11%, transparent) 50%,
+    transparent 100%
   );
-  background-size: 200% 100%;
-  animation: dsl-skeleton 1.4s ease-in-out infinite;
+  /* Start and end just outside the shape: the band re-enters on the frame it
+     leaves, so the pass never pauses between loops. */
+  transform: translateX(-100%);
+  animation: dsl-skeleton-sweep 1.5s linear infinite;
 }
-@keyframes dsl-skeleton {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+@keyframes dsl-skeleton-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(222%); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .skeletonTitle,
-  .skeletonBars > span,
-  .skeletonBlock { animation: none; }
+  .skeletonTitle::after,
+  .skeletonBars > span::after,
+  .skeletonBlock::after { animation: none; opacity: 0; }
 }
 
 /* ---------- staggered reveal ---------- */
