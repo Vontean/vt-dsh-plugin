@@ -145,6 +145,52 @@
       ]
     },
     {
+      "name": "dsh-vt-minedesign",
+      "title": {
+        "zh": "MineDesign 设计稿",
+        "en": "Use MineDesign"
+      },
+      "description": {
+        "zh": "把本机已装的 MineDesign 接进 DSH：本地 MCP 工具、设计稿与设计系统技能都能用，并把编辑器地址交到你手上。",
+        "en": "Connects the MineDesign install on this machine: its local MCP tools and design skills, plus the editor link MCP Apps cannot deliver here."
+      },
+      "icon": "data:image/svg+xml;base64,PCEtLSBHZW5lcmF0ZWQgZnJvbSBhc3NldHMvYnJhbmQvbWluZWRlc2lnbi1pY29uLnN2ZyBieSBzY3JpcHRzL2J1aWxkLWJyYW5kLWljb25zLm1qcy4gLS0+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgY29sb3I9IiMwZDBkMGQiIGZpbGw9Im5vbmUiIHJvbGU9ImltZyIgYXJpYS1sYWJlbGxlZGJ5PSJtaW5lZGVzaWduLXRpdGxlIj4KICA8dGl0bGUgaWQ9Im1pbmVkZXNpZ24tdGl0bGUiPk1pbmVEZXNpZ248L3RpdGxlPgogIDxkZXNjPkNvZGV4IOWFreeTo+WkluWciOS4jiBMdWNpZGUg55S756yU77yb5rK/55SoIE1DWCDnmoTlh6DkvZXkuI7nirbmgIHop4TliJnjgII8L2Rlc2M+CiAgPHBhdGggaWQ9ImNvZGV4LW91dGxpbmUiIGZpbGw9ImN1cnJlbnRDb2xvciIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik05LjMzMTYgMi4wMzc2OEMxMS4xNjQ0IDEuNTQ2ODggMTMuMDI2OCAyLjA0NjY4IDE0LjM1NiAzLjIwMTc0QzE2LjA4NTkgMi44NjUxMiAxNy45NTExIDMuMzY0MTggMTkuMjkzNSA0LjcwNjYzQzIwLjYzNTYgNi4wNDg4MiAyMS4xMzI2IDcuOTEyODggMjAuNzk2NCA5LjY0MjE3QzIxLjk1MjcgMTAuOTcxNiAyMi40NTM0IDEyLjgzNDkgMjEuOTYyNSAxNC42Njg1QzIxLjQ3MTEgMTYuNTAyNSAyMC4xMDUxIDE3Ljg2NTcgMTguNDM5IDE4LjQzOUMxNy44NjU4IDIwLjEwNDcgMTYuNTAzIDIxLjQ3IDE0LjY2OTUgMjEuOTYxNUMxMi44MzU2IDIyLjQ1MjggMTAuOTcyNyAyMS45NTE5IDkuNjQzMTIgMjAuNzk1NUM3LjkxMzcxIDIxLjEzMTkgNi4wNDk5MyAyMC42MzUgNC43MDc1NyAxOS4yOTI2QzMuMzY1NTggMTcuOTUwNSAyLjg2NjU5IDE2LjA4NjYgMy4yMDI2OSAxNC4zNTdDMi4wNDY5MyAxMy4wMjczIDEuNTQ3NTcgMTEuMTYzOCAyLjAzODYzIDkuMzMwNjVDMi41Mjk5NyA3LjQ5NzU5IDMuODk0MzYgNi4xMzI4MiA1LjU2MDExIDUuNTU5MTdDNi4xMzM4MiAzLjg5MzUgNy40OTgzNyAyLjUyODkxIDkuMzMxNiAyLjAzNzY4Wk0xMy4yNjIzIDQuNjM1MzRDMTIuMzYwNiAzLjgwMTQ5IDExLjA2NyAzLjQzNjEgOS43OTc0MiAzLjc3NTk2QzguNTI3NDUgNC4xMTYyNiA3LjU4OTI0IDUuMDc5NiA3LjIyNTE1IDYuMjUyNTNDNy4wODE0NSA2LjcxNTc1IDYuNzE3NTMgNy4wNzkyOCA2LjI1NDQ1IDcuMjIzMjNDNS4wODEzMyA3LjU4NzAyIDQuMTE4NDQgOC41MjYyMiAzLjc3Nzg5IDkuNzk2NDdDMy40Mzc1OSAxMS4wNjY3IDMuODAxNDggMTIuMzYwNiA0LjYzNTMxIDEzLjI2MjNDNC45NjQ2NyAxMy42MTg0IDUuMDk3NzYgMTQuMTE1NCA0Ljk5MDc4IDE0LjU4ODVDNC43MTkzOSAxNS43ODY0IDUuMDUxMDkgMTcuMDg5MSA1Ljk4MTAxIDE4LjAxOTFDNi45MTA4NSAxOC45NDkgOC4yMTM0NSAxOS4yODAxIDkuNDExNjggMTkuMDA4NEw5LjU4OTQxIDE4Ljk3OTFDOS45NDY5NSAxOC45NDMyIDEwLjMwNjUgMTkuMDM5NyAxMC41OTgyIDE5LjI0OTZMMTAuNzM3OCAxOS4zNjM5TDEwLjkxMTcgMTkuNTE0MkMxMS44MDE1IDIwLjI0MDcgMTMuMDEyNyAyMC41NDEzIDE0LjIwMzcgMjAuMjIyM0MxNS40NzMzIDE5Ljg4MTggMTYuNDExMSAxOC45MTkxIDE2Ljc3NSAxNy43NDU3QzE2LjkxODkgMTcuMjgyNCAxNy4yODMyIDE2LjkxODYgMTcuNzQ2NiAxNi43NzVMMTcuOTYzNCAxNi42OTk4QzE5LjAzNzYgMTYuMjkyMyAxOS45MDUxIDE1LjM5MzYgMjAuMjI0MiAxNC4yMDI3QzIwLjU2NDEgMTIuOTMyOCAyMC4xOTg5IDExLjYzODUgMTkuMzY0OCAxMC43MzY5QzE5LjAzNTMgMTAuMzgwNiAxOC45MDIxIDkuODgzOTkgMTkuMDA5MyA5LjQxMDczTDE5LjA1MzMgOS4xODUxNEMxOS4yMzcyIDguMDUxNCAxOC44OTE3IDYuODUxNzYgMTguMDIwMSA1Ljk4MDA2QzE3LjA5MDEgNS4wNTAwMyAxNS43ODY1IDQuNzE4MjYgMTQuNTg4NCA0Ljk4OTgzQzE0LjExNTMgNS4wOTcxMiAxMy42MTg2IDQuOTY0NjcgMTMuMjYyMyA0LjYzNTM0WiIvPgogIDxnIGlkPSJicnVzaCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNi4yNCA2LjI0KSBzY2FsZSguNDgpIiBmaWxsPSJjdXJyZW50Q29sb3IiPgogICAgPHBhdGggZD0ibTkuMDYgMTEuOSA4LjA3LTguMDZhMi44NSAyLjg1IDAgMSAxIDQuMDMgNC4wM2wtOC4wNiA4LjA4WiIvPgogICAgPHBhdGggZD0iTTcuMDcgMTQuOTRjLTEuNjYgMC0zIDEuMzUtMyAzLjAyIDAgMS4zMy0yLjUgMS41Mi0yIDIuMDIgMS4wOCAxLjEgMi40OSAyLjAyIDQgMi4wMiAyLjIgMCA0LTEuOCA0LTQuMDRhMy4wMSAzLjAxIDAgMCAwLTMtMy4wMnoiLz4KICA8L2c+Cjwvc3ZnPgo=",
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-minedesign#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "directory": "plugins/vt-minedesign"
+      },
+      "metadata": {
+        "category": "workflow",
+        "keywords": [
+          "minedesign",
+          "design",
+          "mcp",
+          "skills",
+          "canvas",
+          "design-system"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1793555943,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "0657bba499c1437caec4ce2571a173af7815275d",
+            "path": "plugins/vt-minedesign"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    },
+    {
       "name": "dsh-vt-quote-bar",
       "title": {
         "zh": "模型额度",
