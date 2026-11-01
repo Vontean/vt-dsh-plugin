@@ -355,8 +355,18 @@ window.__ModuleLoader__.load({
      * leaves 4px of air above the text without looking clipped.
      */
     const SCROLL_PIN = {
-      /** Distance from the scrollport's top edge to the user row's top edge. */
-      offset: 20,
+      /**
+       * The pin line is not invented: it is the distance DSH itself leaves between
+       * the scrollport's top edge and its content — the chat list's own
+       * `padding-top` (`.scroll { padding: 16px … }` in the chat view's CSS). That
+       * is exactly where the first user bubble sits in a fresh session, so "pinned"
+       * here means the same thing the shipped layout already calls the top.
+       *
+       * Read at runtime (`offsetOf`), because a token or a hard-coded number would
+       * drift the moment upstream touches that padding. This value is the fallback
+       * for a list that cannot be measured yet.
+       */
+      fallbackOffset: 16,
       /**
        * Bottom slack when deciding whether the answer's first line survives the
        * pin: a line that only half-fits is not "visible". One line box (22px) is
@@ -1868,7 +1878,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
 
 
       /**
-       * Freeze the reading position when the answer starts to stream.
+       * Keep the reader's place while an answer streams.
        *
        * The transcript's follow policy is one line — content growth scrolls the
        * tail into view — and it is owned by the chat package. `followTail()` even
@@ -1879,24 +1889,29 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
        *
        * The rule (values in `SCROLL_PIN`):
        *
-       *   · only while a turn is running AND its formal answer exists, so the
-       *     thinking and tool phases follow exactly as shipped;
-       *   · on the first write after the answer appears the position is frozen —
-       *     the view stops where the reader already is, and every later follow
-       *     write is neutralised. Nothing scrolls on its own once the answer runs;
-       *   · if the answer's first line is not on screen at that moment (a long
-       *     process group pushed it below the fold), the view moves once so the
-       *     answer starts at the pin line instead of freezing on empty space;
-       *   · the freeze ends when the reader returns to the tail — the app's
-       *     `data-chat-following-tail` comes back, or it asks for a smooth
-       *     "back to latest" — and never comes back for that turn.
+       *   · only while a turn runs AND the turn has actually written text. DSH
+       *     exposes no "the answer step started" flag — its process header renders
+       *     only after the turn closes, and `data-turn-process-answer` is set after
+       *     the live process ends — so the trigger is the first visible assistant
+       *     text of the turn. A row created before its text (height 0) is the
+       *     thinking phase and follows exactly as shipped; a summary the model
+       *     writes mid-turn is text and counts as the start;
+       *   · following continues until this turn's own message reaches the top: the
+       *     line is the chat list's own `padding-top`, i.e. the distance DSH leaves
+       *     above the first message in a fresh session;
+       *   · from there on, every follow write is capped at that line, so the row
+       *     stays put while the answer grows below it;
+       *   · if the row is already above the line when the answer starts (a long
+       *     process phase pushed it away), the view is pulled back to it once;
+       *   · returning to the tail — the app's `data-chat-following-tail` coming
+       *     back, or a smooth "back to latest" — hands the view back for the rest
+       *     of the turn. Wheel, touch, pointer and key input never release it.
        *
        * Why the write and not a scroll listener: the app writes the target it
        * wants, reads back the actual `scrollTop` and stores that as its landing,
-       * so a neutralised write stays consistent with its own bookkeeping.
+       * so a capped write stays consistent with its own bookkeeping.
        */
       function installScrollPin(readSelectors, metrics) {
-        const OFFSET = SCROLL_PIN.offset;
         const SLACK = SCROLL_PIN.slack;
 
         let scroller = null;
@@ -1905,6 +1920,8 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         let hostObserver = null;
         let revoke = null;
         let published = '';
+        let publishedShape = '';
+        let publishedAt = 0;
         let state = null;
 
         /** One turn's freeze state; reset whenever the user row changes. */
@@ -1914,15 +1931,21 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           column: null,
           user: null,
           answer: null,
-          /** The position was frozen for this turn. */
+          /** The pin row was chosen for this turn. */
+          armed: false,
+          /** A write was capped or pulled back at least once. */
           engaged: false,
           /** The reader took the tail back: the rest of this turn follows. */
           released: false,
-          /** How far the one alignment move went, in px. */
+          /** `user` or `answer` — which row this turn is pinned to. */
+          pin: 'user',
+          rowTop: null,
+          pinTop: null,
+          /** The pin row's top on the previous write; detects the crossing frame. */
+          prevPinTop: null,
+          ceiling: null,
+          /** How far the one pull-back went, in px. */
           pulled: 0,
-          /** Frozen scroll position and the answer row's top at that moment. */
-          top: null,
-          answerTop: null,
           /** Last requested write and what it became, for the report. */
           requested: null,
           allowed: null,
@@ -1932,9 +1955,21 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         const columnOf = (element) => element.querySelector('[data-chat-flow]');
 
         /**
+         * The native top inset: the chat list's own `padding-top`, which is where
+         * the first message of a session sits. Read every time so a change upstream
+         * moves the pin with it instead of leaving a stale number behind.
+         */
+        const offsetOf = (current) => {
+          const list = current.column ? current.column.parentElement : null;
+          if (!list) return SCROLL_PIN.fallbackOffset;
+          const raw = Number.parseFloat(getComputedStyle(list).paddingTop);
+          return Number.isFinite(raw) && raw >= 0 ? raw : SCROLL_PIN.fallbackOffset;
+        };
+
+        /**
          * Which turn is on screen: its last committed user row and the turn it
          * belongs to. Re-read on every write — a steering message during a turn
-         * replaces the row this freeze belongs to.
+         * replaces the row this freeze is pinned to.
          */
         const resolveTurn = () => {
           if (!scroller || !scroller.isConnected) return null;
@@ -1960,8 +1995,8 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         /**
          * The formal answer row of the current turn. It is an `assistant-step`
          * whose group part is "response"; reasoning rows are the same kind marked
-         * "reasoning", so the part — not the kind — separates answer from thinking.
-         * A plain `assistant` row is accepted for display modes that keep one.
+         * "reasoning". A plain `assistant` row is accepted for display modes that
+         * keep one.
          */
         const resolveAnswer = (current) => {
           if (current.answer && current.answer.isConnected) return current.answer;
@@ -1997,12 +2032,24 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
          */
         const publish = () => {
           if (!state) return;
+          // A write happens on every growth frame, so the numbers move constantly.
+          // Publishing each one would swap a theme layer twenty times a second for
+          // nothing: emit immediately when the *decision* changes, otherwise at most
+          // once a second (the report only ever needs the latest reading).
+          const shape = `${state.turn}|${state.pin}|${state.armed ? 1 : 0}|${state.engaged ? 1 : 0}|${state.released ? 1 : 0}|${state.pulled}`;
+          const now = Date.now();
+          if (shape === publishedShape && now - publishedAt < 1000) return;
+          publishedShape = shape;
+          publishedAt = now;
           const value = [
             `turn-${state.turn ?? 'none'}`,
+            `pin-${state.pin}`,
+            `armed-${state.armed ? 1 : 0}`,
             `engaged-${state.engaged ? 1 : 0}`,
             `released-${state.released ? 1 : 0}`,
             `pull-${state.pulled}px`,
-            `top-${state.top ?? 'none'}`,
+            `row-${state.rowTop ?? 'none'}px`,
+            `ceil-${state.ceiling ?? 'none'}`,
             `req-${state.requested ?? 'none'}`,
             `ok-${state.allowed ?? 'none'}`,
           ].join('-');
@@ -2016,8 +2063,77 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         };
 
         /**
-         * Where a requested scroll should land: the request itself until the answer
-         * starts, the frozen position afterwards.
+         * The live phase, taken from the harness instead of guessed from the DOM.
+         *
+         * DSH's own definition of "the answer" is retrospective: `latestAnswer()`
+         * only accepts the *last* step, settled, with reply content and no tool-call
+         * block, and `answerStep` stays null while that step still streams. So there
+         * is no "answer started" flag to read.
+         *
+         * What the harness does publish live is the session event stream: every
+         * assistant chunk of the running step arrives as `assistant/live-chunk`
+         * with a `chunk.type` of `text-delta`, `reasoning-delta` or
+         * `tool-call-delta`. That is the phase, straight from the source: text means
+         * the model is writing prose to the reader, anything else means it is still
+         * thinking or working.
+         *
+         * `bind` borrows the UI's retained session (`sessions.binding` does not
+         * extend its lifetime) and subscribes read-only. When the service, the
+         * session id or the binding is missing, the caller falls back to the
+         * rendered-height signal.
+         */
+        let liveSource = null;
+
+        /** Is the newest assistant activity of this turn text? `null` when unknown. */
+        const phaseOf = (entries, turn) => {
+          for (let i = entries.length - 1; i >= 0; i -= 1) {
+            const entry = entries[i];
+            const event = entry && entry.event;
+            if (!event || !event.data) continue;
+            const eventTurn = Number(event.data.turn);
+            if (Number.isSafeInteger(eventTurn) && eventTurn !== turn) continue;
+            if (event.type === 'assistant/live-chunk') {
+              const chunk = event.data.chunk || {};
+              if (chunk.type === 'text-delta') return true;
+              if (chunk.type === 'reasoning-delta' || chunk.type === 'tool-call-delta') return false;
+              if (chunk.type === 'block-start') return chunk.blockType === 'text';
+              continue;
+            }
+            if (event.type === 'tool/call' || event.type === 'tool/result') return false;
+          }
+          return null;
+        };
+
+        /** Read the phase now; the window is cheap and always fresher than a cache. */
+        const livePhaseNow = (turn) => {
+          if (!liveSource || !Number.isSafeInteger(turn)) return null;
+          try {
+            const window = liveSource.getSnapshot();
+            return phaseOf((window && window.entries) || [], turn);
+          } catch (err) { return null; }
+        };
+
+        const attachLive = () => {
+          liveSource = null;
+          const sessions = typeof ctx.get === 'function' ? ctx.get('sessions') : undefined;
+          if (!sessions || typeof sessions.binding !== 'function' || !scroller) return;
+          // The content region is not necessarily a descendant of the scrollport
+          // (measured: it is not), so look it up document-wide and prefer the one
+          // inside the scrollport when there are several panes.
+          const content = (scroller && scroller.querySelector('[data-conversation-content]'))
+            || document.querySelector('[data-conversation-content]');
+          const id = content && content.getAttribute('data-conversation-session');
+          if (!id) return;
+          let binding = null;
+          try { binding = sessions.binding(id); } catch (err) { binding = null; }
+          const source = binding && binding.eventSource;
+          if (!source || typeof source.getSnapshot !== 'function') return;
+          liveSource = source;
+        };
+
+        /**
+         * Where a requested scroll should land: the request itself while the pin
+         * row is still below the line, the line once it would cross.
          */
         const plan = (requested, smooth) => {
           if (!scroller) return requested;
@@ -2041,36 +2157,67 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           if (!answer) return requested;
           const view = scroller.clientHeight;
           if (view <= 0) return requested;
+          // Phase gate. The harness knows whether the running step is emitting text
+          // (answer) or reasoning/tool deltas (process); when it cannot be read, the
+          // rendered height of the answer row is the fallback — a row created before
+          // its text is 0px tall and must follow as shipped.
+          const phase = livePhaseNow(Number(current.turn));
+          if (phase === false) return requested;
+          if (phase === null && answer.getBoundingClientRect().height < 1) return requested;
           const start = scroller.scrollTop;
-          if (current.engaged) {
-            // Frozen: the reader owns the viewport for the rest of this turn.
-            current.requested = Math.round(requested);
-            current.allowed = Math.round(start);
-            publish();
-            return start;
-          }
+          const offset = offsetOf(current);
           const row = current.user.getBoundingClientRect();
           // A message taller than the viewport has no reachable pin line; the
           // message clamp folds those rows anyway, so this is a guard, not a path.
-          if (row.height > view - OFFSET) return requested;
+          if (row.height > view - offset) return requested;
           const frame = scroller.getBoundingClientRect();
-          const answerTop = answer.getBoundingClientRect().top - frame.top;
-          current.engaged = true;
-          current.top = Math.round(start);
-          current.answerTop = Math.round(answerTop);
+          const first = !current.armed;
+          if (first) {
+            current.armed = true;
+            const rowTop = row.top - frame.top;
+            const answerTop = answer.getBoundingClientRect().top - frame.top;
+            current.rowTop = Math.round(rowTop);
+            // Pinning the user row pushes the answer down by the same amount. When
+            // that would leave the answer's first line below the fold, the answer
+            // start is what has to stay readable instead.
+            current.pin = answerTop - (rowTop - offset) > view - SLACK ? 'answer' : 'user';
+          }
+          const pinEl = current.pin === 'answer' ? answer : current.user;
+          const pinTop = pinEl.getBoundingClientRect().top - frame.top;
+          const ceiling = start + (pinTop - offset);
+          // The crossing frame: growth has already pushed the row above the line
+          // before this write, so a plain "is it below" test would step over it.
+          const crossed = current.prevPinTop !== null && current.prevPinTop >= offset && pinTop < offset;
+          current.prevPinTop = pinTop;
+          current.pinTop = Math.round(pinTop);
+          current.ceiling = Math.round(ceiling);
+          if (ceiling >= start || crossed) {
+            const next = Math.min(requested, ceiling);
+            if (next < requested - 0.5) {
+              current.engaged = true;
+            }
+            current.requested = Math.round(requested);
+            current.allowed = Math.round(next);
+            publish();
+            return next;
+          }
+          // The pin line is above the current position: this turn's message is
+          // already out of view (a long process phase pushed it away), or the app
+          // wants to move up. Upward requests go through; otherwise freeze where
+          // the view is instead of jumping — a jump would be a second, larger
+          // surprise than the scroll this patch exists to remove.
+          if (requested < start) return requested;
           current.requested = Math.round(requested);
-          // The answer is already on screen: stop right here, nothing moves.
-          if (answerTop >= 0 && answerTop <= view - SLACK) {
+          if (!first && current.engaged) {
             current.allowed = Math.round(start);
             publish();
             return start;
           }
-          // Otherwise bring the answer's first line to the pin line, once.
-          const target = Math.max(0, start + (answerTop - OFFSET));
-          current.pulled = Math.round(target - start);
-          current.allowed = Math.round(target);
+          current.engaged = true;
+          current.pulled = 0;
+          current.allowed = Math.round(start);
           publish();
-          return target;
+          return start;
         };
 
         /**
@@ -2137,12 +2284,16 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
             client: scroller.clientHeight,
             height: scroller.scrollHeight,
             following: isFollowing(current),
+            offset: current.column ? offsetOf(current) : SCROLL_PIN.fallbackOffset,
             turn: current.turn,
+            pin: current.pin,
+            armed: current.armed,
             engaged: current.engaged,
             released: current.released,
             pulled: current.pulled,
-            frozenTop: current.top,
-            answerTop: current.answerTop,
+            rowTop: current.rowTop,
+            pinTop: current.pinTop,
+            ceiling: current.ceiling,
             requested: current.requested,
             allowed: current.allowed,
           };
@@ -2150,12 +2301,15 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
 
         const unbind = () => {
           if (flagObserver) { flagObserver.disconnect(); flagObserver = null; }
+          liveSource = null;
           if (restoreWrites) { restoreWrites(); restoreWrites = null; }
           if (typeof revoke === 'function') safeCall(revoke);
           revoke = null;
           scroller = null;
           state = null;
           published = '';
+          publishedShape = '';
+          publishedAt = 0;
         };
 
         const bind = () => {
@@ -2168,6 +2322,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           if (flagObserver) {
             flagObserver.observe(next, { attributes: true, attributeFilter: ['data-chat-following-tail'], subtree: true });
           }
+          attachLive();
           return true;
         };
 

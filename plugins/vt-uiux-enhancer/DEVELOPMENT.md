@@ -242,6 +242,15 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
   读者滚动后由 500ms 的采样定时器决定 `following = nearBottom`，在这段时间里 `onResize` 直接
   返回（`pending`）—— 也就是说「一旦被判成读者接管，500ms 内不会再有自动下滚」。
   这是限位补丁不需要持续纠偏的原因。
+- **「正式回答」在 harness 里是事后判定的**：`ui-chat` 的 `latestAnswer()` 只认**最后一步、已
+  settled、有回复内容、且不含 tool-call 块**的 assistant-step；`answerStep` 在流式期间是 `null`。
+  DOM 也没有阶段属性（过程组标题 `TurnProcessNodeView` 在 `turn.status !== "closed"` 时直接返回
+  `null`，`data-turn-process-answer` 只在轮次结束、`!liveProcess` 时才设）。想在运行期知道阶段，
+  只能用会话事件流：`sessions.binding(id).eventSource` 的最近一条 `assistant/live-chunk`，
+  看 `chunk.type`（`text-delta` / `reasoning-delta` / `tool-call-delta`）。
+- **会话 id 的取法**：`[data-conversation-content]` 上的 `data-conversation-session`；这个元素
+  **不在** `[data-conversation-scroll]` 内部（实测 `scroller.querySelector` 取不到，全文档只有 1 个），
+  所以要从 `document` 查。
 - **过程组在运行期保持展开**：`turnProcessAlwaysOpen()` 对 `status === "open"` 的轮次返回真，
   所以运行中 `processHidden` 不生效、成员不折叠；只有轮次结束后「最近完成的一轮」才保持展开，
   更早的轮次折叠。推论：思考阶段很长时，用户消息可能早已被推出视口，靠轮次结束后的折叠
