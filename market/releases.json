@@ -4,10 +4,7 @@
       "version": "1.0.0",
       "publishTimestamp": 1793500244,
       "source": {
-        "type": "git",
-        "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "eda3c1570be2b1365187dea86754dd7b4d0adb3f",
-        "path": "plugins/vt-uiux-enhancer"
+        "type": "npm"
       },
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
@@ -17,10 +14,7 @@
       "version": "1.0.1",
       "publishTimestamp": 1793502837,
       "source": {
-        "type": "git",
-        "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "189d846af02b76271ec93e93c209bc754eabb1b3",
-        "path": "plugins/vt-uiux-enhancer"
+        "type": "npm"
       },
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
@@ -32,10 +26,7 @@
       "version": "1.0.0",
       "publishTimestamp": 1793500848,
       "source": {
-        "type": "git",
-        "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "dd7ba1d470f1dcdb672083bf615b961168ef0d34",
-        "path": "plugins/vt-gen-ui"
+        "type": "npm"
       },
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
@@ -45,10 +36,7 @@
       "version": "1.0.1",
       "publishTimestamp": 1793502703,
       "source": {
-        "type": "git",
-        "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "52c2da3335de93035394acaf6ac196295a3fab64",
-        "path": "plugins/vt-gen-ui"
+        "type": "npm"
       },
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
@@ -60,10 +48,7 @@
       "version": "1.0.0",
       "publishTimestamp": 1793501789,
       "source": {
-        "type": "git",
-        "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "507058218fec4e761303598fc30603600db2ec56",
-        "path": "plugins/vt-quote-bar"
+        "type": "npm"
       },
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
@@ -73,10 +58,7 @@
       "version": "1.0.1",
       "publishTimestamp": 1793502748,
       "source": {
-        "type": "git",
-        "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "8bfbcb4e6a6bd9b8d7e66b0590a714257565d1ce",
-        "path": "plugins/vt-quote-bar"
+        "type": "npm"
       },
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
@@ -88,10 +70,7 @@
       "version": "1.0.0",
       "publishTimestamp": 1793500813,
       "source": {
-        "type": "git",
-        "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "f086d5fa366ba0eb8ff74d1416c2fec368af881f",
-        "path": "plugins/vt-web-chat"
+        "type": "npm"
       },
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
@@ -101,10 +80,7 @@
       "version": "1.0.1",
       "publishTimestamp": 1793502874,
       "source": {
-        "type": "git",
-        "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "262e266ab85b029f79540372a013dae126af5651",
-        "path": "plugins/vt-web-chat"
+        "type": "npm"
       },
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
@@ -116,10 +92,7 @@
       "version": "1.0.0",
       "publishTimestamp": 1793500771,
       "source": {
-        "type": "git",
-        "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "c3c993f6434f7c4766bf862692c2934cc8fc15c2",
-        "path": "plugins/vt-system-prompt"
+        "type": "npm"
       },
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
@@ -129,10 +102,7 @@
       "version": "1.0.1",
       "publishTimestamp": 1793502790,
       "source": {
-        "type": "git",
-        "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "dcc8de277fb25805045218379191f6872a93b1af",
-        "path": "plugins/vt-system-prompt"
+        "type": "npm"
       },
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
