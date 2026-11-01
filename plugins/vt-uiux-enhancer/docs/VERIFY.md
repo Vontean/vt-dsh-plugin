@@ -44,13 +44,16 @@ cordis_inspect_query(platform="client", provider="Theme", method="listTokens")
 `behavior` 补丁不解析选择器，所以没有 `discovered` 这类 token。它自己额外发两组：
 
 ```
---vt-report-behaviors-<installed>-of-<total>   四个行为是否都装上了；失败时会多一条
+--vt-report-behaviors-<installed>-of-<total>   行为是否都装上了；失败时会多一条
 --vt-report-behaviour-errors-<原因>            同 `__vtInterface.behaviors().errors`
 --vt-report-messages-rows-<n>-bubbles-<n>-clamped-<n>-expanded-<n>   长消息折叠的读数
+--vt-report-scroll-pin-turn-<n>-engaged-<0|1>-released-<0|1>-pull-<n>px-top-<n>-req-<n>-ok-<n>   阅读位置冻结的读数（req = 应用想滚到的位置，ok = 实际被允许的位置）
+--vt-report-scroll-pin-hook-<installed|no-accessor>   写入接管是否真的挂上了（拿不到 Element 的 scrollTop 访问器时是 no-accessor）
 ```
 
 `messages-*` 由 `message-clamp` 自己写入独立主题层（`vt-interface:messages`），不等引擎的重发周期 ——
-页面静止时引擎不会再上报，那个读数就永远不出现（这条踩过）。
+页面静止时引擎不会再上报，那个读数就永远不出现（这条踩过）。`scroll-pin` 用同一手法写入
+`vt-interface:scroll-pin`，理由相同：要读的那一刻，恰好是生成停止、页面不动的时候。
 
 这个通道每次 body 变动后 600ms 重发一次，只测「解析到没有 + 首个元素的尺寸/圆角」，
 刻意保持廉价。
@@ -80,6 +83,27 @@ cordis_inspect_query(platform="client", provider="Theme", method="listTokens")
 
 展开后 token 变成 `clamped-0 expanded-1`，再点一次回来。这两个数值变化只证明**状态**变了；
 「看得见的变化」仍然要肉眼确认一次，因为 `max-height` 与兄弟块的拼接没有计算值可读。
+
+## 阅读位置冻结：怎么判断生效
+
+规则是「正式回答一开始就原地冻结」，所以判读只有两个数：**冻结有没有发生**、**冻结后位置有没有再变**。
+`req` 与 `ok` 不相等就说明夹住了；相等则说明那一刻没有需要夹的写作。
+
+| 时机 | token | 期望 |
+|---|---|---|
+| 思考 / 工具调用阶段 | 没有 `scroll-pin` token | 还没插手，出厂跟随不变 |
+| 正式回答第一帧 | `turn-<n>-engaged-1-released-0-pull-<n>px-top-<n>` | `engaged-1`；回答首行本就在屏幕内时 `pull-0px` |
+| 回答继续流入 | `…-top-<n>-req-<n>-ok-<n>` | `ok` 停在冻结位置上，`req` 继续变大而 `ok` 不变 |
+| 点「回到最新」/ 滚回底部 | `…-released-1` | 本轮交还跟随，后续不再冻结 |
+| 本轮结束 | `engaged-1 released-0` | 冻结状态保留到下一轮 |
+
+判读要点：
+
+- `ok` 必须**不再变化**。它一秒一秒地跟着 `req` 涨，就是没夹住（先看行为是否 5/5 装上）。
+- `pull-<n>px` 非 0 是允许的：回答首行当时在屏幕外，视图朝它对齐了一次。
+- `--vt-report-scroll-pin-hook-installed` 是「写入接管挂上了」的唯一证据；`no-accessor` 表示拿不到
+  `Element.prototype.scrollTop`，补丁等于没装。
+- 探针里的 `scrollPin` 字段给出同一组数，外加 `user`/`answer` 两行相对滚动容器顶边的位置。
 
 ## 通道 B：探针（按需开启）
 
@@ -123,6 +147,7 @@ tail -f /tmp/vt-dump.jsonl | jq -c 'select(.kind=="hover") | .hovered'
 | `controls[].svg` | 输入框内每个按钮图标：盒子尺寸、计算描边、第一个图形的墨迹盒。改图标大小时三个数一起看 |
 | `rail` | 轮次跳转条：条本身/所在容器/侧栏/正文墨迹左缘的位置与尺寸，单根刻度的计算值（长度、颜色、`scaleX`、缓动），预览卡与 `:has()` 波峰规则是否被浏览器保留 |
 | `convo` | 会话视口：滚动容器/输入框座/视区的矩形与计算值、`scrollTop` 与两端是否到头、注入的渐隐覆盖层是否在位（两条带的 24px 高度与不透明度、底带偏移） |
+| `scrollPin` | 阅读位置冻结：`scroll`（top/client/height）、`following`、`running`、`turn`、`user` 与 `answer` 两行相对滚动容器顶边的 `top`/`height`，以及 `state`（行为自己记录的 `pin`/`armed`/`engaged`/`released`/`pull`/`rowTop`/`pinTop`/`ceiling`）。要判断「有没有接管」看 `state`，要判断「画面对不对」看 `user.top` 是否停在 20 附近 |
 | `viewSwitch` | 视图切换入口：`header`（会话 header 实测高，应从 76 掉到 51）、`tabs`（标签行实测高、当前标签、**仍在 DOM 里的标签文案**）、`entry`（入口按钮的类名/几何/图标/`aria-label`）、`dock`（状态行成员的文案与顺序） |
 | `queue` | 排队消息面板：类名、`::before` 的实际背景色、读到的 `--vt-queue-fill`。它只在 agent 忙碌时存在，平时为 `null` —— 发一条排队消息后取 `manual` dump |
 

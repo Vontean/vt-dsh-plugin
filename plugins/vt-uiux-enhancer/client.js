@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.1.1';
+    const VERSION = '1.2.0';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -337,6 +337,32 @@ window.__ModuleLoader__.load({
       glyph: { box: 14, stroke: 1 },
       /** Icon-to-label gap, the value the app's disclosure titles use. */
       iconGap: 6,
+    };
+
+    /**
+     * Reading position while an answer streams.
+     *
+     * The transcript follows the tail: every frame that grows the answer scrolls
+     * one line further, so a long answer walks its own first paragraph out of the
+     * viewport and the reader has to scroll back to the beginning of the text
+     * they are being shown.
+     *
+     * The fix freezes the position when the answer starts, and the offset below is
+     * the only alignment line it may still use: when the answer's first line is not
+     * on screen at that moment (a long process group pushed it below the fold), the
+     * view moves once so the answer starts there. Measured between two box edges,
+     * never from a token; the chat column's own `padding-top` is 16px, so 20px
+     * leaves 4px of air above the text without looking clipped.
+     */
+    const SCROLL_PIN = {
+      /** Distance from the scrollport's top edge to the user row's top edge. */
+      offset: 20,
+      /**
+       * Bottom slack when deciding whether the answer's first line survives the
+       * pin: a line that only half-fits is not "visible". One line box (22px) is
+       * the smallest honest margin.
+       */
+      slack: 24,
     };
 
     /** Codex's spring: linear() with a 0.8% overshoot instead of a bezier. */
@@ -1213,6 +1239,41 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         behavior: 'message-clamp',
         css: () => '',
       },
+      {
+        kind: 'behavior',
+        id: 'scroll-pin',
+        /**
+         * Keep the reader's place while an answer streams.
+         *
+         * The transcript owns one policy: content growth scrolls the tail into
+         * view (`onResize` → `followTail()`). For a long answer that policy walks
+         * the answer's own beginning off the top, so the reader ends up scrolling
+         * back to read text that was pushed away while it was being written.
+         *
+         * This is a behaviour for two reasons that CSS cannot reach:
+         *
+         *   · the decision needs the live geometry of this turn's user row and the
+         *     scroll position — neither is readable from a stylesheet;
+         *   · `data-chat-following-tail` is React state, and `followTail()` writes
+         *     `true` back even when the landing was clamped, so the freeze cannot
+         *     be expressed by toggling that state. It has to be applied at the one
+         *     place the tail movement passes through: the scrollport's own write.
+         *
+         * Took over: `element.scrollTop` and `element.scrollTo` on the transcript
+         * scrollport, as own properties shadowing `Element.prototype`, so every
+         * follow write — instant or smooth — passes one clamp. Nothing global is
+         * patched, no event is synthesized, and disposing deletes the two own
+         * properties, which restores the shipped behaviour exactly.
+         *
+         * The rule: nothing follows after the answer starts. The first write after
+         * the answer row appears freezes the viewport where it is — the growing
+         * answer then never moves it — and `SCROLL_PIN.offset` is used only for the
+         * one catch-up move when the answer's first line is off screen.
+         *
+         * Values live in `SCROLL_PIN`; the state machine is in `installScrollPin`.
+         */
+        behavior: 'scroll-pin',
+      },
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1293,6 +1354,12 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
        * invisible to the one verification channel that works without DevTools.
        */
       const behaviorMetrics = {};
+      /**
+       * Live readout of the reading-position freeze, set by `scroll-pin` once it
+       * installs. The engine hands it to diagnostics and the probe rather than
+       * letting either one re-derive the state from the DOM.
+       */
+      let scrollPinReadout = null;
       /** Created on first sync, so a document-less host never touches the DOM. */
       let sheet = null;
       const ensureSheet = () => sheet || (sheet = createStyleHost(ctx));
@@ -1679,6 +1746,30 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
 
 
       /**
+       * The main transcript scrollport, or null while no conversation is open.
+       *
+       * Two rules, in order: a scrollport that contains a run in flight, then the
+       * largest visible one. The app can render a second conversation (sidebar
+       * preview, dock panel) with its own history, so "first match" and even
+       * "largest box" can both land on a view the reader is not looking at — only
+       * the one with `[data-chat-running]` is the transcript being written to.
+       * Shared by `scroll-edges` and `scroll-pin` so "the main transcript" has
+       * exactly one definition.
+       */
+      function pickTranscriptScroller() {
+        const all = [...document.querySelectorAll('[data-conversation-scroll]')];
+        const visible = all.filter((el) => el.clientHeight > 0 && el.parentElement);
+        if (visible.length === 0) return null;
+        // The transcript of a run in flight wins over size: secondary surfaces
+        // (sidebar and dock previews) can host a second conversation, and taking
+        // the largest box would then patch a view the reader is not looking at.
+        const running = visible.filter((el) => el.querySelector('[data-chat-running]') !== null);
+        const pool = running.length > 0 ? running : visible;
+        return pool.reduce((best, el) => (el.clientHeight > best.clientHeight ? el : best));
+      }
+
+
+      /**
        * Soft edges for the transcript viewport.
        *
        * One inert overlay in the conversation body, two gradient bands, both fed
@@ -1741,15 +1832,8 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
          * render a second conversation (sidebar preview, embedded panel), and
          * taking the first match would fade the wrong one.
          */
-        const pick = () => {
-          const all = [...document.querySelectorAll('[data-conversation-scroll]')];
-          const visible = all.filter((el) => el.clientHeight > 0 && el.parentElement);
-          if (visible.length === 0) return null;
-          return visible.reduce((best, el) => (el.clientHeight > best.clientHeight ? el : best));
-        };
-
         const bind = () => {
-          const next = pick();
+          const next = pickTranscriptScroller();
           if (!next || next === scroller || !next.parentElement) return false;
           unbind();
           scroller = next;
@@ -1779,6 +1863,329 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         return () => {
           if (hostObserver) hostObserver.disconnect();
           unbind();
+        };
+      }
+
+
+      /**
+       * Freeze the reading position when the answer starts to stream.
+       *
+       * The transcript's follow policy is one line — content growth scrolls the
+       * tail into view — and it is owned by the chat package. `followTail()` even
+       * writes "following" back to `true` after a landing it did not reach, so the
+       * freeze cannot be expressed by toggling that state from outside. It has to
+       * happen where the tail movement is written: the scrollport's own
+       * `scrollTop` / `scrollTo`.
+       *
+       * The rule (values in `SCROLL_PIN`):
+       *
+       *   · only while a turn is running AND its formal answer exists, so the
+       *     thinking and tool phases follow exactly as shipped;
+       *   · on the first write after the answer appears the position is frozen —
+       *     the view stops where the reader already is, and every later follow
+       *     write is neutralised. Nothing scrolls on its own once the answer runs;
+       *   · if the answer's first line is not on screen at that moment (a long
+       *     process group pushed it below the fold), the view moves once so the
+       *     answer starts at the pin line instead of freezing on empty space;
+       *   · the freeze ends when the reader returns to the tail — the app's
+       *     `data-chat-following-tail` comes back, or it asks for a smooth
+       *     "back to latest" — and never comes back for that turn.
+       *
+       * Why the write and not a scroll listener: the app writes the target it
+       * wants, reads back the actual `scrollTop` and stores that as its landing,
+       * so a neutralised write stays consistent with its own bookkeeping.
+       */
+      function installScrollPin(readSelectors, metrics) {
+        const OFFSET = SCROLL_PIN.offset;
+        const SLACK = SCROLL_PIN.slack;
+
+        let scroller = null;
+        let restoreWrites = null;
+        let flagObserver = null;
+        let hostObserver = null;
+        let revoke = null;
+        let published = '';
+        let state = null;
+
+        /** One turn's freeze state; reset whenever the user row changes. */
+        const blank = () => ({
+          key: null,
+          turn: null,
+          column: null,
+          user: null,
+          answer: null,
+          /** The position was frozen for this turn. */
+          engaged: false,
+          /** The reader took the tail back: the rest of this turn follows. */
+          released: false,
+          /** How far the one alignment move went, in px. */
+          pulled: 0,
+          /** Frozen scroll position and the answer row's top at that moment. */
+          top: null,
+          answerTop: null,
+          /** Last requested write and what it became, for the report. */
+          requested: null,
+          allowed: null,
+        });
+
+        /** The chat flow column inside the scrollport. */
+        const columnOf = (element) => element.querySelector('[data-chat-flow]');
+
+        /**
+         * Which turn is on screen: its last committed user row and the turn it
+         * belongs to. Re-read on every write — a steering message during a turn
+         * replaces the row this freeze belongs to.
+         */
+        const resolveTurn = () => {
+          if (!scroller || !scroller.isConnected) return null;
+          const column = columnOf(scroller);
+          if (!column) return null;
+          const rows = column.querySelectorAll('[data-chat-flow-kind="user"], [data-chat-flow-kind="steering"]');
+          let user = null;
+          for (let i = rows.length - 1; i >= 0; i -= 1) {
+            if (rows[i].closest('[hidden]') !== null) continue;
+            user = rows[i];
+            break;
+          }
+          if (!user) return null;
+          const key = user.getAttribute('data-chat-flow-key') || user.getAttribute('data-chat-turn');
+          if (!state || state.key !== key) {
+            state = { ...blank(), key, turn: user.getAttribute('data-chat-turn'), column };
+          }
+          state.column = column;
+          state.user = user;
+          return state;
+        };
+
+        /**
+         * The formal answer row of the current turn. It is an `assistant-step`
+         * whose group part is "response"; reasoning rows are the same kind marked
+         * "reasoning", so the part — not the kind — separates answer from thinking.
+         * A plain `assistant` row is accepted for display modes that keep one.
+         */
+        const resolveAnswer = (current) => {
+          if (current.answer && current.answer.isConnected) return current.answer;
+          const turn = Number(current.turn);
+          if (!Number.isSafeInteger(turn)) return null;
+          const nodes = current.column.querySelectorAll(
+            `[data-chat-turn="${turn}"][data-chat-group-part="response"], [data-chat-turn="${turn}"][data-chat-flow-kind="assistant"]`,
+          );
+          for (let i = nodes.length - 1; i >= 0; i -= 1) {
+            if (nodes[i].closest('[hidden]') !== null) continue;
+            current.answer = nodes[i];
+            return nodes[i];
+          }
+          return null;
+        };
+
+        const isRunning = (current) => current.column.querySelector('[data-chat-running]') !== null;
+
+        /** Whether the app currently owns the tail; React mirrors it as an attribute. */
+        const isFollowing = (current) => {
+          let node = current && current.column;
+          for (let i = 0; node && i < 6; i += 1, node = node.parentElement) {
+            if (node.hasAttribute('data-chat-following-tail')) return true;
+          }
+          return false;
+        };
+
+        /**
+         * Publish the freeze through the same two channels the message clamp uses:
+         * the engine's metrics (carried into the report tokens) and its own theme
+         * layer, because the engine only republishes on body mutations and the
+         * reading a human wants to check is taken while the page is static.
+         */
+        const publish = () => {
+          if (!state) return;
+          const value = [
+            `turn-${state.turn ?? 'none'}`,
+            `engaged-${state.engaged ? 1 : 0}`,
+            `released-${state.released ? 1 : 0}`,
+            `pull-${state.pulled}px`,
+            `top-${state.top ?? 'none'}`,
+            `req-${state.requested ?? 'none'}`,
+            `ok-${state.allowed ?? 'none'}`,
+          ].join('-');
+          if (value === published) return;
+          published = value;
+          metrics['scroll-pin'] = value;
+          const tokens = { [`--vt-report-scroll-pin-${sanitize(value)}`]: { light: '', dark: '' } };
+          try {
+            revoke = ctx.theme.overrideTokens('vt-interface:scroll-pin', tokens);
+          } catch (err) { /* diagnostics must never break the visual layer */ }
+        };
+
+        /**
+         * Where a requested scroll should land: the request itself until the answer
+         * starts, the frozen position afterwards.
+         */
+        const plan = (requested, smooth) => {
+          if (!scroller) return requested;
+          const current = resolveTurn();
+          if (smooth) {
+            // A smooth request is "back to latest" — a reader command, never the
+            // growth path, which is always immediate.
+            if (current && current.engaged && !current.released) {
+              current.released = true;
+              current.requested = Math.round(requested);
+              current.allowed = Math.round(requested);
+              publish();
+            }
+            return requested;
+          }
+          if (!current) return requested;
+          if (current.released) return requested;
+          if (current.column.hasAttribute('data-input-fold')) return requested;
+          if (!isRunning(current)) return requested;
+          const answer = resolveAnswer(current);
+          if (!answer) return requested;
+          const view = scroller.clientHeight;
+          if (view <= 0) return requested;
+          const start = scroller.scrollTop;
+          if (current.engaged) {
+            // Frozen: the reader owns the viewport for the rest of this turn.
+            current.requested = Math.round(requested);
+            current.allowed = Math.round(start);
+            publish();
+            return start;
+          }
+          const row = current.user.getBoundingClientRect();
+          // A message taller than the viewport has no reachable pin line; the
+          // message clamp folds those rows anyway, so this is a guard, not a path.
+          if (row.height > view - OFFSET) return requested;
+          const frame = scroller.getBoundingClientRect();
+          const answerTop = answer.getBoundingClientRect().top - frame.top;
+          current.engaged = true;
+          current.top = Math.round(start);
+          current.answerTop = Math.round(answerTop);
+          current.requested = Math.round(requested);
+          // The answer is already on screen: stop right here, nothing moves.
+          if (answerTop >= 0 && answerTop <= view - SLACK) {
+            current.allowed = Math.round(start);
+            publish();
+            return start;
+          }
+          // Otherwise bring the answer's first line to the pin line, once.
+          const target = Math.max(0, start + (answerTop - OFFSET));
+          current.pulled = Math.round(target - start);
+          current.allowed = Math.round(target);
+          publish();
+          return target;
+        };
+
+        /**
+         * Shadow the scrollport's own writes with one clamp. Own properties on the
+         * instance, never the prototypes: deleting them restores the shipped
+         * behaviour and no other element is ever affected.
+         */
+        const patchWrites = (element) => {
+          // Never wrap our own wrapper: `nativeScrollTo` would then be the previous
+          // clamp and every write would re-enter `plan`.
+          if (element.scrollTo && element.scrollTo.vtScrollPin === true) return () => {};
+          const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop');
+          if (!descriptor || typeof descriptor.set !== 'function') {
+            // The whole patch is this hook; without it there is nothing to verify by
+            // eye either, so it has to be visible in the report.
+            metrics['scroll-pin-hook'] = 'no-accessor';
+            return () => {};
+          }
+          metrics['scroll-pin-hook'] = 'installed';
+          const read = descriptor.get;
+          const write = descriptor.set;
+          const nativeScrollTo = element.scrollTo;
+          Object.defineProperty(element, 'scrollTop', {
+            configurable: true,
+            enumerable: false,
+            get() { return read.call(element); },
+            set(value) { write.call(element, plan(value, false)); },
+          });
+          element.scrollTo = function scrollTo(options, y) {
+            if (typeof options === 'number') {
+              return nativeScrollTo.call(element, options, plan(y, false));
+            }
+            if (!options || options.top === undefined || options.top === null) {
+              return nativeScrollTo.call(element, options);
+            }
+            const top = plan(options.top, options.behavior === 'smooth');
+            return nativeScrollTo.call(element, { ...options, top });
+          };
+          element.scrollTo.vtScrollPin = true;
+          return () => {
+            delete element.scrollTop;
+            delete element.scrollTo;
+          };
+        };
+
+        /** Following resumed after the freeze released the tail: the reader asked for it. */
+        const onFlag = (records) => {
+          if (!state || !state.engaged || state.released) return;
+          for (const record of records) {
+            if (record.attributeName !== 'data-chat-following-tail') continue;
+            if (!record.target.hasAttribute('data-chat-following-tail')) continue;
+            state.released = true;
+            publish();
+            return;
+          }
+        };
+
+        const snapshot = () => {
+          if (!scroller) return { bound: false };
+          const current = state || blank();
+          return {
+            bound: true,
+            top: Math.round(scroller.scrollTop),
+            client: scroller.clientHeight,
+            height: scroller.scrollHeight,
+            following: isFollowing(current),
+            turn: current.turn,
+            engaged: current.engaged,
+            released: current.released,
+            pulled: current.pulled,
+            frozenTop: current.top,
+            answerTop: current.answerTop,
+            requested: current.requested,
+            allowed: current.allowed,
+          };
+        };
+
+        const unbind = () => {
+          if (flagObserver) { flagObserver.disconnect(); flagObserver = null; }
+          if (restoreWrites) { restoreWrites(); restoreWrites = null; }
+          if (typeof revoke === 'function') safeCall(revoke);
+          revoke = null;
+          scroller = null;
+          state = null;
+          published = '';
+        };
+
+        const bind = () => {
+          const next = pickTranscriptScroller();
+          if (!next || next === scroller || !next.parentElement) return false;
+          unbind();
+          scroller = next;
+          restoreWrites = patchWrites(next);
+          flagObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(onFlag);
+          if (flagObserver) {
+            flagObserver.observe(next, { attributes: true, attributeFilter: ['data-chat-following-tail'], subtree: true });
+          }
+          return true;
+        };
+
+        bind();
+
+        // The conversation view remounts per session, so the scrollport this patch
+        // owns is replaced under it. Re-bind on structural changes only.
+        hostObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+          if (!scroller || !scroller.isConnected) bind();
+        });
+        if (hostObserver) hostObserver.observe(document.body, { childList: true, subtree: true });
+
+        scrollPinReadout = snapshot;
+
+        return () => {
+          if (hostObserver) hostObserver.disconnect();
+          unbind();
+          if (scrollPinReadout === snapshot) scrollPinReadout = null;
         };
       }
 
@@ -2241,6 +2648,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
       const BEHAVIORS = {
         'native-tooltip': (readSelectors) => installNativeTitleTakeover(readSelectors),
         'scroll-edges': () => installScrollEdgeFade(),
+        'scroll-pin': (readSelectors, metrics) => installScrollPin(readSelectors, metrics),
         'view-switch': () => installViewSwitch(ctx),
         'message-clamp': (readSelectors) => installMessageClamp(readSelectors),
       };
@@ -2304,6 +2712,15 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         /** Live readings a behaviour publishes for the report channel. */
         behaviorMetrics() {
           return { ...behaviorMetrics };
+        },
+
+        /**
+         * Live state of the reading-position freeze (`scroll-pin`): whether it is
+         * bound, which row this turn pinned to, and the numbers it acted on. Null
+         * until the behaviour installs or before a conversation mounts.
+         */
+        scrollPin() {
+          return typeof scrollPinReadout === 'function' ? scrollPinReadout() : null;
         },
 
         dispose() {
@@ -2667,6 +3084,60 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
       };
     }
 
+    /**
+     * The reading-position freeze, as numbers.
+     *
+     * `state` comes from the behaviour itself (`__vtInterface.scrollPin()`) so the
+     * probe reports the decision that was actually taken instead of re-deriving
+     * one. The rest is DOM geometry: where this turn's user row and its answer row
+     * sit right now, and whether a turn is still running.
+     */
+    function vtScrollPin() {
+      const all = [...document.querySelectorAll('[data-conversation-scroll]')];
+      const visible = all.filter((el) => el.clientHeight > 0 && el.parentElement);
+      const scroller = visible.length === 0
+        ? null
+        : visible.reduce((best, el) => (el.clientHeight > best.clientHeight ? el : best));
+      if (!scroller) return null;
+      const column = scroller.querySelector('[data-chat-flow]');
+      const frame = scroller.getBoundingClientRect();
+      const box = (el) => {
+        if (!el) return null;
+        const rect = el.getBoundingClientRect();
+        return { top: Math.round(rect.top - frame.top), height: Math.round(rect.height) };
+      };
+      let following = false;
+      let user = null;
+      let answer = null;
+      let turn = null;
+      if (column) {
+        for (let node = column, i = 0; node && i < 6; node = node.parentElement, i += 1) {
+          if (node.hasAttribute('data-chat-following-tail')) { following = true; break; }
+        }
+        const rows = [...column.querySelectorAll('[data-chat-flow-kind="user"], [data-chat-flow-kind="steering"]')]
+          .filter((el) => el.closest('[hidden]') === null);
+        user = rows.length === 0 ? null : rows[rows.length - 1];
+        const value = user ? Number(user.getAttribute('data-chat-turn')) : NaN;
+        if (Number.isSafeInteger(value)) {
+          turn = value;
+          const answers = [...column.querySelectorAll(`[data-chat-turn="${value}"][data-chat-flow-kind="assistant"]`)]
+            .filter((el) => el.closest('[hidden]') === null);
+          answer = answers.length === 0 ? null : answers[answers.length - 1];
+        }
+      }
+      return {
+        scroll: { top: Math.round(scroller.scrollTop), client: scroller.clientHeight, height: scroller.scrollHeight },
+        following,
+        running: column ? column.querySelector('[data-chat-running]') !== null : false,
+        turn,
+        user: box(user),
+        answer: box(answer),
+        state: window.__vtInterface && window.__vtInterface.scrollPin
+          ? window.__vtInterface.scrollPin()
+          : null,
+      };
+    }
+
     function vtPath(el, depth) {
       const parts = [];
       let node = el;
@@ -2791,6 +3262,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
       payload.metrics = vtFontMetrics();
       payload.rail = vtRail();
       payload.convo = vtConvo();
+      payload.scrollPin = vtScrollPin();
       payload.sheets = vtSheetScan(['pn0E2q_trigger', 'kKSgSq_chip', '_ghost_1rv3m_', 'SJRB_q_trigger']);
       // Every rule we emit carries !important; nothing shipped upstream does in
       // the same place. Reading them back proves the sheet's real selectors and
@@ -3047,6 +3519,14 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
          */
         messages() {
           return ui.behaviorMetrics();
+        },
+        /**
+         * Live state of the reading-position freeze (`scroll-pin`): which row this
+         * turn pinned to, whether it engaged or was released, and the pin line it
+         * acted on. Plain data, safe to read from a console.
+         */
+        scrollPin() {
+          return ui.scrollPin();
         },
         /** Resolved selectors per patch, for auditing what each patch targets. */
         selectors() {

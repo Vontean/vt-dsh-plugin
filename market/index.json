@@ -264,8 +264,8 @@
         "en": "VT UI/UX Enhancer"
       },
       "description": {
-        "zh": "把 Harness 调成干净的白纸界面：纯白画布、暖调中性文字、统一的控件形状与间距、有信息量的动效；超长用户消息折叠成 20 行、原位展开。插件关闭后精确回到出厂外观。",
-        "en": "Turns Harness into a clean paper-like surface: white canvas, warm neutral text, unified control shapes and spacing, motion that carries information, and long user messages folded to 20 lines with in-place disclosure. Disabling it restores the shipped interface exactly."
+        "zh": "把 Harness 调成干净的白纸界面：纯白画布、暖调中性文字、统一的控件形状与间距、有信息量的动效；超长用户消息折叠成 20 行、原位展开；流式回答时冻结阅读位置，不再把开头推出屏幕。插件关闭后精确回到出厂外观。",
+        "en": "Turns Harness into a clean paper-like surface: white canvas, warm neutral text, unified control shapes and spacing, motion that carries information, long user messages folded to 20 lines with in-place disclosure, and a reading position that stays put while an answer streams. Disabling it restores the shipped interface exactly."
       },
       "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ildhcm0gbmV1dHJhbCBwYWxldHRlIj4KICA8cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHJ4PSIxNCIgZmlsbD0iIzFiMWIxYyIvPgogIDxnPgogICAgPHJlY3QgeD0iMTQiIHk9IjE0IiB3aWR0aD0iMzYiIGhlaWdodD0iNiIgcng9IjMiIGZpbGw9IiNjZmQzZDYiLz4KICAgIDxyZWN0IHg9IjE0IiB5PSIyNSIgd2lkdGg9IjM2IiBoZWlnaHQ9IjYiIHJ4PSIzIiBmaWxsPSIjZjFlZGU5Ii8+CiAgICA8cmVjdCB4PSIxNCIgeT0iMzYiIHdpZHRoPSIzNiIgaGVpZ2h0PSI2IiByeD0iMyIgZmlsbD0iI2EzOWI5MyIvPgogICAgPHJlY3QgeD0iMTQiIHk9IjQ3IiB3aWR0aD0iMzYiIGhlaWdodD0iNiIgcng9IjMiIGZpbGw9IiM0ODQ0NDAiLz4KICA8L2c+Cjwvc3ZnPgo=",
       "author": "Vontean",
@@ -282,7 +282,9 @@
           "appearance",
           "design",
           "motion",
-          "message"
+          "message",
+          "scroll",
+          "reading"
         ],
         "labels": [],
         "sortKeys": {}

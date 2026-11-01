@@ -4,8 +4,8 @@
     "en": "VT UI/UX Enhancer"
   },
   "description": {
-    "zh": "把 Harness 调成干净的白纸界面：纯白画布、暖调中性文字、统一的控件形状与间距、有信息量的动效；超长用户消息折叠成 20 行、原位展开。插件关闭后精确回到出厂外观。",
-    "en": "Turns Harness into a clean paper-like surface: white canvas, warm neutral text, unified control shapes and spacing, motion that carries information, and long user messages folded to 20 lines with in-place disclosure. Disabling it restores the shipped interface exactly."
+    "zh": "把 Harness 调成干净的白纸界面：纯白画布、暖调中性文字、统一的控件形状与间距、有信息量的动效；超长用户消息折叠成 20 行、原位展开；流式回答时冻结阅读位置，不再把开头推出屏幕。插件关闭后精确回到出厂外观。",
+    "en": "Turns Harness into a clean paper-like surface: white canvas, warm neutral text, unified control shapes and spacing, motion that carries information, long user messages folded to 20 lines with in-place disclosure, and a reading position that stays put while an answer streams. Disabling it restores the shipped interface exactly."
   },
   "icon": "icon.svg",
   "category": "ui",
@@ -15,6 +15,8 @@
     "appearance",
     "design",
     "motion",
-    "message"
+    "message",
+    "scroll",
+    "reading"
   ]
 }

@@ -157,6 +157,27 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
 - 推论：`.bubble` 是 `content-box`（Harness 没有全局 `border-box`），所以 `max-height` 只写
   `19 × 行高`，不要加内距 —— 这两个事实要一起用才对。
 
+### 11. 自动下滚只有一条写路径，而且状态改不回去
+
+聊天区跟随尾部不是 CSS、不是 `scrollIntoView`，也不是某个可订阅的 store：`ChatViewport` 在
+`ResizeObserver` 里收到尺寸变化，若 `followingTail` 为真就调 `followTail()`，它在内部让
+`followWindow` 把 `scroller.scrollTop` 写成新的 floor（少数路径走 `scrollTo`）。**写完还会回读**
+`element.scrollTop` 当作 landing。
+
+更关键的是 `followTail()` 最后 `commit(landing, true, …)`：`followingTail` 被**硬写回 `true`**，
+即使这次落地被改了也一样。所以想停住跟随，不能去改那个状态，只能在写入处限位。
+
+- 现象：给滚动容器加 `overflow-anchor`、改 `data-chat-following-tail`、往状态里塞 `false`，全都无效；
+  下一帧依旧滚到底。
+- 做法：在滚动容器实例上定义 own 的 `scrollTop` 访问器与 own `scrollTo`，把写入**替换成冻结位置**
+  （回答开始那一刻的 `scrollTop`），转发给 `Element.prototype` 的真实描述符。`jump()` 回读到的就是
+  替换后的值，它的记账因此自洽。
+- 副作用是好的：夹过之后位置离 floor 很远，它 500ms 的读者采样把这次移动判成「读者接管」，
+  `followingTail` 自己变 `false`，跟随真正停下，「回到最新」按钮也照常出现。
+- 还原：`delete element.scrollTop` / `delete element.scrollTo` 即可。绝不要改原型。
+- 折叠批次（`column[data-input-fold]`）自己按帧写 `scrollTop` 做位置补偿，限位期间必须放行，
+  否则会和补偿打架。
+
 ---
 
 ## Harness 机制备忘
@@ -205,6 +226,26 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
   `[data-chat-flow-kind="user"],[data-chat-flow-kind="steering"]` 定位 —— 不用类名，不受构建哈希影响。
   transcript 本身不虚拟化，但切会话、compaction 与热更新都会重挂节点：重挂即回到折叠态，
   展开状态只活在该节点上（这是有意的，见 `DESIGN.md` 的决策记录）。
+- **跟随尾部的可读信号**：聊天根上有 `data-chat-following-tail`（React 状态
+  `followingTail` 的镜像，跟随为真时才存在，顺带把滚动容器设成 `overflow-anchor: none`）；
+  内部还有 `[data-chat-running]`（本轮运行指示行，思考阶段就在，直到本轮关闭）与
+  `[data-streaming]`（回答 / 推理正在流入）。
+- **回答行与思考行同 kind，靠 group part 区分**：本轮回答的 flowItem 是
+  `data-chat-flow-kind="assistant-step"` + `data-chat-group-part="response"`；思考行同样是
+  `assistant-step`（或 `tool-call`），但 part 是 `"reasoning"` 或没有。**不存在**
+  `data-chat-flow-kind="assistant"` —— 按 kind 找回答会永远找不到。运行期间回答行还带
+  `data-turn-process-member`，所以「不是过程组成员」也不能用来筛回答。
+- **`[data-conversation-scroll]` 可能不止一个**：侧栏 / 停靠面板里的会话预览也会渲染一个，
+  它同样带 `[data-chat-flow]` 与完整历史。取「最大的那个」可能选到预览。可靠判据是先按
+  「内含 `[data-chat-running]`」筛（只有真正在跑的那份有），再比高度。
+- **跟随的判定是 25px + 500ms**：`ScrollFollow` 的阈值 25px（`useScrollFollow(…, 25)`），
+  读者滚动后由 500ms 的采样定时器决定 `following = nearBottom`，在这段时间里 `onResize` 直接
+  返回（`pending`）—— 也就是说「一旦被判成读者接管，500ms 内不会再有自动下滚」。
+  这是限位补丁不需要持续纠偏的原因。
+- **过程组在运行期保持展开**：`turnProcessAlwaysOpen()` 对 `status === "open"` 的轮次返回真，
+  所以运行中 `processHidden` 不生效、成员不折叠；只有轮次结束后「最近完成的一轮」才保持展开，
+  更早的轮次折叠。推论：思考阶段很长时，用户消息可能早已被推出视口，靠轮次结束后的折叠
+  救不回来 —— 需要时得主动回拉（`scroll-pin` 的做法）。
 - **图标来自旧的 primitives 包**：`@deepseek-ai/dsh-client-ui-primitives` 在磁盘上没有独立包，
   它是壳的 **seed 模块**（`staticModules` 里就有），`require` 在同步阶段一定命中，
   **不需要**写进 `dsh.client.inject`（那里的 id 必须是 boot graph 的行，否则被静默跳过）。

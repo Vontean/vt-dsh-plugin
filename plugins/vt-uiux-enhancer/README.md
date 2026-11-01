@@ -1,8 +1,8 @@
 # dsh-vt-uiux-enhancer · VT UI/UX 增强
 
 DeepSeek Harness 的界面改善插件：把外观调成**一张干净的白纸**。
-默认只改看得见的样式；唯一越界的是两处**可逆的密度处理**（低频入口收进状态行、超长用户消息折叠成 20 行），
-都不新增持久状态，关闭插件后 Harness 精确回到出厂外观。
+默认只改看得见的样式；越界的只有三处**可逆的交互处理**（低频入口收进状态行、超长用户消息折叠成 20 行、
+流式回答不再甩走阅读位置），都不新增持久状态，关闭插件后 Harness 精确回到出厂外观。
 
 ## 它改了什么
 
@@ -16,6 +16,9 @@ DeepSeek Harness 的界面改善插件：把外观调成**一张干净的白纸*
 - **长消息折叠**：用户自己的消息超过 20 行时，显示 19 行正文 + 一行「…」，气泡内底部出现
   「展开／收起」+ 原生 chevron；展开后原位显示全文。阈值是**渲染行数**，窗口变窄或字号变大
   都不会改变折叠点。
+- **阅读位置冻结**：正式回答一开始流入，视口就**原地停住**，文字继续在下方增长 —— 不会再把自己
+  的开头一行行推出屏幕。思考与工具阶段照常跟随；若回答首行正好在屏幕外，会一次性对齐到它。
+  之后自己滚回底部或点「回到最新」，本轮即交还跟随。
 - **细节**：会话边缘上下 24px 渐隐、队列消息卡片用"比画布深一档"的底色。
 
 每条补丁的取值理由写在 `client.js` 的注释里；跨补丁的取舍记在 `DESIGN.md`。
@@ -36,16 +39,16 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 **npm**
 
 ```bash
-dsh plugin --profile <profile> add dsh-vt-uiux-enhancer@1.1.1
+dsh plugin --profile <profile> add dsh-vt-uiux-enhancer@1.2.0
 ```
 
 **Release tarball**
 
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载
-`dsh-vt-uiux-enhancer-1.1.1.tgz`，然后：
+`dsh-vt-uiux-enhancer-1.2.0.tgz`，然后：
 
 ```bash
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-uiux-enhancer-1.1.1.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-uiux-enhancer-1.2.0.tgz
 ```
 
 ## 支持的 DSH 版本

@@ -8,7 +8,7 @@
 | 插件 | 包名 | 作用 | 分类 |
 |---|---|---|---|
 | [模型选择器](plugins/vt-mine-models/README.md) | `dsh-vt-mine-models` | 把输入框的模型选择改成两段式面板：先调思考强度滑条，再展开带厂商图标的模型列表 | 界面与外观 |
-| [VT UI/UX 增强](plugins/vt-uiux-enhancer/README.md) | `dsh-vt-uiux-enhancer` | 把界面调成干净的白纸：配色、层级、控件形状、间距与动效；关闭即完全还原 | 界面与外观 |
+| [VT UI/UX 增强](plugins/vt-uiux-enhancer/README.md) | `dsh-vt-uiux-enhancer` | 把界面调成干净的白纸：配色、层级、控件形状、间距与动效；流式回答不再甩走阅读位置；关闭即完全还原 | 界面与外观 |
 | [VT GenUI 生成式界面](plugins/vt-gen-ui/README.md) | `dsh-vt-gen-ui` | 把 `dsh-ui` 围栏渲染成可交互界面：50 种组件、图表与流程图、表单本地判分、常驻面板 | 生成式界面 |
 | [模型额度](plugins/vt-quote-bar/README.md) | `dsh-vt-quote-bar` | 在侧边栏显示 DeepSeek 余额与 OpenCode Go 的额度 | 用量与额度 |
 | [网页对话](plugins/vt-web-chat/README.md) | `dsh-vt-web-chat` | 「新建会话」下方的网页对话入口，把 chat.deepseek.com 作为主区面板打开 | 界面与外观 |
