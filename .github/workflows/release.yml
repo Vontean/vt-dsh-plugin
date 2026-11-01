@@ -64,6 +64,18 @@ jobs:
           git fetch origin main
           git merge-base --is-ancestor HEAD origin/main || { echo "tag 提交不在 main 上，拒绝发布"; exit 1; }
 
+      - name: Work from the latest main
+        # 多个版本的发布可能排队执行；市场账本必须基于 main 的最新副本，
+        # 否则每个 tag 都会用它自己树里的旧账本覆盖别人刚记下的版本。
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B main origin/main
+          dir='${{ steps.tag.outputs.dir }}'
+          version='${{ steps.tag.outputs.version }}'
+          current=$(node -p "require('./$dir/package.json').version")
+          test "$current" = "$version" || { echo "main 上 $dir 的版本是 $current，不是 tag 的 $version，拒绝重放旧 tag"; exit 1; }
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.2
