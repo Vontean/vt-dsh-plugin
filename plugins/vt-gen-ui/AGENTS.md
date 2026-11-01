@@ -12,6 +12,7 @@ DSH 生成式 UI 插件的**视觉重做版**。fork 自 `@changfenhuang/dsh-gen
 | 搞清楚这插件到底能做什么 | `docs/CAPABILITY-MAP.md` |
 | 改某个组件的字段、默认值、渲染位置 | `docs/recon/schema.md`（50 个 type 的字段表 + 行号） |
 | 改颜色/字号/间距/圆角/阴影/动画 | `DESIGN.md`（token 与验收判据）→ `docs/recon/visual.md`（现状诊断） |
+| 写/查 `mermaid` 图型源码 | `docs/MERMAID-EXAMPLES.md`（32 类可抄样例 + 语法坑，每条都实跑过） |
 | 动构建、打包、安装、切换插件 | `docs/recon/scaffold.md` §4–§6 |
 | 判断某个字段名能不能改 | `docs/recon/schema.md` §7.1「必须原样保留」 |
 | 判断某处样式好不好改（A/B/C 档） | `docs/recon/visual.md` §4「改造面分档」 |

@@ -71,7 +71,7 @@ flowchart LR
 
 **交互与表单（12）**：`button` `input`（`action` on blur/Enter、IME 安全） `textarea` `select` `checkbox` `radio` `switch` `slider`（300 ms 尾部防抖） `submit`（**本地判卷** + groups 进度） `quiz`（单选即判、可重做） `link` `copy`（可展开预览）
 
-**高级（10）**：`callout` `diff` `json` `code` `mermaid`（懒加载 + 视口触发 + 自动修复） `diagram`（editorial 风格 SVG 架构图，自研布局引擎） `scene3d`（three.js） `tabs` `accordion` `blocks`
+**高级（10）**：`callout` `diff` `json` `code` `mermaid`（Pele 引擎，支持 Mermaid 12.1 全图型；样例见 [`MERMAID-EXAMPLES.md`](./MERMAID-EXAMPLES.md)） `diagram`（editorial 风格 SVG 架构图，自研布局引擎） `scene3d`（three.js） `tabs` `accordion` `blocks`
 
 ---
 
