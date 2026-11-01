@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · 图表与 mermaid 预览</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  html, body { margin: 0; background: var(--dsw-alias-bg-base); }
+  #root { max-width: 780px; margin: 0 auto; padding: 24px 20px 40px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  window.__SPEC__ = {
+    items: [
+      { type: 'text', size: 'h2', content: 'mermaid 与图表预览' },
+
+      { type: 'mermaid', code: 'flowchart TD\n  A[用户提问] --> B{需要图表?}\n  B -- 是 --> C[选组件]\n  B -- 否 --> D[纯文本回答]\n  C --> E[渲染 dsh-ui 围栏]\n  E --> F[用户交互]\n  F -->|action| A' },
+
+      { type: 'mermaid', code: 'sequenceDiagram\n  participant U as 用户\n  participant A as Agent\n  participant H as 宿主\n  U->>A: 帮我看看这个指标\n  A->>H: render_ui(spec)\n  H-->>A: 渲染结果\n  A-->>U: 图表 + 结论' },
+
+      { type: 'mermaid', code: 'gantt\n  title 视觉改造排期\n  dateFormat YYYY-MM-DD\n  section 第一版\n  字重与阴影 :done, a1, 2026-11-01, 1d\n  表面语言 :active, a2, 2026-11-02, 2d\n  section 第二版\n  图表与 mermaid :a3, after a2, 3d' },
+
+      { type: 'mermaid', code: 'pie title 组件使用分布\n  "布局" : 20\n  "展示" : 35\n  "图表" : 25\n  "交互" : 20' },
+
+      { type: 'mermaid', code: 'classDiagram\n  class GenuiBlock {\n    +render()\n    -normalize()\n  }\n  class GenuiPanel {\n    +actions()\n  }\n  GenuiBlock <|-- GenuiPanel' },
+
+      { type: 'mermaid', code: 'stateDiagram-v2\n  [*] --> 空闲\n  空闲 --> 运行: 开始\n  运行 --> 空闲: 停止\n  运行 --> 出错: 异常' },
+
+      { type: 'mermaid', code: 'erDiagram\n  USER ||--o{ SESSION : owns\n  SESSION ||--o{ TURN : has\n  TURN }o--|| MODEL : uses' },
+
+      { type: 'mermaid', code: 'gitGraph\n  commit id: "init"\n  branch feat\n  commit id: "ui"\n  commit id: "tokens"\n  checkout main\n  commit id: "fix"\n  merge feat' },
+
+      { type: 'mermaid', code: 'journey\n  title 一天的改造\n  section 上午\n    写代码: 4: 我\n    开会: 2: 我\n  section 下午\n    改样式: 5: 我\n    写文档: 3: 我' },
+
+      { type: 'chart', kind: 'bars', title: '每周提交', data: [
+        { label: '周一', value: 12 }, { label: '周二', value: 19 },
+        { label: '周三', value: 8 }, { label: '周四', value: 23 }, { label: '周五', value: 17 }
+      ] },
+
+      { type: 'chart', kind: 'line', title: '两条序列', series: [
+        { label: '构建', data: [3, 5, 4, 8, 6, 9].map((v, i) => ({ label: `W${i + 1}`, value: v })) },
+        { label: '测试', data: [2, 3, 5, 4, 7, 6].map((v, i) => ({ label: `W${i + 1}`, value: v })) }
+      ] },
+
+      { type: 'echart', preset: 'bar', title: 'ECharts 预设', data: [
+        { label: 'A', value: 40 }, { label: 'B', value: 62 }, { label: 'C', value: 28 }
+      ] },
+
+      { type: 'echart', preset: 'pie', title: 'ECharts 饼图', data: [
+        { label: '布局', value: 20 }, { label: '展示', value: 35 }, { label: '图表', value: 25 }, { label: '交互', value: 20 }
+      ] },
+      { type: 'echart', preset: 'line', title: 'ECharts 折线（两组）', series: [
+        { label: '构建', data: [3, 5, 4, 8, 6, 9].map((v, i) => ({ label: `W${i + 1}`, value: v })) },
+        { label: '测试', data: [2, 3, 5, 4, 7, 6].map((v, i) => ({ label: `W${i + 1}`, value: v })) }
+      ] },
+      { type: 'echart', preset: 'gauge', title: 'ECharts 仪表', data: [
+        { label: '可用率', value: 99 }, { label: '耗时', value: 42 }
+      ] },
+
+      { type: 'echart', preset: 'radar', title: 'ECharts 雷达', series: [
+        { label: '本周', data: [{ label: '速度', value: 70 }, { label: '质量', value: 82 }, { label: '成本', value: 55 }, { label: '稳定', value: 66 }, { label: '覆盖', value: 74 }] }
+      ] },
+      { type: 'echart', preset: 'sankey', title: 'ECharts 桑基', data: [], links: [
+        { from: '问答', to: '渲染', value: 60 }, { from: '问答', to: '对话', value: 40 },
+        { from: '渲染', to: '图表', value: 35 }, { from: '渲染', to: '表格', value: 25 }
+      ] },
+
+      { type: 'echart', preset: 'treemap', title: 'ECharts 矩形树图', data: [
+        { label: '布局', value: 20 }, { label: '展示', value: 35 }, { label: '图表', value: 25 }, { label: '交互', value: 20 }
+      ] },
+      { type: 'echart', preset: 'funnel', title: 'ECharts 漏斗', data: [
+        { label: '访问', value: 1200 }, { label: '试用', value: 640 }, { label: '付费', value: 210 }
+      ] },
+      { type: 'echart', preset: 'graph', title: 'ECharts 关系图', data: [
+        { label: '围栏', value: 1 }, { label: '解析', value: 1 }, { label: '渲染', value: 1 }, { label: '令牌', value: 1 }
+      ], links: [
+        { from: '围栏', to: '解析', value: 1 }, { from: '解析', to: '渲染', value: 1 }, { from: '令牌', to: '渲染', value: 1 }
+      ] },
+      { type: 'echart', preset: 'wordCloud', title: 'ECharts 词云', data: [
+        { label: '一致性', value: 40 }, { label: '色板', value: 32 }, { label: '排版', value: 26 },
+        { label: '令牌', value: 22 }, { label: '间距', value: 18 }
+      ] },
+
+      { type: 'plot', title: '函数绘图', series: [
+        { expr: 'sin(x)', label: 'sin' },
+        { expr: 'x/3', label: 'x/3', kind: 'line' }
+      ], xMin: -5, xMax: 5 },
+
+      { type: 'diagram', kind: 'architecture', title: '架构示意', nodes: [
+        { id: 'u', label: '用户', type: 'input' },
+        { id: 'a', label: 'Agent', type: 'focal' },
+        { id: 'h', label: '宿主', type: 'backend' },
+        { id: 's', label: '存储', type: 'store' }
+      ], edges: [
+        { from: 'u', to: 'a' }, { from: 'a', to: 'h' }, { from: 'h', to: 's' }
+      ] }
+    ]
+  };
+</script>
+<script src="../../lib/assets/mermaid.js"></script>
+<script src="../../lib/assets/echarts-core.js"></script>
+<script src="../../lib/assets/echarts-full.js"></script>
+<script src="../../lib/assets/standalone-runtime.js"></script>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+  window.__GenuiStandalone__.mount(document.getElementById('root'), {
+    format: 'dsh-genui',
+    version: 1,
+    spec: window.__SPEC__,
+    presentation: { locale: 'zh', theme }
+  });
+</script>
+</body>
+</html>

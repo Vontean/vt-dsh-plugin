@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · 一致性检查页</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  /* 一列 780px：模拟真实会话正文的宽度，所有图表族在同一列里排队。 */
+  html, body { margin: 0; background: var(--dsw-alias-bg-base); }
+  #root { max-width: 780px; margin: 0 auto; padding: 24px 20px 48px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  window.__SPEC__ = {
+    items: [
+      { type: 'text', size: 'h2', content: '一致性检查：所有图表排在一屏' },
+      { type: 'text', content: '同一列宽、同一套色板、同一套网格与刻度。下面每一种图都来自不同的渲染器（原生 SVG / ECharts canvas / 自研绘图 / mermaid / 表格内联标记），如果它们看起来像同一只手画的，目标就达成了。' },
+
+      { type: 'row', items: [
+        { type: 'stat', label: '白名单组件', value: '50' },
+        { type: 'stat', label: '渲染器', value: '4' },
+        { type: 'stat', label: '图种', value: '10+' }
+      ] },
+      { type: 'divider', label: '原生 chart（SVG）' },
+      { type: 'chart', kind: 'bars', title: '每周提交（单序列）', data: [
+        { label: '周一', value: 12 }, { label: '周二', value: 19 }, { label: '周三', value: 8 },
+        { label: '周四', value: 23 }, { label: '周五', value: 17 }
+      ] },
+      { type: 'chart', kind: 'line', title: '两条序列（明度 + 虚线）', series: [
+        { label: '构建', data: [3, 5, 4, 8, 6, 9].map((v, i) => ({ label: `W${i + 1}`, value: v })) },
+        { label: '测试', data: [2, 3, 5, 4, 7, 6].map((v, i) => ({ label: `W${i + 1}`, value: v })) }
+      ] },
+      { type: 'chart', kind: 'donut', title: '占比（单色相梯度）', data: [
+        { label: '布局', value: 20 }, { label: '展示', value: 35 },
+        { label: '图表', value: 25 }, { label: '交互', value: 20 }
+      ] },
+
+      { type: 'divider', label: 'ECharts（canvas）' },
+      { type: 'echart', preset: 'bar', title: 'ECharts 柱状：同一套 ramp', data: [
+        { label: 'A', value: 40 }, { label: 'B', value: 62 }, { label: 'C', value: 28 }
+      ] },
+
+      { type: 'divider', label: '自研绘图（SVG）' },
+      { type: 'plot', title: '函数绘图：与 chart 同高同刻度', series: [
+        { expr: 'sin(x)', label: 'sin' },
+        { expr: 'x/3', label: 'x/3' }
+      ], xMin: -5, xMax: 5 },
+
+      { type: 'divider', label: 'mermaid' },
+      { type: 'mermaid', code: 'pie title 组件占比（与 donut 同 ramp）\n  "布局" : 20\n  "展示" : 35\n  "图表" : 25\n  "交互" : 20' },
+      { type: 'mermaid', code: 'flowchart LR\n  A[数据] --> B{有序列?}\n  B -- 是 --> C[多序列]\n  B -- 否 --> D[单序列]' },
+
+      { type: 'divider', label: '表格内联标记' },
+      { type: 'table', columns: ['组件', '占比', '进度', '量级'], types: ['text', 'ring', 'bar', 'num'], rows: [
+        ['chart', 72, 72, 1200],
+        ['echart', 45, 45, 860],
+        ['plot', 88, 88, 2400],
+        ['mermaid', 36, 36, 640]
+      ] },
+
+      { type: 'divider', label: '收尾' },
+      { type: 'callout', tone: 'info', content: '四个渲染器共用 `--dsl-g-data-1..6`、`--dsl-g-chart-grid/axis/label/legend`、`--dsl-g-chart-height/font`。换主题只换 token，不换代码。' }
+    ]
+  };
+</script>
+<script src="../../lib/assets/mermaid.js"></script>
+<script src="../../lib/assets/echarts-core.js"></script>
+<script src="../../lib/assets/standalone-runtime.js"></script>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+  window.__GenuiStandalone__.mount(document.getElementById('root'), {
+    format: 'dsh-genui',
+    version: 1,
+    spec: window.__SPEC__,
+    presentation: { locale: 'zh', theme }
+  });
+</script>
+</body>
+</html>

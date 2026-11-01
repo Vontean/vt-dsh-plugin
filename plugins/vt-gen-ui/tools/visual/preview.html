@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · 视觉预览</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  /* 预览宿主页面：只放容器，不干扰被预览的样式。 */
+  html, body { margin: 0; background: var(--dsw-alias-bg-base); }
+  #root { max-width: 780px; margin: 0 auto; padding: 24px 20px 40px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  // 与宿主会话正文同构的 fixture：覆盖截图里出现的 callout / table / steps，
+  // 再加 stat、card、list、progress、keyvalue、code、badge，用来同时看阴影与字重。
+  window.__SPEC__ = {
+    items: [
+      { type: 'text', size: 'h2', content: '视觉预览 fixture：字重与阴影' },
+      { type: 'text', content: '这一段是正文，应当比标题轻、比标签重。段落里混一个 **加粗**、一个 `行内代码`，用来对比字重阶梯是否成立。' },
+      { type: 'row', items: [
+        { type: 'stat', label: '白名单组件', value: '50', delta: '+0' },
+        { type: 'stat', label: '源码规模', value: '2.98 万行' },
+        { type: 'stat', label: '构建产物', value: '8 个' }
+      ] },
+      { type: 'callout', tone: 'success', content: '旧插件已禁用，新插件已装入 profile。这一段照抄用户截图里的绿色提示条。' },
+      { type: 'table', columns: ['链路', '验证方式', '结果'], rows: [
+        ['host', 'render_ui / validate_dsh_ui 工具清单', '✓ 在位'],
+        ['skill', '技能目录', '✓ genui 回来了'],
+        ['client', 'conversation.input.dock 占位', '✓ genui-panel 已注册'],
+        ['asset', '/plugins/dsh-vt-gen-ui/assets/mermaid.js', '✓ 200 / 3.4 MB']
+      ] },
+      { type: 'divider', label: '首版视觉改造的顺序' },
+      { type: 'steps', steps: [
+        { title: '字重与字号：三档收口', desc: '这一步就能消掉「通篇加粗」的观感' },
+        { title: '表面语言：边框与阴影二选一', desc: '卡片、表头、hero、进度条、图标底板五处' },
+        { title: '表格、列表、hero 的结构规则', desc: '表头不做大写与斑马，列表去分隔线' },
+        { title: '图表色板与尺寸', desc: '分类色不再借用成功 / 警告 / 错误色' }
+      ] },
+      { type: 'grid', cols: 2, items: [
+        { type: 'card', eyebrow: '服务', title: '在线率', items: [{ type: 'stat', label: '近 30 天', value: '99.96%', delta: '+0.02%' }] },
+        { type: 'card', eyebrow: '算力', title: 'CPU', items: [{ type: 'stat', label: '峰值负载', value: '42%', delta: '+3.1%' }] }
+      ] },
+      { type: 'list', items: [
+        { title: '字重体系崩塌', desc: '69 处 font-weight 里 67 处 ≥600，整块文字「全部加粗」' },
+        { title: '每个组件都在抢注意力', desc: '卡片边框 + 双层阴影、表头大写 + 斑马 + 双边框' }
+      ] },
+      { type: 'row', items: [
+        { type: 'progress', value: 72, label: '训练进度' },
+        { type: 'progress', variant: 'ring', value: 82, label: '目标完成率' }
+      ] },
+      { type: 'keyvalue', pairs: [
+        { key: '链路', value: 'host → client → assets' },
+        { key: '协议', value: 'dsh-ui fence（50 个 type）' }
+      ] },
+      { type: 'code', lang: 'sh', code: 'pnpm build   # 改 CSS → 构建 → 浏览器热替换' },
+      { type: 'callout', tone: 'info', content: '迭代回路已打通：改 CSS → pnpm build → 浏览器秒级热替换。' }
+    ]
+  };
+</script>
+<script src="../../lib/assets/standalone-runtime.js"></script>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+  window.__GenuiStandalone__.mount(document.getElementById('root'), {
+    format: 'dsh-genui',
+    version: 1,
+    spec: window.__SPEC__,
+    presentation: { locale: 'zh', theme }
+  });
+</script>
+</body>
+</html>

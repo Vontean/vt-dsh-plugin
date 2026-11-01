@@ -1,0 +1,6 @@
+node_modules/
+.DS_Store
+*.log
+.codegraph/
+
+# lib/ 是构建产物，必须入库（docs/plugin-conventions.md §5）——不要在这里忽略它。

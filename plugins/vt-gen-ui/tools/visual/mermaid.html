@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · mermaid 图种总览</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  html, body { margin: 0; background: var(--dsw-alias-bg-base); }
+  #root { max-width: 780px; margin: 0 auto; padding: 24px 20px 40px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  // 九种 mermaid 图种各一条，内容用真实项目语境，便于判断"像不像一页文档"。
+  window.__SPEC__ = {
+    items: [
+      { type: 'text', size: 'h2', content: 'mermaid 图种总览' },
+      { type: 'text', content: '同一个 dsh-ui 围栏里的九种图，全部走宿主 token：节点底色 / 描边 / 连线 / 文字与同屏组件是同一套。' },
+
+      { type: 'divider', label: 'flowchart' },
+      { type: 'mermaid', code: 'flowchart TD\n  A[用户提问] --> B{需要图表?}\n  B -- 是 --> C[选择组件]\n  B -- 否 --> D[纯文本回答]\n  C --> E[输出 dsh-ui 围栏]\n  E --> F[用户交互]\n  F -->|action| A' },
+
+      { type: 'divider', label: 'sequenceDiagram' },
+      { type: 'mermaid', code: 'sequenceDiagram\n  participant U as 用户\n  participant A as Agent\n  participant H as 宿主\n  U->>A: 帮我看看这个指标\n  A->>H: render_ui(spec)\n  H-->>A: 渲染结果\n  A-->>U: 图表 + 结论' },
+
+      { type: 'divider', label: 'classDiagram' },
+      { type: 'mermaid', code: 'classDiagram\n  class GenuiBlock {\n    +render()\n    -normalize()\n  }\n  class GenuiPanel {\n    +actions()\n  }\n  class InteractionStore {\n    +save(key, state)\n  }\n  GenuiBlock <|-- GenuiPanel\n  GenuiBlock --> InteractionStore' },
+
+      { type: 'divider', label: 'stateDiagram' },
+      { type: 'mermaid', code: 'stateDiagram-v2\n  [*] --> 空闲\n  空闲 --> 运行: 开始\n  运行 --> 空闲: 停止\n  运行 --> 出错: 异常\n  出错 --> 空闲: 重置' },
+
+      { type: 'divider', label: 'erDiagram' },
+      { type: 'mermaid', code: 'erDiagram\n  USER ||--o{ SESSION : owns\n  SESSION ||--o{ TURN : has\n  TURN }o--|| MODEL : uses' },
+
+      { type: 'divider', label: 'gantt' },
+      { type: 'mermaid', code: 'gantt\n  title 视觉改造排期\n  dateFormat YYYY-MM-DD\n  section 第一版\n  字重与阴影 :done, a1, 2026-11-01, 1d\n  表面语言 :done, a2, 2026-11-02, 2d\n  section 第二版\n  图表与 mermaid :active, a3, 2026-11-04, 3d\n  一致性验收 :a4, after a3, 2d' },
+
+      { type: 'divider', label: 'pie' },
+      { type: 'mermaid', code: 'pie title 组件使用分布\n  "布局" : 20\n  "展示" : 35\n  "图表" : 25\n  "交互" : 20' },
+
+      { type: 'divider', label: 'gitGraph' },
+      { type: 'mermaid', code: 'gitGraph\n  commit id: "init"\n  branch feat\n  commit id: "ui"\n  commit id: "tokens"\n  checkout main\n  commit id: "fix"\n  merge feat' },
+
+      { type: 'divider', label: 'journey' },
+      { type: 'mermaid', code: 'journey\n  title 一次改造的体验\n  section 上午\n    写代码: 4: 我\n    开会: 2: 我\n  section 下午\n    改样式: 5: 我\n    写文档: 3: 我' }
+    ]
+  };
+</script>
+<script src="../../lib/assets/mermaid.js"></script>
+<script src="../../lib/assets/standalone-runtime.js"></script>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+  window.__GenuiStandalone__.mount(document.getElementById('root'), {
+    format: 'dsh-genui',
+    version: 1,
+    spec: window.__SPEC__,
+    presentation: { locale: 'zh', theme }
+  });
+</script>
+</body>
+</html>

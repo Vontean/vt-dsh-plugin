@@ -1,0 +1,14 @@
+# dsh-vt-gen-ui bundle for DeepSeek Harness (dsh).
+#
+# Forked from @changfenhuang/dsh-genui (MIT) — see THIRD_PARTY_NOTICES.md.
+# The row id and package name are our own (`dsh-vt-gen-ui`), so this bundle never
+# collides with the upstream row id `genui`. Both must not run at the same time:
+# both teach the model the same ```dsh-ui fence and both mount a renderer into
+# the same conversation DOM. Disable one before enabling the other.
+#
+# node half : teaches the model the fence + registers render_ui / validate_dsh_ui
+#             + serves the lazy engine assets under /plugins/dsh-vt-gen-ui/assets
+# client half: the fence renderer registered from the package's `./client` export
+- insert:
+    - id: dsh-vt-gen-ui
+      name: dsh-vt-gen-ui

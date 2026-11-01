@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "VT GenUI 生成式界面",
+    "en": "VT GenUI"
+  },
+  "description": {
+    "zh": "把模型写在回答里的 dsh-ui 围栏渲染成可交互界面：50 种组件、图表与流程图、表单本地判分、常驻面板与导出。",
+    "en": "Renders the model's dsh-ui fences as interactive UI: 50 components, charts and diagrams, local grading, a persistent panel dock and export."
+  },
+  "icon": "assets/vt-gen-ui-icon.svg",
+  "category": "render",
+  "keywords": ["genui", "generative-ui", "dsh-ui", "render", "chart", "mermaid"]
+}
