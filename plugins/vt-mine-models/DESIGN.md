@@ -114,15 +114,15 @@ DSH 实例占用）。subagent 会话通过 `sessions.subagentAddress(sessionId)
 | 列表滚动区 | `max-height: max(120, 菜单可用高度)` | 超出滚动；分组标题吸顶 |
 | chip | 高 `28px`，`padding: 0 4px 0 8px`，`gap: 4px`，字号 `13/20`，圆角 `--dsw-radius-sm` | 沿用原生 chip 几何 |
 | chip 最大宽 | `min(360px, 45cqw)` | 文本溢出省略 |
-| 强度面板内边距 | `10px 12px 12px` | 左右 12px 就是滑条两侧的安全边 |
-| 强度档位标签 | `min-height: 22px`，`16/22`，weight `600`，字距 `.01em` | 居中，强调蓝 |
-| 强度面板模型行 | `min-height: 22px`，`margin: 2px 0 0`，`padding: 0 6px`，`gap: 4px`，`14/20` | 圆角 `--dsw-radius-sm`；图标 16px、chevron 12px |
-| 滑轨容器 | 高 `38px`，`margin: 10px 0 0`；宽度 = 面板内容宽（约 `228px`） | 左右不留 margin，缩进由面板 padding 提供 |
-| 轨道 | 高 `16px`，距滑轨顶 `12px`，圆角 `999px`，底 `--dsw-specific-selector` | `corner-shape: round`；轨道中心线在 y=20px |
+| 强度面板内边距 | `10px 8px 8px` | 左右 8px 留白，滑条自己再留 2px |
+| 强度档位标签 | `min-height: 18px`，`13/18`，weight `500` | 居中，强调蓝；与 DSH 正文同一字号 |
+| 强度面板模型行 | `min-height: 20px`，`margin: 2px 0 0`，`padding: 0 6px`，`gap: 4px`，`13/18` | 圆角 `--dsw-radius-sm`；只显示模型名 + chevron 12px，不显示厂商图标 |
+| 滑轨容器 | 高 `30px`，`margin: 10px 2px 2px`；宽度 = 面板内容宽（约 `244px`） | 左右 2px 微缩进，缩进主体由面板 padding 提供 |
+| 轨道 | 高 `18px`，距滑轨顶 `6px`，圆角 `999px`，底 `--dsw-specific-selector` | `corner-shape: round`；轨道中心线在 y=15px |
 | 填充 | 在轨道内部（`top:0; bottom:0`），宽度 = 档位百分比，圆角继承轨道 | 宽度不做端点修正 |
-| 刻度点 | `6×6px`，顶 `20px` 且 `translate(-50%,-50%)`（垂直居中于轨道），横向按端点修正 | 已过档位填反色 |
-| 拇指 | `26×26px`，距顶 `7px`，`translateX(-50%)`，`0.5px` 描边 | 阴影 `elevation-panel`；横向按端点修正 |
-| 端点修正 | `left = calc(progress% + (13 − progress/50 × 13)px)`：0% 右移 13px、50% 为 0、100% 左移 13px | 拇指与刻度用同一公式，让两端收进胶囊端头 |
+| 刻度点 | `4×4px`，顶 `15px` 且 `translate(-50%,-50%)`（垂直居中于轨道），横向按端点修正 | 常态 `opacity: .55`，已过档位反色且 `opacity: .9`，避免视觉过实 |
+| 拇指 | `24×24px`，距顶 `3px`，`translateX(-50%)`，`0.5px` 描边 | 阴影 `elevation-soft`；横向按端点修正 |
+| 端点修正 | `left = calc(progress% + (12 − progress/50 × 12)px)`：0% 右移 12px、50% 为 0、100% 左移 12px | 拇指与刻度用同一公式，让两端收进胶囊端头 |
 | 强度提示行 | 高 `16px`，`11/16` | 只有一档时显示 |
 | 列表标题行 | `margin-bottom: 3px`，`gap: 2px` | 返回按钮 `24×24` 圆形 |
 | 搜索框 | 内边距 `5px 7px`，输入 `12px`，有查询时右侧留 `34px` 给清除按钮 | 清除按钮 `24×24` |
@@ -150,14 +150,14 @@ DSH 实例占用）。subagent 会话通过 `sessions.subagentAddress(sessionId)
 | 警告条 | 底 `--dsw-alias-bg-module-platform`，字 `--dsw-alias-state-warn-label` |
 | 行内 chevron | `--dsw-alias-menu-icon` |
 | 拇指描边 | `--dsw-alias-border-l2`（`0.5px`） |
-| 阴影档位 | `--dsw-elevation-panel`（拇指）、`--dsw-elevation-prominent`（菜单） |
+| 阴影档位 | `--dsw-elevation-soft`（拇指）、`--dsw-elevation-prominent`（菜单） |
 | 滚动条 | `--dsh-scrollbar-thumb` → `--dsw-alias-scrollbar-bg-l2`，hover → `--dsw-alias-scrollbar-hover-l2` |
 | 窄容器文字开关 | `--dsh-composer-model-text-display`（composer 行写入；插件只读） |
 | 圆角 | `--dsw-radius-sm`（chip、强度面板模型行）、`--dsw-radius-md`（列表行、选项、搜索框、错误条）；圆形元素 `999px` |
 | 全局圆角形态 | 圆形元素同时写 `corner-shape: round`，抵消 DSH 全局 `superellipse(1.5)`；否则滑条与刻度会被渲染成超椭圆（观感偏方，不是正圆） |
 
 **排版**：不引入字号体系，直接对齐原生——chip `13px/20`、列表行 `13px/18`、
-档位标签 `16px/22` weight 600、强度面板模型行 `14px/20`、搜索输入 `12px`、状态行 `12px/18`、
+档位标签 `13px/18` weight 500、强度面板模型行 `13px/18`、搜索输入 `12px`、状态行 `12px/18`、
 错误条 `11px/16`、强度提示 `11px/16`、重试文字 weight 600。字体族继承宿主，不覆盖。
 
 **材质选择**：`MenuSurface` 默认是半透明毛玻璃。长列表后面就是聊天正文，透出来会读不清，
@@ -165,6 +165,8 @@ DSH 实例占用）。subagent 会话通过 `sessions.subagentAddress(sessionId)
 去掉模糊，保留 `MenuSurface` 自带的描边与阴影。这样仍然是「同一套菜单」，只是不再是玻璃。
 
 ## 图标匹配规则
+
+厂商图标只出现在**模型列表行首**。composer chip 不显示品牌图标（窄容器下用原生通用 `IconDataOutlineRegular`，与官方 chip 一致），强度面板的模型行也只显示名称与 chevron。
 
 12 个厂商标记以**内联资产**的形式随 `client.js` 打包（客户端 bundle 只能从平台模块表解析模块，
 不能读取包内文件，所以图标只能是内联数据；其中 11 个是 SVG，智谱是 SVG 包 PNG，见本节末）。

@@ -71,7 +71,7 @@ window.__ModuleLoader__.load({
 .vtmm_trigger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .vtmm_trigger:focus-visible:not([data-selection-focus]){box-shadow:0 0 0 2px var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary))}
 .vtmm_trigger:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}
-.vtmm_triggerIcon{display:block;flex:none;color:currentColor}
+.vtmm_triggerIcon{display:var(--dsh-composer-model-icon-display,none);flex:none;color:currentColor}
 .vtmm_triggerLabel{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden;display:var(--dsh-composer-model-text-display,block)}
 .vtmm_triggerEffort{text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dsw-alias-label-caption);flex-shrink:1000;overflow:hidden;display:var(--dsh-composer-model-text-display,block)}
 .vtmm_chevron{color:var(--dsw-alias-label-caption);flex:none;transition:transform .12s}
@@ -85,25 +85,24 @@ window.__ModuleLoader__.load({
 
 /* ── effort stage ───────────────────────────────────────────────────────── */
 
-.vtmm_effort{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;padding:10px 12px 12px;transition:opacity 140ms linear}
+.vtmm_effort{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;padding:10px 8px 8px;transition:opacity 140ms linear}
 .vtmm_effort[data-hidden]{opacity:0;pointer-events:none}
-.vtmm_effortValue{min-height:22px;text-align:center;color:var(--dsw-alias-state-business-primary);font-size:16px;font-weight:600;line-height:22px;letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color 160ms ease}
-.vtmm_modelRow{display:flex;align-items:center;justify-content:center;gap:4px;min-height:22px;margin:2px 0 0;padding:0 6px;border:0;border-radius:var(--dsw-radius-sm);background:0 0;color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;line-height:20px;cursor:pointer;outline:none;text-align:center}
+.vtmm_effortValue{min-height:18px;text-align:center;color:var(--dsw-alias-state-business-primary);font-size:13px;font-weight:500;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color 160ms ease}
+.vtmm_modelRow{display:flex;align-items:center;justify-content:center;gap:4px;min-height:20px;margin:2px 0 0;padding:0 6px;border:0;border-radius:var(--dsw-radius-sm);background:0 0;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:18px;cursor:pointer;outline:none;text-align:center}
 .vtmm_modelRow:hover .vtmm_modelRowChevron{transform:translateX(2px)}
 .vtmm_modelRow:focus-visible{background:var(--dsw-alias-interactive-bg-hover)}
-.vtmm_modelRowIcon{display:block;flex:none;color:var(--dsw-alias-label-secondary)}
 .vtmm_modelRowName{min-width:0;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
 .vtmm_modelRowChevron{display:block;flex:none;color:var(--dsw-alias-menu-icon);transition:transform 200ms cubic-bezier(.23,1,.32,1)}
 
 /* 滑轨几何照抄 MineCodex：rail 38 / track 16（top 12）/ thumb 26（top 7）/ tick 6。
    两端按 thumbRadius 修正，让拇指和端点刻度收进轨道，不越过胶囊端头。 */
-.vtmm_rail{position:relative;height:38px;margin:10px 0 0;cursor:pointer;touch-action:none;outline:none}
-.vtmm_track{position:absolute;left:0;right:0;top:12px;height:16px;border-radius:999px;corner-shape:round;background:var(--dsw-specific-selector)}
+.vtmm_rail{position:relative;height:30px;margin:10px 2px 2px;cursor:pointer;touch-action:none;outline:none}
+.vtmm_track{position:absolute;left:0;right:0;top:6px;height:18px;border-radius:999px;corner-shape:round;background:var(--dsw-specific-selector)}
 .vtmm_fill{position:absolute;top:0;bottom:0;left:0;border-radius:inherit;corner-shape:round;background:var(--dsw-alias-state-business-primary);transition:width 180ms cubic-bezier(.23,1,.32,1),background-color 160ms ease}
-.vtmm_tick{position:absolute;top:20px;width:6px;height:6px;border-radius:999px;corner-shape:round;transform:translate(-50%,-50%);background:var(--dsw-alias-label-caption);transition:background-color 160ms ease;pointer-events:none}
-.vtmm_tick[data-passed]{background:var(--dsw-alias-label-primary-inverted)}
-.vtmm_thumb{box-sizing:border-box;position:absolute;top:7px;width:26px;height:26px;border-radius:999px;corner-shape:round;transform:translateX(-50%);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);box-shadow:var(--dsw-elevation-panel);transition:left 180ms cubic-bezier(.23,1,.32,1),box-shadow 160ms ease;pointer-events:none}
-.vtmm_rail:focus-visible .vtmm_thumb{box-shadow:0 0 0 2px var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary)),var(--dsw-elevation-panel)}
+.vtmm_tick{position:absolute;top:15px;width:4px;height:4px;border-radius:999px;corner-shape:round;transform:translate(-50%,-50%);background:var(--dsw-alias-label-caption);opacity:.55;transition:opacity 160ms ease;pointer-events:none}
+.vtmm_tick[data-passed]{background:var(--dsw-alias-label-primary-inverted);opacity:.9}
+.vtmm_thumb{box-sizing:border-box;position:absolute;top:3px;width:24px;height:24px;border-radius:999px;corner-shape:round;transform:translateX(-50%);background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l2);box-shadow:var(--dsw-elevation-soft);transition:left 180ms cubic-bezier(.23,1,.32,1),box-shadow 160ms ease;pointer-events:none}
+.vtmm_rail:focus-visible .vtmm_thumb{box-shadow:0 0 0 2px var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary)),var(--dsw-elevation-soft)}
 .vtmm_rail[data-dragging] .vtmm_fill,.vtmm_rail[data-dragging] .vtmm_thumb{transition:none}
 .vtmm_railHint{height:16px;text-align:center;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px;margin-top:2px}
 
@@ -387,7 +386,6 @@ window.__ModuleLoader__.load({
           : effortLabel === undefined
             ? t('trigger.aria', { model: modelLabel })
             : t('trigger.ariaEffort', { model: modelLabel, effort: effortLabel });
-      const currentIcon = currentChoice === undefined ? FALLBACK_ICON : currentChoice.icon;
 
       const closeOutsideEnabled = open;
       useEffect(() => {
@@ -743,7 +741,10 @@ window.__ModuleLoader__.load({
 
       const onBlur = (event) => {
         const next = event.relatedTarget;
-        if (next instanceof Node && (rootRef.current?.contains(next) === true || menuRef.current?.contains(next) === true)) return;
+        // A busy round disables the row that holds focus, so the browser drops focus
+        // to <body> (relatedTarget null). That is not the user leaving the panel.
+        if (!(next instanceof Node)) return;
+        if (rootRef.current?.contains(next) === true || menuRef.current?.contains(next) === true) return;
         if (open) closeMenu();
       };
 
@@ -757,8 +758,8 @@ window.__ModuleLoader__.load({
         );
 
       // ── effort stage ──────────────────────────────────────────────────────
-      // MineCodex 的拇指半径修正：0% 时右移 13px、100% 时左移 13px，端点刻度同理。
-      const RAIL_THUMB_RADIUS = 13;
+      // MineCodex 的拇指半径修正：0% 时右移 12px、100% 时左移 12px，端点刻度同理。
+      const RAIL_THUMB_RADIUS = 12;
       const railLeft = (progress) =>
         `calc(${progress}% + ${(RAIL_THUMB_RADIUS - (progress / 50) * RAIL_THUMB_RADIUS).toFixed(2)}px)`;
       const percent = effortChoices.length > 1 ? (shownEffortIndex / (effortChoices.length - 1)) * 100 : 100;
@@ -793,7 +794,6 @@ window.__ModuleLoader__.load({
               else drillIntoModels();
             },
           },
-          h(BrandIcon, { icon: currentIcon, size: 16, className: 'vtmm_modelRowIcon' }),
           h('span', { className: 'vtmm_modelRowName' }, currentChoice === undefined ? modelLabel : renderModelLabel(currentChoice.group.provider, currentChoice.model, 'menu', true)),
           h(primitives.IconChevronRightOutlineRegular, { className: 'vtmm_modelRowChevron', size: 12 }),
         ),
@@ -1080,7 +1080,7 @@ window.__ModuleLoader__.load({
               else show();
             },
           },
-          h(BrandIcon, { icon: currentIcon, size: 16, className: 'vtmm_triggerIcon' }),
+          h(primitives.IconDataOutlineRegular, { size: 16, className: 'vtmm_triggerIcon' }),
           h(
             'span',
             { className: 'vtmm_triggerLabel' },

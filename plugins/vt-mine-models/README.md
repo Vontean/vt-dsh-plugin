@@ -12,7 +12,7 @@
   DOM、不写配置，注入的 `<style>` 随模块卸载一起回收。
 - **第一段是思考强度面板**（点 chip 后先出现这个，不是模型列表）：
   - 顶部居中一行当前档位名，用强调蓝（`state-business-primary`）；
-  - 中间一行「厂商图标 + 模型名 + 右 chevron」，点击它才进入模型列表；
+  - 中间一行「模型名 + 右 chevron」，点击它才进入模型列表；
   - 底部一条自绘滑条，档位来自该模型的 `reasoning.efforts`；模型只声明了 provider 默认档时，
     第一档显示为 `Default`。只有一档时显示「当前模型没有可调的思考强度」，不画假滑条。
 - **第二段是模型列表**：点模型行进入。列表**覆盖在面板上、底边锚定向上生长**，按 provider
@@ -26,7 +26,7 @@
   列表里显示警告条 + 重试。
 - **逐层退出**：`Escape`（或列表左上返回按钮）从列表回到强度面板，再按 `Escape` 关闭回 chip；
   列表里选中模型直接关闭。
-- **厂商图标**：12 个品牌标记（Anthropic、DeepSeek、Gemini、Grok、混元、Kimi、MiniMax、
+- **厂商图标只出现在模型列表**：12 个品牌标记（Anthropic、DeepSeek、Gemini、Grok、混元、Kimi、MiniMax、
   Meta Muse、OpenAI、Qwen、小米 MiMo、智谱），按 provider id + 模型 id + 模型名做小写包含匹配，
   顺序即优先级；未命中用 sparkles 兜底。
 - **动效照 MineCodex**：容器高度 320ms、pane 内容 200ms + 10px 位移；`prefers-reduced-motion`
