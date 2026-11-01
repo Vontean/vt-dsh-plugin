@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-use-figma",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Teaches DeepSeek Harness to route Figma links to the remote Figma MCP server and to load Figma's official skills before each Figma tool call.",
   "license": "MIT",

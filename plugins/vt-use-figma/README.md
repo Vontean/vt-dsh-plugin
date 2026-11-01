@@ -139,10 +139,10 @@ cp -R /path/to/figma-skills/figma-* ~/.dsh/skills/
 https://vontean.github.io/vt-dsh-plugin/index.json
 
 # npm
-dsh plugin --profile <profile> add dsh-vt-use-figma@1.0.0
+dsh plugin --profile <profile> add dsh-vt-use-figma@1.0.1
 
 # Release tarball
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-use-figma-1.0.0.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-use-figma-1.0.1.tgz
 
 # git 子目录（兜底）
 dsh plugin --profile <profile> add 'git+https://github.com/Vontean/vt-dsh-plugin.git#<commit>&path:/plugins/vt-use-figma'
