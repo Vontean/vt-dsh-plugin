@@ -21,18 +21,20 @@
  * Leaving the panel releases the guest, so the page remembers the last
  * conversation URL and reopens there instead of starting a new chat each time.
  */
-/** Package identity: one source for the module id and every log/storage prefix. */
-const PLUGIN_ID = 'dsh-vt-web-chat';
-/** Must equal `version` in package.json; printed once in the mount trace below. */
-const VERSION = '1.0.1';
-
-// Mount trace: one line naming the loaded build (DevTools → verbose level).
-console.debug(`[${PLUGIN_ID}] v${VERSION}`);
-
 window.__ModuleLoader__.load({
-  id: PLUGIN_ID,
+  // 模块 id 必须与包名一致；装载器把多个 client.js 拼进同一个脚本，所以顶层只能有
+  // 这一个 load() 调用，其余常量一律放进 factory 的作用域，避免重名 SyntaxError。
+  id: 'dsh-vt-web-chat',
   factory(require) {
     'use strict';
+
+    /** Package identity: one source for the module id and every log/storage prefix. */
+    const PLUGIN_ID = 'dsh-vt-web-chat';
+    /** Must equal `version` in package.json; printed once in the mount trace below. */
+    const VERSION = '1.0.2';
+
+    // Mount trace: one line naming the loaded build (DevTools → verbose level).
+    console.debug(`[${PLUGIN_ID}] v${VERSION}`);
 
     const reactModule = require('react');
     const React =

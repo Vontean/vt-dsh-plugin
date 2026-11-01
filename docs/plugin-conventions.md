@@ -73,6 +73,25 @@
 grep -rn "<旧包名>" --include='*.js' --include='*.json' --include='*.yml' --include='*.md' plugins/<slug>
 ```
 
+### 2.1 client.js 的顶层作用域（写错会让整个界面起不来）
+
+客户端装载器把多个插件的 `client.js` **拼进同一个脚本**（控制台里 `plugins/??a/client.js,b/client.js`
+这种 URL）。所以每个 client 模块的顶层是共享作用域：
+
+- 顶层只允许一个 `window.__ModuleLoader__.load({...})` 调用；
+- 包名、`VERSION`、字典等常量一律放进 `factory(require) { ... }` 作用域；
+- 两个插件都在顶层写 `const PLUGIN_ID`，第二个会抛 `SyntaxError: Identifier 'PLUGIN_ID'
+  has already been declared`，结果是 **web boot 失败、应用报「无法启动」**。
+
+改完用脚本自检（CI 也会跑）：
+
+```bash
+node scripts/check-client-bundles.mjs
+```
+
+它会按 `exports["./client"]` 找到每个插件的 client 入口，拼接后编译一遍，并核对
+`load({ id })` 与包名、`VERSION` 与 `package.json` 是否一致。
+
 ## 3. market.json（市场展示信息，不发布到 npm）
 
 ```json

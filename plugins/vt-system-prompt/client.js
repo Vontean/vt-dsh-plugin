@@ -7,17 +7,18 @@
  * /vt-system-prompt/api/* 路由读写，客户端只发相对地址（见 routeUrl）。
  */
 
-/** 插件身份：模块 id、样式标签、data 属性、日志前缀都从这一处派生。 */
-const PLUGIN_ID = 'dsh-vt-system-prompt';
-/** 必须等于 package.json 的 version，随挂载日志一起打印。 */
-const VERSION = '1.0.1';
-
-// 挂载日志：一行说明当前加载的是哪个构建（DevTools 的 Verbose 级别可见）。
-console.debug(`[${PLUGIN_ID}] v${VERSION}`);
-
 window.__ModuleLoader__.load({
-  id: PLUGIN_ID,
+  // 模块 id 必须与包名一致；装载器把多个 client.js 拼进同一个脚本，所以顶层只能有
+  // 这一个 load() 调用，其余常量一律放进 factory 的作用域，避免重名 SyntaxError。
+  id: 'dsh-vt-system-prompt',
   factory(require) {
+    /** 插件身份：模块 id、样式标签、data 属性、日志前缀都从这一处派生。 */
+    const PLUGIN_ID = 'dsh-vt-system-prompt';
+    /** 必须等于 package.json 的 version，随挂载日志一起打印。 */
+    const VERSION = '1.0.2';
+
+    // 挂载日志：一行说明当前加载的是哪个构建（DevTools 的 Verbose 级别可见）。
+    console.debug(`[${PLUGIN_ID}] v${VERSION}`);
     const reactModule = require('react');
     const React = reactModule !== null && typeof reactModule.createElement === 'function' ? reactModule : reactModule.default;
 

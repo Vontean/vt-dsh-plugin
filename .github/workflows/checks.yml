@@ -22,6 +22,9 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --frozen-lockfile
+      - name: Check that the client modules survive being concatenated
+        # 装载器把多个 client.js 拼进一个脚本；顶层重名会让整个 web boot 失败。
+        run: node scripts/check-client-bundles.mjs
       - name: Regenerate and validate market/index.json
         run: node scripts/build-market.mjs
       - name: Fail when the committed index is stale
