@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "模型选择器",
+    "en": "Model picker"
+  },
+  "description": {
+    "zh": "输入框模型选择的两段式面板：先调思考强度，再选模型；带厂商图标与 MineCodex 同款动效。",
+    "en": "A two-stage composer model picker: adjust reasoning effort first, pick a model on demand, with provider icons and MineCodex-style motion."
+  },
+  "icon": "icon.svg",
+  "category": "ui",
+  "keywords": ["ui", "model", "reasoning", "composer", "picker"]
+}
