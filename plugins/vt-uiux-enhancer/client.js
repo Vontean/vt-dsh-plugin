@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.2.3';
+    const VERSION = '1.2.4';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -367,6 +367,15 @@ window.__ModuleLoader__.load({
        * for a list that cannot be measured yet.
        */
       fallbackOffset: 16,
+      /** A requested write must differ by more than this to count as "capped". */
+      writeTolerance: 0.5,
+      /**
+       * The reader nudge, in px. Below what the eye resolves, above the scroll
+       * sampler's own tolerance, so the app concludes the reader took over.
+       */
+      nudge: 1,
+      /** An answer row shorter than this has no text yet (thinking phase). */
+      minAnswerHeight: 1,
       /**
        * Bottom slack when deciding whether the answer's first line survives the
        * pin: a line that only half-fits is not "visible". One line box (22px) is
@@ -374,6 +383,13 @@ window.__ModuleLoader__.load({
        */
       slack: 24,
     };
+
+    /**
+     * How close to an edge counts as "at" it, in px. Two consumers measure the
+     * same fact — the transcript fade bands and the "back to bottom" button — so
+     * the tolerance has one definition rather than two literals that drift.
+     */
+    const EDGE_EPSILON = 2;
 
     /** Codex's spring: linear() with a 0.8% overshoot instead of a bezier. */
     const RAIL_SPRING = 'linear(0, .398 10%, .682 20%, .843 30%, .925 40%, .972 50%, 1.004 60%, 1.008 70%, 1.003 80%, 1)';
@@ -1230,7 +1246,6 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
          * hand-inserted sibling would be reordered or dropped on the next render.
          */
         behavior: 'view-switch',
-        css: () => '',
       },
       {
         kind: 'behavior',
@@ -1247,7 +1262,6 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
          * state attribute, the sibling disclosure block, the ellipsis row.
          */
         behavior: 'message-clamp',
-        css: () => '',
       },
       {
         kind: 'behavior',
@@ -1814,7 +1828,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
        */
       function installScrollEdgeFade() {
         const CLASS = 'vt-edge-fade';
-        const EPSILON = 2;
+        const EPSILON = EDGE_EPSILON;
         let scroller = null;
         let overlay = null;
         let frame = 0;
@@ -1930,7 +1944,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
        * wants, reads back the actual `scrollTop` and stores that as its landing,
        * so a capped write stays consistent with its own bookkeeping.
        */
-      function installScrollPin(readSelectors, metrics) {
+      function installScrollPin(metrics) {
         const SLACK = SCROLL_PIN.slack;
 
         let scroller = null;
@@ -2120,6 +2134,9 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
               if (chunk.type === 'text-delta') return true;
               if (chunk.type === 'reasoning-delta' || chunk.type === 'tool-call-delta') return false;
               if (chunk.type === 'block-start') return chunk.blockType === 'text';
+              // A delta kind this build has never seen is treated as "not text":
+              // inventing a freeze on an unknown stream is worse than missing one.
+              if (typeof chunk.type === 'string' && chunk.type.endsWith('-delta')) return false;
               continue;
             }
             if (event.type === 'tool/call' || event.type === 'tool/result') return false;
@@ -2203,7 +2220,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           // its text is 0px tall and must follow as shipped.
           const phase = livePhaseNow(Number(current.turn));
           if (phase === false) return requested;
-          if (phase === null && answer.getBoundingClientRect().height < 1) return requested;
+          if (phase === null && answer.getBoundingClientRect().height < SCROLL_PIN.minAnswerHeight) return requested;
           const offset = offsetOf(current);
           const row = current.user.getBoundingClientRect();
           // A message taller than the viewport has no reachable pin line; the
@@ -2254,14 +2271,14 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
               requestAnimationFrame(() => {
                 if (!scroller || !scroller.isConnected) return;
                 const at = scroller.scrollTop;
-                nativeWrite.call(scroller, Math.max(0, at - 1));
+                nativeWrite.call(scroller, Math.max(0, at - SCROLL_PIN.nudge));
               });
             }
             return top;
           };
           if (ceiling >= start || crossed) {
             const next = Math.min(requested, ceiling);
-            if (next < requested - 0.5) return freeze(next);
+            if (next < requested - SCROLL_PIN.writeTolerance) return freeze(next);
             current.requested = Math.round(requested);
             current.allowed = Math.round(next);
             publish();
@@ -2436,9 +2453,12 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           frame = 0;
           if (!scroller || !scroller.isConnected) return;
           if (!button || !button.isConnected) button = findButton();
-          if (!button) return;
+          if (!button) {
+            metrics['to-bottom'] = 'button-none';
+            return;
+          }
           const max = scroller.scrollHeight - scroller.clientHeight;
-          const below = max > 2 && scroller.scrollTop < max - 2;
+          const below = max > EDGE_EPSILON && scroller.scrollTop < max - EDGE_EPSILON;
           if (below === !hidden) {
             metrics['to-bottom'] = `below-${below ? 1 : 0}`;
             return;
@@ -2950,7 +2970,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
       const BEHAVIORS = {
         'native-tooltip': (readSelectors) => installNativeTitleTakeover(readSelectors),
         'scroll-edges': () => installScrollEdgeFade(),
-        'scroll-pin': (readSelectors, metrics) => installScrollPin(readSelectors, metrics),
+        'scroll-pin': (readSelectors, metrics) => installScrollPin(metrics),
         'to-bottom-visibility': (readSelectors, metrics) => installToBottomVisibility(metrics),
         'view-switch': () => installViewSwitch(ctx),
         'message-clamp': (readSelectors) => installMessageClamp(readSelectors),

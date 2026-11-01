@@ -19,7 +19,7 @@
 
 | 形态 | 例子 | 硬要求 |
 |---|---|---|
-| 接管 DOM | `native-tooltip`、`scroll-edges`、`message-clamp` | 作用域限制在一个容器内；释放时把改动原样写回；新节点只加在 React 不回收的位置（见陷阱 10） |
+| 接管 DOM | `native-tooltip`、`scroll-edges`、`message-clamp`、`scroll-pin`、`to-bottom-visibility` | 作用域限制在一个容器内；释放时把改动原样写回（`scroll-pin` 是删掉实例上的 own property）；新节点只加在 React 不回收的位置（见陷阱 10） |
 | 贡献 slot | `view-switch` | 只经 `ctx.slots.register` 增加自己的节点，不碰别人的；释放即 dispose 注册 |
 
 新增 `component` 时：
@@ -304,7 +304,7 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
 |---|---|---|
 | DOMAIN | `PATCHES` | 纯数据：要改什么。不含选择器逻辑、不含 DOM 操作 |
 | CSSOM 基底 | `collectStyleSheets()` / `walkRules()` | 唯一有两个真实消费者的底层：适配器做 discovery，探针做审计 |
-| ADAPTERS | `createAdapters(ctx, patches)` | 返回 `applyTokenPatches` / `sync` / `installBehaviors` / `behaviorErrors` / `dispose` |
+| ADAPTERS | `createAdapters(ctx, patches)` | 返回 `applyTokenPatches` / `sync` / `installBehaviors` / `behaviorErrors` / `behaviorMetrics` / `scrollPin` / `dispose` |
 | PROBE | `createProbe(readState)` | 返回 `dump` / `dispose`；引擎只传一个状态读取器 |
 | ENGINE | `mount(ctx)` | 只管生命周期、重试、诊断；不认任何 DSH 概念 |
 
