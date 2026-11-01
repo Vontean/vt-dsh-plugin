@@ -330,7 +330,23 @@ export const CopyNode = memo(function CopyNode({ node, path }: { node: GenuiCopy
 type MermaidRenderState =
   | { status: 'loading' }
   | { status: 'ready'; html: string }
-  | { status: 'error' }
+  /** `detail` is the engine's first error line, shown under the fallback: the
+   * generic "渲染失败" told nobody which statement the parser choked on. */
+  | { status: 'error'; detail: string }
+
+/** Condense an engine error into one diagnostic line for the fallback hint.
+ * Pele reports "Parse error on line N:" and then the offending source line, a
+ * caret ruler and an "Expecting …" line; the first line alone says nothing
+ * useful, so the ruler is dropped and the rest is joined. */
+function diagramErrorDetail(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error)
+  const parts = raw
+    .split('\n')
+    .map(part => part.trim())
+    .filter(part => part !== '' && !/^[-^|\s]+$/.test(part))
+  const line = parts.join(' ')
+  return line.length > 160 ? `${line.slice(0, 160)}…` : line
+}
 
 /** Mermaid: lazily loaded diagram renderer. */
 export const MermaidNode = memo(function MermaidNode({ node }: { node: GenuiMermaid }) {
@@ -356,10 +372,10 @@ export const MermaidNode = memo(function MermaidNode({ node }: { node: GenuiMerm
             finished = true
             setState({ status: 'ready', html: svg })
           }
-        } catch {
+        } catch (error) {
           if (alive && !current.signal.aborted) {
             finished = true
-            setState({ status: 'error' })
+            setState({ status: 'error', detail: diagramErrorDetail(error) })
           }
         }
       })()
@@ -434,7 +450,15 @@ export const MermaidNode = memo(function MermaidNode({ node }: { node: GenuiMerm
       dangerouslySetInnerHTML={state.status === 'ready' ? { __html: state.html } : undefined}
     >
       {state.status === 'ready' ? null : state.status === 'error'
-        ? <><pre>{code}</pre><div className={css.mermaidErr}>{t('block.mermaidError')}</div></>
+        ? (
+          <>
+            <pre>{code}</pre>
+            <div className={css.mermaidErr}>
+              {t('block.mermaidError')}
+              {state.detail !== '' && <span className={css.mermaidDetail}>{state.detail}</span>}
+            </div>
+          </>
+        )
         : <><pre>{code}</pre><div className={css.mermaidHint}>{t('block.mermaidLoading')}</div></>}
     </div>
   )

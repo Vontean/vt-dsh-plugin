@@ -1795,7 +1795,21 @@ img.mediaPlayer { aspect-ratio: 16 / 9; object-fit: cover; background: var(--dsl
   font-family: var(--dsl-g-font-mono);
   font-size: var(--dsl-g-font-meta);
 }
-.mermaidErr { color: var(--dsw-alias-state-error-primary, #ff6b6b); font-size: var(--dsl-g-font-meta); }
+.mermaidErr {
+  color: var(--dsw-alias-state-error-primary, #ff6b6b);
+  font-size: var(--dsl-g-font-meta);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* The parser's own first line: mono + tertiary, so it reads as a diagnostic
+   under the sentence rather than as a second error. */
+.mermaidDetail {
+  font-family: var(--dsl-g-font-mono);
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
 .mermaidHint { color: var(--dsw-alias-label-tertiary); font-size: var(--dsl-g-font-meta); }
 
 /* ---------- scene3d ---------- */
