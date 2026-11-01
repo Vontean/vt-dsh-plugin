@@ -32,16 +32,16 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 **npm**
 
 ```bash
-dsh plugin --profile <profile> add dsh-vt-uiux-enhancer@1.0.0
+dsh plugin --profile <profile> add dsh-vt-uiux-enhancer@1.0.1
 ```
 
 **Release tarball**
 
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载
-`dsh-vt-uiux-enhancer-1.0.0.tgz`，然后：
+`dsh-vt-uiux-enhancer-1.0.1.tgz`，然后：
 
 ```bash
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-uiux-enhancer-1.0.0.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-uiux-enhancer-1.0.1.tgz
 ```
 
 ## 支持的 DSH 版本

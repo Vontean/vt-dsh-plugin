@@ -23,7 +23,7 @@ window.__ModuleLoader__.load({
     /** 插件标识（与 package.json 的 name、cordis.patch.yml 的 name 一致）。 */
     const PLUGIN_ID = 'dsh-vt-quote-bar';
     /** 与 package.json 的 version 同值；只用于标注 DOM，便于确认加载的是哪一版。 */
-    const VERSION = '1.0.0';
+    const VERSION = '1.0.1';
 
     /** Locale namespace owned by this plugin. */
     const NS = 'vtQuoteBar';

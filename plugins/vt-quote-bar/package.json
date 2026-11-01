@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-quote-bar",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Show DeepSeek account balance and OpenCode Go 5-hour / weekly / monthly quota in the DSH sidebar footer.",
   "license": "MIT",
@@ -53,5 +53,8 @@
         "@deepseek-ai/dsh-client-locale"
       ]
     }
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

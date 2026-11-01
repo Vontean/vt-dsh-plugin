@@ -10,7 +10,7 @@
 /** 插件身份：模块 id、样式标签、data 属性、日志前缀都从这一处派生。 */
 const PLUGIN_ID = 'dsh-vt-system-prompt';
 /** 必须等于 package.json 的 version，随挂载日志一起打印。 */
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 
 // 挂载日志：一行说明当前加载的是哪个构建（DevTools 的 Verbose 级别可见）。
 console.debug(`[${PLUGIN_ID}] v${VERSION}`);

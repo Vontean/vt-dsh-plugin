@@ -42,16 +42,16 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 **npm**
 
 ```bash
-dsh plugin --profile <profile> add dsh-vt-gen-ui@1.0.0
+dsh plugin --profile <profile> add dsh-vt-gen-ui@1.0.1
 ```
 
 **Release tarball**
 
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载
-`dsh-vt-gen-ui-1.0.0.tgz`，然后：
+`dsh-vt-gen-ui-1.0.1.tgz`，然后：
 
 ```bash
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-gen-ui-1.0.0.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-gen-ui-1.0.1.tgz
 ```
 
 **与上游共存时的切换顺序**（顺序不能反，否则重复注册抛错）：先在插件页停用上游，或在 profile 里
@@ -60,7 +60,7 @@ dsh plugin --profile <profile> add /绝对路径/dsh-vt-gen-ui-1.0.0.tgz
 ```bash
 # 装本插件前：先去掉上游
 dsh plugin --profile <profile> remove @changfenhuang/dsh-genui
-dsh plugin --profile <profile> add dsh-vt-gen-ui@1.0.0
+dsh plugin --profile <profile> add dsh-vt-gen-ui@1.0.1
 
 # 回滚：先去掉本插件，再装回上游
 dsh plugin --profile <profile> remove dsh-vt-gen-ui

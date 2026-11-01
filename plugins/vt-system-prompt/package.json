@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-system-prompt",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "View and edit DSH's global system prompt (AGENTS.md) from Settings, with conflict-safe save, discard and reload.",
   "license": "MIT",
@@ -53,5 +53,8 @@
         "@deepseek-ai/dsh-client-ui-settings"
       ]
     }
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

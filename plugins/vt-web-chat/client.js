@@ -24,7 +24,7 @@
 /** Package identity: one source for the module id and every log/storage prefix. */
 const PLUGIN_ID = 'dsh-vt-web-chat';
 /** Must equal `version` in package.json; printed once in the mount trace below. */
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 
 // Mount trace: one line naming the loaded build (DevTools → verbose level).
 console.debug(`[${PLUGIN_ID}] v${VERSION}`);

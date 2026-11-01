@@ -32,7 +32,7 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 ### npm
 
 ```bash
-dsh plugin --profile <profile> add dsh-vt-quote-bar@1.0.0
+dsh plugin --profile <profile> add dsh-vt-quote-bar@1.0.1
 ```
 
 npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view <包名>@<版本>` 能查到即可）。
@@ -43,7 +43,7 @@ npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view <包�
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载对应插件的 `.tgz`，然后：
 
 ```bash
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-quote-bar-1.0.0.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-quote-bar-1.0.1.tgz
 ```
 
 ### Git 子目录（不使用市场与 npm 时的兜底）
@@ -100,8 +100,8 @@ pnpm market           # 重新生成并校验 market/index.json
 发布 = 打一个 tag，其余由 CI 完成：
 
 ```bash
-git tag vt-quote-bar-v1.0.0      # 名字 = plugins/ 下的目录名 + -v + package.json 的 version
-git push origin vt-quote-bar-v1.0.0
+git tag vt-quote-bar-v1.0.1      # 名字 = plugins/ 下的目录名 + -v + package.json 的 version
+git push origin vt-quote-bar-v1.0.1
 ```
 
 tag 推上去后 `.github/workflows/release.yml` 会：

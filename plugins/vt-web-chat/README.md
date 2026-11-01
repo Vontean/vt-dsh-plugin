@@ -24,7 +24,7 @@
 
 1. **插件市场（推荐）**：在「插件 → 发现 → 添加索引源」里填入
    `https://vontean.github.io/vt-dsh-plugin/index.json`，找到「网页对话」点安装。
-2. **npm**：`dsh plugin --profile <profile> add dsh-vt-web-chat@1.0.0`。
+2. **npm**：`dsh plugin --profile <profile> add dsh-vt-web-chat@1.0.1`。
 3. **Release tarball**：从 GitHub Release 下载 `.tgz`，再执行
    `dsh plugin --profile <profile> add <该 .tgz 的本地路径或 URL>`。
 
