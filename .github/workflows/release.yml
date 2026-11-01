@@ -106,15 +106,19 @@ jobs:
           npm publish --access public
 
       - name: Record the release and regenerate the market index
+        env:
+          PUBLISH_OUTCOME: ${{ steps.npm.outcome }}
         run: |
           set -euo pipefail
           name='${{ steps.tag.outputs.name }}'
           version='${{ steps.tag.outputs.version }}'
           commit=$(git rev-parse HEAD)
-          if npm view "$name@$version" version >/dev/null 2>&1; then
+          # npm 处理新版本有几分钟延迟，刚 publish 完就查 registry 往往查不到。
+          # 因此以发布步骤的结果为准，不要用查询结果覆盖已成功的发布。
+          if [ "${PUBLISH_OUTCOME:-}" = "success" ] || npm view "$name@$version" version >/dev/null 2>&1; then
             kind=npm
             sha=''
-            echo "npm 上已有 $name@$version，索引来源记为 npm"
+            echo "npm 发布成功，索引来源记为 npm"
           else
             kind=git
             sha="$commit"
