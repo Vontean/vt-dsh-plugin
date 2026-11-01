@@ -59,7 +59,7 @@ import type { ChatNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/cli
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { GenuiActionContext, type GenuiActionHandler } from './action-context.ts'
 import { withFileLinkContext, type FileLinkAvailability, type FileLinkCordisContext } from './file-link-context.tsx'
-import css from './GenuiBlock.module.css'
+import { StreamSkeleton } from './stream-skeleton.tsx'
 import { renderSvgFence } from './svg-fence.tsx'
 import { repairFenceJson, trimToBalancedRoot } from '../shared/fence-repair.ts'
 import { describeFenceFailure, FenceDiagnostic, renderResolvedFenceNode, type GenuiFenceContext } from './fence-render.tsx'
@@ -205,25 +205,10 @@ function looksLikeGenuiInProgress(raw: string): boolean {
   return /"(items|type|title|panel)"\s*:/.test(text)
 }
 
-/** Skeleton mounted while a fence body is still streaming and no component has
- *  finished yet. It is a REAL mounted tree, so the channel's rule "never hide
- *  the stock block without a mounted replacement" (issue #19) still holds: if
- *  the body never parses, the settle sweep unmounts the skeleton and the raw
- *  code block returns. */
-function GenuiSkeleton() {
-  return (
-    <div className={css.skeleton} role="status" aria-label="正在生成界面">
-      <span className={css.skeletonTitle} />
-      <span className={css.skeletonBars}>
-        <span style={{ width: '32%' }} />
-        <span style={{ width: '52%' }} />
-        <span style={{ width: '24%' }} />
-      </span>
-      <span className={css.skeletonBlock} />
-    </div>
-  )
-}
-
+/* The streaming placeholder is a REAL mounted tree, so the channel's rule
+ * "never hide the stock block without a mounted replacement" (issue #19) still
+ * holds: if the body never parses, the settle sweep unmounts it and the raw
+ * code block returns. The dot-wave field lives in stream-skeleton.tsx. */
 interface Mount {
   root: Root
   container: HTMLElement
@@ -1190,7 +1175,7 @@ export function installDomFenceRenderer(
       }
       // Streaming, spec-shaped, nothing renderable yet: show the skeleton
       // rather than a wall of half-written JSON.
-      payload = <GenuiSkeleton />
+      payload = <StreamSkeleton />
     }
     clearDiagnostic(block)
     // Mount FIRST, hide AFTER (issue #19): the stock block is only ever
