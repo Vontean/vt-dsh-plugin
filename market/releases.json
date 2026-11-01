@@ -31,5 +31,19 @@
     }
   ],
   "dsh-vt-web-chat": [],
-  "dsh-vt-system-prompt": []
+  "dsh-vt-system-prompt": [
+    {
+      "version": "1.0.0",
+      "publishTimestamp": 1793500771,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "commit": "c3c993f6434f7c4766bf862692c2934cc8fc15c2",
+        "path": "plugins/vt-system-prompt"
+      },
+      "engines": {
+        "dsh": ">=0.2.1-rc.5 <0.3.0"
+      }
+    }
+  ]
 }

@@ -85,6 +85,50 @@
       ]
     },
     {
+      "name": "dsh-vt-system-prompt",
+      "title": {
+        "zh": "全局提示词",
+        "en": "Global instructions"
+      },
+      "description": {
+        "zh": "在设置页里查看并编辑全局系统提示词（AGENTS.md），支持保存、放弃修改与重新载入。",
+        "en": "View and edit the global system prompt (AGENTS.md) from Settings, with save, discard and reload."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IkFHRU5UUy5tZCBpbnN0cnVjdGlvbnMiPgogIDxyZWN0IHg9IjIiIHk9IjIiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjE1IiBmaWxsPSIjMWY2ZmViIi8+CiAgPHJlY3QgeD0iMTYiIHk9IjEyIiB3aWR0aD0iMjQiIGhlaWdodD0iMzIiIHJ4PSI0IiBmaWxsPSIjZmZmZmZmIi8+CiAgPHBhdGggZD0iTTIyIDIxaDEyTTIyIDI3aDEyTTIyIDMzaDciIHN0cm9rZT0iIzFmNmZlYiIgc3Ryb2tlLXdpZHRoPSIyLjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik00NC41IDI3LjVsLTkuMiA5LjItMS40IDQuNiA0LjYtMS40IDkuMi05LjJ6IiBmaWxsPSIjZmZkMTY2IiBzdHJva2U9IiMwZjRjOWUiIHN0cm9rZS13aWR0aD0iMS42IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=",
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-system-prompt#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "directory": "plugins/vt-system-prompt"
+      },
+      "metadata": {
+        "category": "workflow",
+        "keywords": [
+          "workflow",
+          "prompt",
+          "agents-md",
+          "settings"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1793500771,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "c3c993f6434f7c4766bf862692c2934cc8fc15c2",
+            "path": "plugins/vt-system-prompt"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    },
+    {
       "name": "dsh-vt-uiux-enhancer",
       "title": {
         "zh": "VT UI/UX 增强",
