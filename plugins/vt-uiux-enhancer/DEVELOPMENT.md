@@ -184,6 +184,9 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
 - 还原：`delete element.scrollTop` / `delete element.scrollTo` 即可。绝不要改原型。
 - 折叠批次（`column[data-input-fold]`）自己按帧写 `scrollTop` 做位置补偿，限位期间必须放行，
   否则会和补偿打架。
+- 冻结的入场判据必须是两路：DOM 的 `[data-variant="think"][data-state="running"]` 说「在思考」
+  就一票否决，事件流说「正文」才放行。写成单一来源的代价是隐形的——读错或读不到时表现就是
+  「思考阶段也冻住」，而读数里分不出是哪一路错了。
 
 ---
 
@@ -251,12 +254,20 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
   这是限位补丁不需要持续纠偏的原因。
 - **「正式回答」在 harness 里是事后判定的**：`ui-chat` 的 `latestAnswer()` 只认**最后一步、已
   settled、有回复内容、且不含 tool-call 块**的 assistant-step；`answerStep` 在流式期间是 `null`。
-  这条决定了一件事：**没有「回答开始了」的实时标志可读**，所以 `scroll-pin` 只能改用下面那条事件流，
-  而不是去 DOM 里找阶段属性。
-  DOM 也没有阶段属性（过程组标题 `TurnProcessNodeView` 在 `turn.status !== "closed"` 时直接返回
-  `null`，`data-turn-process-answer` 只在轮次结束、`!liveProcess` 时才设）。想在运行期知道阶段，
-  只能用会话事件流：`sessions.binding(id).eventSource` 的最近一条 `assistant/live-chunk`，
-  看 `chunk.type`（`text-delta` / `reasoning-delta` / `tool-call-delta`）。
+  这条决定了一件事：**没有「回答开始了」的实时标志可读**，所以「正文在写」只能从会话事件流读。
+  过程组标题 `TurnProcessNodeView` 在 `turn.status !== "closed"` 时直接返回 `null`，
+  `data-turn-process-answer` 只在轮次结束、`!liveProcess` 时才设，两个都不能用。
+- **「正在思考」有行级标记，但别拿 `[data-streaming]` 顶替**：推理行根带
+  `[data-variant="think"]`，`data-state` 取 `running` / `ok`，判据是 `streaming && i === last`
+  —— 即「这一步还在跑，且这个推理块是最新写入的块」。正文块一追加到它后面，属性立刻变 `ok`。
+  **反例**：`[data-streaming]` 是**节点级**的（`streaming: data.status === "running"`），思考期
+  一样为真，拿它判正文会一直冻住；`[data-chat-group-part="reasoning"]` 也不行，轮次结束后
+  它还在（只是折叠）。缺行不等于在写正文：第一个 reasoning 增量还没到、或推理块内容为空
+  （`block.text.trim() === ""` 直接不渲染）时都没有这一行 —— 所以它只能当**一票否决**用。
+- **「正文在写」只能来自事件流**：`sessions.binding(id).eventSource` 的最近一条
+  `assistant/live-chunk`，看 `chunk.type`（`text-delta` / `reasoning-delta` / `tool-call-delta`）。
+  DOM 分不出正文与工具调用（两者都没有正面标记），所以两路信号互补、不能替换：DOM 说「在思考」
+  就绝不冻结，事件流说「正文」才允许冻结，两路都读不到时才退回回答行的渲染高度。
 - **会话 id 的取法**：`[data-conversation-content]` 上的 `data-conversation-session`；这个元素
   **不在** `[data-conversation-scroll]` 内部（实测 `scroller.querySelector` 取不到，全文档只有 1 个），
   所以要从 `document` 查。

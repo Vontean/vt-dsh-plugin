@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.2.5';
+    const VERSION = '1.2.6';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -2082,6 +2082,28 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
 
         const isRunning = (current) => current.column.querySelector('[data-chat-running]') !== null;
 
+        /**
+         * Is reasoning being written right now?
+         *
+         * The reasoning row carries `data-variant="think"` and
+         * `data-state="running"` while it is the newest block of a step that still
+         * runs; the first text block of that step is appended after it and flips it
+         * to "ok". So this one attribute pair answers "the model is thinking" from
+         * inside the column — a session switch, a second pane or a missing event
+         * binding cannot leave it reading somebody else's turn.
+         *
+         * It is a veto, not a phase: a missing row also covers "the step has not
+         * produced a reasoning block yet" and "the reasoning block is empty", so
+         * only its presence is evidence.
+         *
+         * Scoped to the column, not to this turn's rows: only the running turn can
+         * own a row in the "running" state, and some display modes drop the turn
+         * attribute from the wrapper a reasoning row hangs under.
+         */
+        const isThinking = (current) => current.column.querySelector(
+          '[data-variant="think"][data-state="running"]',
+        ) !== null;
+
         /** Whether the app currently owns the tail; React mirrors it as an attribute. */
         const isFollowing = (current) => {
           let node = current && current.column;
@@ -2244,10 +2266,15 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           if (!answer) return requested;
           const view = scroller.clientHeight;
           if (view <= 0) return requested;
-          // Phase gate. The harness knows whether the running step is emitting text
-          // (answer) or reasoning/tool deltas (process); when it cannot be read, the
-          // rendered height of the answer row is the fallback — a row created before
-          // its text is 0px tall and must follow as shipped.
+          // Phase gate, in two independent halves, and either one can stop a freeze.
+          // The DOM answers "reasoning is being written right now", which is the
+          // reading that survives a stale or unreadable event stream; one vote is
+          // enough to keep following. The event stream stays the only positive
+          // signal for "text is being written" because the DOM cannot tell prose
+          // from a tool call: `[data-streaming]` is node-level and true while the
+          // step reasons as well. The rendered height is the last resort when
+          // neither can be read — a row created before its text is 0px tall.
+          if (isThinking(current)) return requested;
           const phase = livePhaseNow(Number(current.turn));
           if (phase === false) return requested;
           if (phase === null && answer.getBoundingClientRect().height < SCROLL_PIN.minAnswerHeight) return requested;
