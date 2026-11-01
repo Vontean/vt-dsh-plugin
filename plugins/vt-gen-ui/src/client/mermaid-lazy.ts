@@ -11,11 +11,21 @@
  * @module dsh-vt-gen-ui/client/mermaid-lazy
  */
 import { loadGenuiAsset } from './asset-loader.ts'
+import { createDiagramResolvers } from './diagram-resolvers.ts'
+import type { DiagramResolvers } from './diagram-types.ts'
 export { assertSafeSvg, ensureFlowchartKind, repairMermaidSource } from './mermaid-safe.ts'
 
-/** The engine surface registered by the mermaid asset bundle. */
+/** The engine surface registered by the pele asset bundle. */
 interface MermaidAssetApi {
-  renderMermaid: (code: string, target?: HTMLElement) => Promise<string>
+  renderMermaid: (code: string, target?: HTMLElement, resolvers?: DiagramResolvers) => Promise<string>
+}
+
+/** KaTeX + icon-catalogue resolvers, built once and handed to the lazy engine
+ * so the asset does not carry a second copy of either. */
+let resolvers: DiagramResolvers | undefined
+function diagramResolvers(): DiagramResolvers {
+  resolvers ??= createDiagramResolvers()
+  return resolvers
 }
 
 interface RenderJob {
@@ -84,7 +94,7 @@ function pump(): void {
           jobs.unshift(job)
           return
         }
-        const svg = await api.renderMermaid(job.code, job.target)
+        const svg = await api.renderMermaid(job.code, job.target, diagramResolvers())
         job.signal?.throwIfAborted()
         job.resolve(svg)
       } catch (error) {

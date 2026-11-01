@@ -23,6 +23,7 @@
  */
 import { detectType, render } from 'pele'
 import { assertSafeSvg, ensureFlowchartKind, repairMermaidSource } from './mermaid-safe.ts'
+import type { DiagramResolvers } from './diagram-types.ts'
 
 /** Monotonic render id: pele prefixes gradient/clip ids per diagram, and two
  * diagrams in one answer must not share them. No entropy, no collisions. */
@@ -34,12 +35,14 @@ interface RenderOptions {
   fontSize: number
   fontFamily: string
   maxWidth?: number
+  math?: NonNullable<DiagramResolvers['math']>
+  icons?: NonNullable<DiagramResolvers['icons']>
 }
 
 /** Options shared by every attempt: the font pele measures with is the font the
  * diagram will be displayed in, and `maxWidth` is the real reading column, so a
  * wide flowchart can switch to a vertical layout instead of overflowing. */
-function renderOptions(target?: HTMLElement): RenderOptions {
+function renderOptions(target: HTMLElement | undefined, resolvers: DiagramResolvers | undefined): RenderOptions {
   const doc = globalThis.document
   const fallback = doc === undefined ? 'sans-serif' : getComputedStyle(doc.body).fontFamily
   const fontFamily = target === undefined ? fallback : getComputedStyle(target).fontFamily
@@ -51,6 +54,10 @@ function renderOptions(target?: HTMLElement): RenderOptions {
     fontFamily,
   }
   if (width > 0) options.maxWidth = width
+  // Passed through to pele: KaTeX typesetting for label math, and the plugin's
+  // icon catalogue for `fa:…` references. Undefined keeps pele's fallbacks.
+  if (resolvers?.math !== undefined) options.math = resolvers.math
+  if (resolvers?.icons !== undefined) options.icons = resolvers.icons
   return options
 }
 
@@ -72,7 +79,7 @@ function knownKind(source: string): boolean {
  * @throws when pele cannot parse the source, or the output fails the
  *   sanitization check — the caller then shows its raw-source fallback.
  */
-export async function renderMermaid(code: string, target?: HTMLElement): Promise<string> {
+export async function renderMermaid(code: string, target?: HTMLElement, resolvers?: DiagramResolvers): Promise<string> {
   let source = code.trim()
   // Model-authored sources routinely omit the mandatory declaration line
   // (`A --> B` with no leading `graph TD`). Prepend it when the body is clearly
@@ -82,7 +89,7 @@ export async function renderMermaid(code: string, target?: HTMLElement): Promise
     if (lenient !== source) source = lenient
   }
 
-  const options = renderOptions(target)
+  const options = renderOptions(target, resolvers)
   const draw = (text: string): string => {
     const { svg } = render(text, options)
     assertSafeSvg(svg)
