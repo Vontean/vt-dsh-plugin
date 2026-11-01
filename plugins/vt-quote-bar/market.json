@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "模型额度",
+    "en": "Model quota"
+  },
+  "description": {
+    "zh": "在侧边栏账号行上方显示 DeepSeek 余额与 OpenCode Go 的 5 小时 / 本周 / 本月额度。",
+    "en": "Show your DeepSeek balance and OpenCode Go 5-hour / weekly / monthly quota above the account row in the DSH sidebar."
+  },
+  "icon": "icon.svg",
+  "category": "usage",
+  "keywords": ["quota", "balance", "usage", "sidebar", "opencode"]
+}
