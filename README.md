@@ -8,10 +8,10 @@
 | 插件 | 包名 | 作用 | 分类 |
 |---|---|---|---|
 | [VT UI/UX 增强](plugins/vt-uiux-enhancer/README.md) | `dsh-vt-uiux-enhancer` | 把界面调成干净的白纸：配色、层级、控件形状、间距与动效；关闭即完全还原 | 界面与外观 |
-| [VT GenUI](plugins/vt-gen-ui/README.md) | `dsh-vt-gen-ui` | 生成式界面的重绘版：同一套 `dsh-ui` 围栏协议，重新设计的渲染器 | 生成式界面 |
-| [VT 额度条](plugins/vt-quote-bar/README.md) | `dsh-vt-quote-bar` | 在侧边栏显示 DeepSeek 余额与 OpenCode Go 的额度 | 用量与额度 |
-| [VT 网页对话](plugins/vt-web-chat/README.md) | `dsh-vt-web-chat` | 「新建会话」里的 Web Chat 入口，把 chat.deepseek.com 作为主区面板打开 | 界面与外观 |
-| [VT 系统提示词](plugins/vt-system-prompt/README.md) | `dsh-vt-system-prompt` | 设置页里的全局系统提示词（`AGENTS.md`）查看与编辑 | 工作流与提示词 |
+| [VT GenUI 生成式界面](plugins/vt-gen-ui/README.md) | `dsh-vt-gen-ui` | 把 `dsh-ui` 围栏渲染成可交互界面：50 种组件、图表与流程图、表单本地判分、常驻面板 | 生成式界面 |
+| [模型额度](plugins/vt-quote-bar/README.md) | `dsh-vt-quote-bar` | 在侧边栏显示 DeepSeek 余额与 OpenCode Go 的额度 | 用量与额度 |
+| [网页对话](plugins/vt-web-chat/README.md) | `dsh-vt-web-chat` | 「新建会话」下方的网页对话入口，把 chat.deepseek.com 作为主区面板打开 | 界面与外观 |
+| [全局提示词](plugins/vt-system-prompt/README.md) | `dsh-vt-system-prompt` | 设置页里的全局系统提示词（`AGENTS.md`）查看与编辑 | 工作流与提示词 |
 
 ## 安装
 
@@ -34,6 +34,9 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 ```bash
 dsh plugin --profile <profile> add dsh-vt-quote-bar@1.0.0
 ```
+
+npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view <包名>@<版本>` 能查到即可）。
+还没发到 npm 时，请用市场索引或 Release tarball：三条通道发出去的是同一份构建。
 
 ### Release tarball
 
