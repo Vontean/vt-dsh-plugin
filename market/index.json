@@ -129,6 +129,19 @@
       },
       "versions": [
         {
+          "version": "1.0.1",
+          "publishTimestamp": 1793502748,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "8bfbcb4e6a6bd9b8d7e66b0590a714257565d1ce",
+            "path": "plugins/vt-quote-bar"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        },
+        {
           "version": "1.0.0",
           "publishTimestamp": 1793501789,
           "source": {
