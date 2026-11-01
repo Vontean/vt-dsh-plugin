@@ -78,9 +78,10 @@ vt-dsh-plugin/
 │  └─ index.json            # 市场索引，官方解析器校验后部署到 Pages
 ├─ scripts/
 │  ├─ build-market.mjs      # 生成 + 校验 index.json
-│  └─ record-release.mjs    # 发布时把版本写进账本
+│  ├─ record-release.mjs    # 发布时把版本写进账本
+│  └─ refresh-sources.mjs   # 补发 npm 后把 git 来源刷成 npm 来源
 ├─ docs/plugin-conventions.md  # 新增/迁移插件的硬约定
-└─ .github/workflows/       # Release / Pages / Checks
+└─ .github/workflows/       # Release / Refresh market sources / Pages / Checks
 ```
 
 ## 开发
@@ -111,8 +112,14 @@ tag 推上去后 `.github/workflows/release.yml` 会：
 4. 把版本写进 `market/releases.json`，重新生成并经官方解析器校验 `market/index.json`；
 5. 提交索引到 `main`，重新部署 GitHub Pages。
 
-之后补上 npm 发布时，用 Actions 的 `Release` 工作流手动传入同一个 tag 重跑一次，
-索引来源就会从 git 子树刷新成 npm 包。
+之后补上 npm 发布时，用 Actions 的 **Refresh market sources** 工作流跑一次：它会把 npm 上已存在的
+版本从 git 来源改成 npm 来源，重新生成索引并部署 Pages。也可以单独给某个 tag 重跑 `Release` 工作流。
+
+CI 发布 npm 需要仓库 secret `NPM_TOKEN`（npm 的 Automation / Granular token，带 publish 权限）：
+
+```bash
+gh secret set NPM_TOKEN --repo Vontean/vt-dsh-plugin
+```
 
 ## 版本策略
 
