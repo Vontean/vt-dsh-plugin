@@ -19,8 +19,7 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
+  actions: write
 
 concurrency:
   group: release
@@ -173,23 +172,9 @@ jobs:
             exit 1
           }
 
-  deploy-pages:
-    needs: release
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-      - name: Stage the index
-        run: |
-          mkdir -p _site
-          cp market/index.json _site/index.json
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Redeploy Pages from main
+        # github-pages 环境只允许从分支部署，tag 触发的运行会被环境策略拒绝，
+        # 所以这里对 main 触发 pages 工作流，由它在 main 上完成部署。
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pages.yml --ref main
