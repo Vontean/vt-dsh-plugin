@@ -297,6 +297,8 @@ window.__ModuleLoader__.load({
       const itemRefs = useRef([]);
       const dragRef = useRef(null);
       const leaveTimerRef = useRef(0);
+      // Effort preview that outlives the pointer gesture until the directory publishes the new value.
+      const effortCommitRef = useRef({ active: false, index: -1, timer: 0 });
       const id = React.useId();
       const accountProviderName = t('provider.account');
 
@@ -523,10 +525,31 @@ window.__ModuleLoader__.load({
         itemRefs.current[0]?.focus();
       }, [open, stage, showSearch]);
 
+      // 预览只在目录真正发布目标档位后释放；若适配器把档位规范化成别的值，
+      // pending 结束后也要跟随真实值，避免标签一直停在旧预览上。
+      useEffect(() => {
+        const commit = effortCommitRef.current;
+        if (!commit.active) return;
+        const target = effortChoices[commit.index];
+        if (target === undefined) {
+          releaseEffortPreview();
+          return;
+        }
+        // 只有目录真的发布了目标档位才释放；pending 结束但投影还没跟上时继续按住，
+        // 否则会先跳回旧值、等投影到达再跳到新值，看起来就是闪两下。
+        const currentEffort = state.current?.reasoningEffort ?? reasoning?.defaultEffort;
+        if (target.effort === currentEffort) releaseEffortPreview();
+      }, [pending, state.current, effortChoices, reasoning]);
+
       // Clear transient notices when the menu is reopened.
       useEffect(() => {
         if (!open) setNotice(null);
       }, [open]);
+
+      useEffect(() => () => {
+        const commit = effortCommitRef.current;
+        if (commit.timer !== 0) window.clearTimeout(commit.timer);
+      }, []);
 
       if (!available) return null;
 
@@ -631,17 +654,51 @@ window.__ModuleLoader__.load({
         });
       };
 
+      /** 释放滑条的临时预览，让标签回到目录里的真实档位。 */
+      const releaseEffortPreview = () => {
+        const commit = effortCommitRef.current;
+        if (commit.timer !== 0) window.clearTimeout(commit.timer);
+        commit.timer = 0;
+        commit.active = false;
+        commit.index = -1;
+        setPreviewIndex(null);
+      };
+
+      /** 保留用户刚选中的档位，直到目录发布同一个值。 */
+      const holdEffortPreview = (index) => {
+        const commit = effortCommitRef.current;
+        if (commit.timer !== 0) window.clearTimeout(commit.timer);
+        commit.active = true;
+        commit.index = index;
+        setPreviewIndex(index);
+        commit.timer = window.setTimeout(releaseEffortPreview, 2000);
+      };
+
       const commitEffort = (index) => {
-        if (busy || state.current === null) return;
+        if (busy || state.current === null) {
+          releaseEffortPreview();
+          return;
+        }
         const choice = effortChoices[index];
-        if (choice === undefined) return;
+        if (choice === undefined) {
+          releaseEffortPreview();
+          return;
+        }
         const nextEffort = choice.effort;
         const currentEffort = state.current.reasoningEffort ?? reasoning?.defaultEffort;
-        if (nextEffort === currentEffort) return;
+        if (nextEffort === currentEffort) {
+          releaseEffortPreview();
+          return;
+        }
+        // 选择是异步的：store 会先经过 pending（旧值）再发布新值。这里把刚选中的
+        // 档位按住不放，否则松手瞬间会闪回旧标签，再跳到新标签（表现为闪烁两下）。
+        holdEffortPreview(index);
         submit({
           provider: state.current.provider,
           model: state.current.model,
           ...(nextEffort === undefined ? {} : { reasoningEffort: nextEffort }),
+        }).then((result) => {
+          if (result === undefined || result.ok === false) releaseEffortPreview();
         });
       };
 
@@ -686,17 +743,16 @@ window.__ModuleLoader__.load({
         dragRef.current = null;
         railRef.current?.releasePointerCapture?.(event.pointerId);
         if (!commit) {
-          setPreviewIndex(null);
+          releaseEffortPreview();
           return;
         }
         const index = effortIndexFromX(event.clientX, drag.rect);
-        setPreviewIndex(null);
         if (index >= 0) commitEffort(index);
       };
 
       const onRailKeyDown = (event) => {
         if (event.nativeEvent.isComposing) return;
-        if (effortChoices.length === 0) return;
+        if (busy || effortChoices.length === 0) return;
         const last = effortChoices.length - 1;
         const current = shownEffortIndex;
         let next = current;
@@ -709,10 +765,7 @@ window.__ModuleLoader__.load({
         event.stopPropagation();
         if (next === current) return;
         setPreviewIndex(next);
-        window.setTimeout(() => {
-          setPreviewIndex(null);
-          commitEffort(next);
-        }, 140);
+        window.setTimeout(() => commitEffort(next), 140);
       };
 
       const moveFocus = (offset) => {
