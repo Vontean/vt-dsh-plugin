@@ -12,6 +12,7 @@ import { GENUI_LIMITS } from '../genui-runtime/index.ts'
 import { renderMermaid } from '../mermaid-lazy.ts'
 import { PlotBlock } from '../PlotBlock.tsx'
 import { IconGlyph } from './icon.tsx'
+import { CaretGlyph } from '../icons/caret.tsx'
 import { renderNode } from './render-node.tsx'
 import { codeBlockLabels, diffBlockLabels, jsonTreeLabels } from '../primitive-labels.ts'
 import { useT } from '../i18n/index.ts'
@@ -215,7 +216,7 @@ export function AccordionNode({ node, onAction, depth = 0, answers, path = '' }:
             onClick={() => setOpen(open === i ? null : i)}
           >
             <span className={css.accTitle}>{renderInline(item.title, false)}</span>
-            <span className={css.accChevron} data-open={open === i} aria-hidden>▸</span>
+            <span className={css.accChevron} data-open={open === i} aria-hidden><CaretGlyph size={12} /></span>
           </button>
           {open === i && (
             <div className={css.accBody} id={`${uid}-body-${i}`} aria-labelledby={`${uid}-head-${i}`}>
@@ -537,7 +538,7 @@ export const FileTreeNode = memo(function FileTreeNode({ node }: { node: GenuiFi
       <div key={path}>
         <div className={css.ftRow} style={{ paddingLeft: `${depth * 14 + 4}px` }}>
           {Array.from({ length: depth }, (_v, i) => (
-            <span key={i} className={css.ftGuide} style={{ left: `${4 + i * 14 + 6}px` }} aria-hidden />
+            <span key={i} className={css.ftGuide} style={{ left: `${4 + i * 14 + 4.5}px` }} aria-hidden />
           ))}
           <button
             type="button"
@@ -550,7 +551,7 @@ export const FileTreeNode = memo(function FileTreeNode({ node }: { node: GenuiFi
               data-open={isDir ? String(!folded) : undefined}
               aria-hidden
             >
-              {isDir ? '▸' : ''}
+              {isDir ? <CaretGlyph size={10} /> : null}
             </span>
             <span className={`${css.ftGlyph} ${isDir ? css.ftGlyphDir : ''}`} aria-hidden>
               {isDir ? <FolderGlyph /> : <FileGlyph />}

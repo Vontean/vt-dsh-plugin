@@ -18,6 +18,7 @@ import { renderInline } from '../inline.ts'
 // local (ticks.map(t => …)), so the translator rides a distinct name.
 import { t as tr, useT } from '../i18n/index.ts'
 import css from '../GenuiBlock.module.css'
+import { CaretGlyph } from '../icons/caret.tsx'
 import { GENUI_LIMITS } from '../genui-runtime/index.ts'
 import type { GenuiChart, GenuiTable } from '../spec.ts'
 import { isTableGroupHeaderRow, tableRowsForDetails } from '../table-details.ts'
@@ -418,7 +419,7 @@ export const TableNode = memo(function TableNode({ node, renderDetail, filterVal
                         aria-expanded={!isCollapsed}
                         onClick={() => toggleSection(headerIndex)}
                       >
-                        <span className={css.groupChevron} aria-hidden>{isCollapsed ? '▸' : '▾'}</span>
+                        <span className={css.groupChevron} data-open={!isCollapsed} aria-hidden><CaretGlyph size={10} /></span>
                       </button>
                       <span className={css.groupLabel} onClick={event => {
                         if (event.target instanceof Element && event.target.closest('button')) return
@@ -449,7 +450,7 @@ export const TableNode = memo(function TableNode({ node, renderDetail, filterVal
                                   aria-expanded={open}
                                   onClick={() => toggleDetail(child.index)}
                                 >
-                                  <span className={css.detailChevron} data-open={open} aria-hidden>▸</span>
+                                  <span className={css.detailChevron} data-open={open} aria-hidden><CaretGlyph size={10} /></span>
                                 </button>
                                 <span className={css.detailContent} onClick={event => {
                                   if (event.target instanceof Element && event.target.closest('button')) return
