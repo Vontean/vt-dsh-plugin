@@ -41,8 +41,16 @@ cordis_inspect_query(platform="client", provider="Theme", method="listTokens")
 扫 `--vt-report-` 前缀即可。**完成判据**：每个 `component` 补丁都有 `discovered-N`（`fallback` 表示仍在
 兜底工作，可接受但要记录原因），且 `build` 与代码一致。
 
-`behavior` 补丁在这里**不会出现** —— 它不解析选择器。它的判据是
-`__vtInterface.behaviors()` 返回 `installed === total` 且 `errors` 为空，见下一条通道。
+`behavior` 补丁不解析选择器，所以没有 `discovered` 这类 token。它自己额外发两组：
+
+```
+--vt-report-behaviors-<installed>-of-<total>   四个行为是否都装上了；失败时会多一条
+--vt-report-behaviour-errors-<原因>            同 `__vtInterface.behaviors().errors`
+--vt-report-messages-rows-<n>-bubbles-<n>-clamped-<n>-expanded-<n>   长消息折叠的读数
+```
+
+`messages-*` 由 `message-clamp` 自己写入独立主题层（`vt-interface:messages`），不等引擎的重发周期 ——
+页面静止时引擎不会再上报，那个读数就永远不出现（这条踩过）。
 
 这个通道每次 body 变动后 600ms 重发一次，只测「解析到没有 + 首个元素的尺寸/圆角」，
 刻意保持廉价。
@@ -51,6 +59,27 @@ cordis_inspect_query(platform="client", provider="Theme", method="listTokens")
 它只证明规则落到了标签行上；「有没有真的藏住、高度有没有还回去」只能看探针的 `viewSwitch`。
 
 ---
+
+## 长消息折叠：怎么判断生效
+
+折叠只在**超过 20 行的用户消息出现在屏幕上**时才工作，所以先让那条消息进入会话视口，再读 token。
+
+| token | 期望 | 说明 |
+|---|---|---|
+| `--vt-report-user-bubble-discovered-1` | 有 | 气泡类名解析到了（签名是 `--dsw-specific-bubble` 填充，全仓唯一） |
+| `--vt-report-user-bubble-box-content-box-22px` | 有 | 两个前提：`content-box`（Harness 没有全局 `border-box`）+ 行高 22px |
+| `--vt-report-messages-rows-<n>-…-clamped-1` | `clamped` ≥ 1 | 长消息已折叠；`bubbles` 应与 `rows` 同量级 |
+| `--vt-report-messages-first-lines-<n>-max-418px-h-428-scroll-<n>-pb-0px-lh-22px-box-content-box` | 见左 | 14px 字号下：19 行 ≈ 418px 内容盒，气泡实测 428px（+10 上内距），`pb-0px` 是折叠态（内距归零，裁切边缘才对得上第 19 行的底边） |
+
+`clamped-0` 而屏幕上确实有一条长消息时，先看 `--vt-report-messages-scan-<n>L/<高>h/<滚动高>s/<状态>`：
+它是前四个气泡的「行数/高度/滚动高度/状态」快照。
+
+- 行数是 0：气泡还没布局（在隐藏的容器里），等它可见后一次 sweep 会补上。
+- 行数 ≤ 20：判定为「不用折叠」，气泡被标记成 `none` 且不会再量第二次。
+- 行数 > 20 但 `clamped-0`：`overflows` 后置检查把它退了（估算法失手时守法，例如某一行被行内 chip 撑高）。
+
+展开后 token 变成 `clamped-0 expanded-1`，再点一次回来。这两个数值变化只证明**状态**变了；
+「看得见的变化」仍然要肉眼确认一次，因为 `max-height` 与兄弟块的拼接没有计算值可读。
 
 ## 通道 B：探针（按需开启）
 
@@ -136,8 +165,9 @@ tail -f /tmp/vt-dump.jsonl | jq -c 'select(.kind=="hover") | .hovered'
 
 ## 复核作用面
 
-探针只打印带 `!important` 的规则，而 Harness 上游不这么写 —— 所以打印出来的就是本插件实际发出的
-**全部** CSS 规则。新增补丁后跑一次 `static` dump，确认规则数量和选择器都在预期内，就能证明没有
-波及到输入框以外的组件。
+`myCss` 打印的是本插件自己那张 `<style>` 的**全文**（按 `data-plugin-css="<插件 id>/…"` 过滤）。
+Harness 上游不写 `!important`，所以带 `!important` 的那部分就是会覆盖上游的作用面；不带
+`!important` 的规则全部落在本插件自己的 `vt-` 类名上（`vt-interface-tip`、`vt-edge-fade`、
+`vt-msg-clamp-*`），作用面同样一眼可数。新增补丁后跑一次 `static` dump，确认规则数与选择器都在预期内。
 
-`myCss` 截断在 12000 字符（当前约 8.7k）。余量过半时先抬高截断值，否则上面那句「全部」就不成立了。
+`myCss` 截断在 16000 字符（当前约 10.5k）。余量过半时先抬高截断值，否则「全文」这个前提就不成立了。

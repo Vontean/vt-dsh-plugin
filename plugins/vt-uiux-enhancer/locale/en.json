@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "VT UI/UX Enhancer",
-    "description": "UI/UX refinements for DeepSeek Harness: palette, elevation, control shapes and motion unified, plus space reclaimed from low-frequency features. Restores the original interface completely when disabled."
+    "description": "UI/UX refinements for DeepSeek Harness: palette, elevation, control shapes and motion unified, long user messages folded to 20 lines, plus space reclaimed from low-frequency features. Restores the original interface completely when disabled."
   }
 }

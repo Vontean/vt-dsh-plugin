@@ -19,7 +19,7 @@
 
 | 形态 | 例子 | 硬要求 |
 |---|---|---|
-| 接管 DOM | `native-tooltip`、`scroll-edges` | 作用域限制在一个容器内；释放时把改动原样写回 |
+| 接管 DOM | `native-tooltip`、`scroll-edges`、`message-clamp` | 作用域限制在一个容器内；释放时把改动原样写回；新节点只加在 React 不回收的位置（见陷阱 10） |
 | 贡献 slot | `view-switch` | 只经 `ctx.slots.register` 增加自己的节点，不碰别人的；释放即 dispose 注册 |
 
 新增 `component` 时：
@@ -141,6 +141,22 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
 - 做法：要隐藏又必须保留度量时，用 `height: 0 + overflow: hidden`（宽度不变），不要用 `display: none`。
 - 复核：探针 `viewSwitch.tabs.labels` 列出仍在 DOM 的标签；只剩一个就是预算塌了。
 
+### 10. `overflow: hidden` 裁在 padding 盒，不在内容盒
+
+折叠一个盒子时最容易想到「`max-height` 限高 + `padding-bottom` 预留按钮行 + 按钮绝对定位进这块内距」。
+它不成立：`overflow: hidden` 的裁切边缘是 **padding 盒**，不是内容盒。超出 `max-height` 的文字会继续
+画进预留的内距里，**压在按钮上**；`padding-bottom` 越大，漏出来的行越多。
+
+- 现象：折叠高度、按钮位置、`clientHeight` 全部正确，画面上却有两三行正文穿过按钮。计算值查不出来，
+  只有截图或肉眼能看见 —— 这也是它第一次上线后马上被用户抓到的原因。
+- 做法：把披露行放到**被裁盒子的外面**。`message-clamp` 的实现是把 `padding-bottom` 归零、让裁切边缘
+  正好落在第 19 行的底边，披露块作为气泡的**兄弟节点**插入，自己带同一底色与顶部直角，两块拼起来
+  仍是一个气泡。
+- 兄弟节点会吃到 `.userStack` 自己的 `gap`：披露块用负 `margin-top` 抵掉（`MESSAGE_CLAMP.stackGap`），
+  否则两块之间露一条缝。
+- 推论：`.bubble` 是 `content-box`（Harness 没有全局 `border-box`），所以 `max-height` 只写
+  `19 × 行高`，不要加内距 —— 这两个事实要一起用才对。
+
 ---
 
 ## Harness 机制备忘
@@ -175,6 +191,26 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
   （order 0 / 1），容器是 `display:flex; justify-content:center; gap:12px`，条目高 22px、距卡片 4px。
   新增一项走 `ctx.slots.register` 即可，不必注入 DOM；视觉可以借 chat 包的 pill 类
   （`_pill` / `_anchor` / `_label`），字号、6px 图标间距、hover 底色因此与原生项同源。
+- **用户消息是一串工厂 slot**：`conversation.chat.node`（keyed，key `user`/`steering`）→
+  `UserStyleBubble` 的 `userRow` → 工厂 `conversation.chat.user.content` → `userStack` →
+  `.bubble`（全仓唯一用 `--dsw-specific-bubble` 上色的盒子）→ 工厂 `conversation.user.text`
+  （行内文本节点）。**气泡里没有可插入的 slot**：那个工厂只能有一个定义、子槽只有图片位，
+  `conversation.user.text.node` 只出行内 chip。想在气泡里加控件只能改 DOM。
+- **用户气泡的六个几何事实**（折叠补丁全靠它们）：`padding: 10px 16px`、
+  `border-radius: var(--dsw-radius-xl)`、`font-size: var(--dsh-content-font-size,14px)`、
+  `line-height: calc(22px + var(--dsh-content-font-delta))`、`white-space: pre-wrap`、
+  `box-sizing` 是默认的 `content-box`。
+- **聊天行的语义钩子**：flowItem 上有 `data-chat-flow-kind`（ChatNodeKind：`user`/`steering`/…）、
+  `data-chat-flow-key`、`data-chat-node-key`、`data-chat-turn`。用户消息就用
+  `[data-chat-flow-kind="user"],[data-chat-flow-kind="steering"]` 定位 —— 不用类名，不受构建哈希影响。
+  transcript 本身不虚拟化，但切会话、compaction 与热更新都会重挂节点，所以展开状态按 flow key 记。
+- **图标来自旧的 primitives 包**：`@deepseek-ai/dsh-client-ui-primitives` 在磁盘上没有独立包，
+  它是壳的 **seed 模块**（`staticModules` 里就有），`require` 在同步阶段一定命中，
+  **不需要**写进 `dsh.client.inject`（那里的 id 必须是 boot graph 的行，否则被静默跳过）。
+  chevron 是 `IconChevronDownOutlineRegular` / `IconChevronUpOutlineRegular`：16 单格、`stroke 1`、
+  `size` 默认 14。
+- **文案走 locale 服务**：`ctx.get('locale')` 是可选依赖；`resolveText({zh,en})` 按当前语言取串
+  （不插值、不查字典），切换语言要自己 `subscribe` 才能重贴到已渲染的 DOM。
 - **header 的 `:has()` 变体是一对**：`.header{min-height:76px}` 与
   `.header:where(:not(:has(.tabs))){min-height:0;padding-bottom:10px}`。元素只要还在树里（哪怕零高），
   `:has()` 就继续匹配，后者永不生效 —— 覆盖时必须自己把高度压回去。

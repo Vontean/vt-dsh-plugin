@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.0.1';
+    const VERSION = '1.1.0';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -290,6 +290,53 @@ window.__ModuleLoader__.load({
       toTrajectory: ['M6 3.5h7.5M6 8h7.5M6 12.5h7.5', 'M2.6 3.5h.01M2.6 8h.01M2.6 12.5h.01'],
       /** IconChevronLeft — the return trip, drawn as the gesture. */
       toConversation: ['M10 4L6.70711 7.29289C6.31658 7.68342 6.31658 8.31658 6.70711 8.70711L10 12'],
+    };
+
+    /**
+     * Long user messages in the transcript.
+     *
+     * A pasted stack trace turns one turn into four screenfuls and pushes every
+     * later exchange out of reach. Codex clamps the message and offers a
+     * disclosure; this copies that, with one difference that matters for a
+     * responsive layout: the threshold is RENDERED ROWS, never characters.
+     * Twenty rows means twenty rows at any column width and any content font
+     * size, because the count is measured from the bubble the browser laid out;
+     * a character budget would show 9 lines in a narrow window and 40 in a wide
+     * one, which is exactly the scrolling problem this is meant to solve.
+     *
+     * The reference this was modelled on (Codex) spends all twenty rows: the
+     * nineteenth is the last line of text, the twentieth is a lone "…" that says
+     * "there is more", and the disclosure row sits under it inside the same
+     * fill. Expanded, the text runs to the bottom and only the disclosure row is
+     * left.
+     *
+     * Geometry is expressed against the bubble's own line box
+     * (`line-height: calc(22px + var(--dsh-content-font-delta))` — the second
+     * term is the Appearance content-size preference), so the clamp follows the
+     * font setting through CSS `calc()` and the line count never has to be
+     * recomputed. `padding` mirrors the shipped bubble (`10px 16px`) and
+     * `stackGap` the shipped `.userStack` gap; the two extra rows are a SIBLING
+     * of the bubble, because `overflow: hidden` clips at the padding box
+     * (see trap 10 in DEVELOPMENT.md).
+     */
+    const MESSAGE_CLAMP = {
+      /**
+       * Rows shown while clamped, the "…" marker included. Twenty is where a
+       * message stops reading as a message and starts reading as a document;
+       * below it nothing changes at all.
+       */
+      rows: 20,
+      /** Space between the "…" row and the disclosure row. */
+      rowGap: 8,
+      /** The shipped bubble's bottom/side padding, and the stack gap it sits in. */
+      padding: { bottom: 10, x: 16 },
+      stackGap: 8,
+      /** Gap between the last text line and the disclosure block when expanded. */
+      textGap: 4,
+      /** Chevron: the icon set's own default box; regular stroke is 1 at 16. */
+      glyph: { box: 14, stroke: 1 },
+      /** Icon-to-label gap, the value the app's disclosure titles use. */
+      iconGap: 6,
     };
 
     /** Codex's spring: linear() with a 0.8% overshoot instead of a bezier. */
@@ -1030,6 +1077,106 @@ ${responseLine} {
         rules: (selector) => `[data-queue-dock] ${selector}::before { background: var(--vt-queue-fill) !important; }`,
       },
       {
+        kind: 'component',
+        id: 'user-bubble',
+        /**
+         * The bubble the user's own message is painted on — the only surface in
+         * the app filled with `--dsw-specific-bubble`, which makes the signature
+         * unambiguous without naming a hashed class.
+         *
+         * This patch owns the clamp, the "…" row and the disclosure block,
+         * because all three are placed against the bubble's own line box.
+         * `data-vt-clamp` is written by the `message-clamp` behaviour.
+         *
+         * The two extra rows are a SIBLING of the bubble, not rows inside it:
+         * `overflow: hidden` clips at the PADDING box, so a reserved
+         * `padding-bottom` would still have text painted over it (trap 10). The
+         * clamp therefore zeroes the bottom padding, which puts the clip edge
+         * exactly on the 19th line's bottom edge, and the block below carries the
+         * same fill plus squared top corners, so both boxes read as one bubble.
+         */
+        signature: ['background:var(--dsw-specific-bubble)'],
+        selectorFilter: '_bubble$',
+        fallback: '.AkCqbG_bubble',
+        rules: (selector) => {
+          const { rows, rowGap, padding, stackGap, textGap, glyph, iconGap } = MESSAGE_CLAMP;
+          return `
+${selector}[data-vt-clamp="clamped"] {
+  max-height: calc(${rows - 1} * (22px + var(--dsh-content-font-delta, 0px))) !important;
+  overflow: hidden !important;
+  padding-bottom: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+${selector}[data-vt-clamp="expanded"] {
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+.vt-msg-clamp-tail {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: ${rowGap}px;
+  /* Sibling inside .userStack, a flex column with an 8px gap: cancel it so the
+     two filled boxes touch, and restore the bottom corners here. */
+  margin-top: -${stackGap}px;
+  padding: 0 ${padding.x}px ${padding.bottom}px;
+  background: var(--dsw-specific-bubble);
+  border-radius: 0 0 var(--dsw-radius-xl) var(--dsw-radius-xl);
+}
+${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail {
+  padding-top: ${textGap}px;
+}
+.vt-msg-clamp-more {
+  height: calc(22px + var(--dsh-content-font-delta, 0px));
+  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
+  color: var(--dsw-alias-label-primary);
+  user-select: none;
+}
+${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
+  display: none !important;
+}
+.vt-msg-clamp-toggle {
+  display: flex;
+  align-items: center;
+  gap: ${iconGap}px;
+  height: calc(22px + var(--dsh-content-font-delta, 0px));
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1;
+  /* label-secondary, not the disclosure rows' label-tertiary: those sit on the
+     white canvas, this one on the tinted fill where tertiary drops under 4:1. */
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  transition: color 0.1s;
+}
+.vt-msg-clamp-toggle:hover {
+  color: var(--dsw-alias-label-primary);
+}
+.vt-msg-clamp-toggle:focus-visible {
+  outline: 1.5px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+  border-radius: var(--dsw-radius-sm);
+}
+.vt-msg-clamp-icon {
+  display: inline-flex;
+  flex: none;
+}
+.vt-msg-clamp-icon svg {
+  display: block;
+  width: ${glyph.box}px;
+  height: ${glyph.box}px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vt-msg-clamp-toggle { transition: none; }
+}`;
+        },
+      },
+      {
         kind: 'behavior',
         id: 'view-switch',
         /**
@@ -1047,6 +1194,23 @@ ${responseLine} {
          * hand-inserted sibling would be reordered or dropped on the next render.
          */
         behavior: 'view-switch',
+        css: () => '',
+      },
+      {
+        kind: 'behavior',
+        id: 'message-clamp',
+        /**
+         * A long user message is clamped to 20 rendered rows, with a disclosure
+         * row inside its own bubble. A behaviour, not a component patch: the
+         * decision ("is this message longer than 20 rows?") needs a layout
+         * measurement, and the toggle has to remember one bit of state per
+         * message. CSS can do neither.
+         *
+         * The style half lives in `user-bubble`, because the geometry has to key
+         * off the discovered bubble class. This entry owns the DOM half: the
+         * state attribute, the sibling disclosure block, the ellipsis row.
+         */
+        behavior: 'message-clamp',
         css: () => '',
       },
     ];
@@ -1122,6 +1286,13 @@ ${responseLine} {
       const disposers = [];
       /** Why a behaviour failed to install; surfaced through diagnostics. */
       const behaviorErrors = [];
+      /**
+       * Measurements a behaviour publishes into the report channel. Behaviours do
+       * not produce `--vt-report-<patch>` tokens (they resolve no selectors), so
+       * without this a behaviour could install successfully and still be
+       * invisible to the one verification channel that works without DevTools.
+       */
+      const behaviorMetrics = {};
       /** Created on first sync, so a document-less host never touches the DOM. */
       let sheet = null;
       const ensureSheet = () => sheet || (sheet = createStyleHost(ctx));
@@ -1273,7 +1444,13 @@ ${responseLine} {
           report[`${id}-radius`] = style.borderRadius;
           report[`${id}-size`] = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
           if (id.includes('row')) report[`${id}-pad`] = style.padding;
+          // The two numbers the long-message clamp derives from: the line box it
+          // counts in, and the box model its max-height is measured against.
+          if (id === 'user-bubble') report[`${id}-box`] = `${style.boxSizing}-${style.lineHeight}`;
         }
+        // Behaviour readings: the only way to see a behaviour work without
+        // DevTools, since behaviours publish no selector report of their own.
+        for (const [key, value] of Object.entries(behaviorMetrics)) report[key] = value;
 
         const tokens = {};
         for (const [key, value] of Object.entries(report)) {
@@ -1760,6 +1937,319 @@ ${responseLine} {
       }
 
       /**
+       * Clamp a long user message to 20 rendered rows with a disclosure block.
+       *
+       * Three constraints shape this more than the feature itself:
+       *
+       * 1. React owns the bubble's children. Appending leaf nodes is safe as long
+       *    as a re-render that drops them is noticed and they are re-added — that
+       *    is what the sweep does on every structural mutation. Reparenting or
+       *    wrapping React's content would not be safe, so the text is never
+       *    moved: the clamp is `max-height` on the bubble, and the disclosure is
+       *    a SIBLING of it (trap 10 is why it cannot be inside the clipped box).
+       * 2. The decision needs layout, so it is measured, never guessed. An
+       *    unclamped bubble's `scrollHeight` is `paddingTop + rows × lineHeight +
+       *    paddingBottom`, which answers "longer than 20 rows?" in one read. Then
+       *    the clamped bubble is checked against its own overflow: if it does not
+       *    actually hide anything (an inline chip inflated a line, or the estimate
+       *    rounded up), the clamp is released. A measured post-condition beats a
+       *    clever formula.
+       * 3. The transcript re-mounts rows on session switches and compaction, so
+       *    expansion is remembered per flow key, not per node, otherwise the
+       *    message the reader just opened would close again.
+       *
+       * Failure surface: a missing chevron icon module or a missing
+       * `react-dom/client` throws into `installBehaviors`, which reports it as a
+       * failed behaviour instead of leaving half a feature wired.
+       */
+      function installMessageClamp(readSelectors) {
+        const ROW_SELECTOR = '[data-chat-flow-kind="user"],[data-chat-flow-kind="steering"]';
+        const STATE = 'data-vt-clamp';
+        const TOGGLE = 'vt-msg-clamp-toggle';
+        const MORE = 'vt-msg-clamp-more';
+        const TAIL = 'vt-msg-clamp-tail';
+        /** Settle time: the transcript mutates continuously while a turn streams. */
+        const SETTLE_MS = 120;
+        /** Expansion memory is bounded so switching sessions cannot grow it forever. */
+        const MEMORY = 400;
+
+        const React = require('react');
+        const reactDom = require('react-dom/client');
+        const icons = require('@deepseek-ai/dsh-client-ui-primitives');
+        const ChevronDown = icons.IconChevronDownOutlineRegular;
+        const ChevronUp = icons.IconChevronUpOutlineRegular;
+        if (typeof ChevronDown !== 'function' || typeof ChevronUp !== 'function') {
+          throw new Error('chevron icons unavailable in @deepseek-ai/dsh-client-ui-primitives');
+        }
+
+        /** Labels follow the app language instead of shipping an English-only row. */
+        const locale = ctx.get('locale');
+        const translate = (zh, en) => (
+          locale && typeof locale.resolveText === 'function' ? locale.resolveText({ zh, en }) : en
+        );
+        const label = { open: translate('展开', 'Show more'), close: translate('收起', 'Show less') };
+
+        /** Expanded flow keys, so the memory survives the re-mounts. */
+        const open = new Set();
+        /** Live disclosure entries, so dispose removes exactly what we added. */
+        const entries = new Set();
+        /** bubble -> entry; a WeakMap keeps dropped rows collectable. */
+        const wired = new WeakMap();
+        let timer = 0;
+        let published = '';
+        let revoke = null;
+
+        const narrowed = () => {
+          while (open.size > MEMORY) open.delete(open.values().next().value);
+        };
+
+        /** Flow key of the row a bubble sits in — the identity that outlives the node. */
+        const flowKey = (bubble) => {
+          const row = bubble.closest('[data-chat-flow-key]');
+          return row ? (row.getAttribute('data-chat-flow-key') || '') : '';
+        };
+
+        /** The bubble class resolved by the `user-bubble` patch, else its own fallback. */
+        const bubblePatch = patches.components.find((patch) => patch.id === 'user-bubble');
+        const bubbleSelector = () => {
+          const map = (typeof readSelectors === 'function' && readSelectors()) || {};
+          const list = map['user-bubble'];
+          if (list && list.length) return list.join(',');
+          return (bubblePatch && bubblePatch.fallback) || '';
+        };
+
+        /**
+         * Rendered row count of an *unclamped* bubble. `scrollHeight` includes
+         * the padding, so the padding is subtracted before dividing by the line
+         * box — the result is the number of line boxes the browser actually laid
+         * out, which is the unit the 20-row rule is defined in.
+         */
+        const lineCount = (bubble) => {
+          const style = getComputedStyle(bubble);
+          const lineHeight = parseFloat(style.lineHeight);
+          if (!isFinite(lineHeight) || lineHeight <= 0) return 0;
+          const padding = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+          return Math.round((bubble.scrollHeight - padding) / lineHeight);
+        };
+
+        /** Does the applied clamp actually hide text? */
+        const overflows = (bubble) => bubble.clientHeight > 0 && bubble.scrollHeight > bubble.clientHeight + 1;
+
+        /** One chevron, rendered from the app's own icon component. */
+        const chevron = (expanded) => {
+          const host = document.createElement('span');
+          host.className = 'vt-msg-clamp-icon';
+          const root = reactDom.createRoot(host);
+          const paint = (isOpen) => root.render(React.createElement(isOpen ? ChevronUp : ChevronDown, {
+            size: MESSAGE_CLAMP.glyph.box,
+            strokeWidth: MESSAGE_CLAMP.glyph.stroke,
+          }));
+          paint(expanded);
+          return { host, paint, dispose: () => root.unmount() };
+        };
+
+        /**
+         * The clamp's verification channel. Published here rather than only
+         * through the engine's report: the engine republishes on body mutations
+         * alone, so on an idle page a reading taken right after install would
+         * never reach the token list.
+         */
+        const publish = (rows, bubbles, clamped, expandedCount, first, scan) => {
+          const fields = {
+            messages: `rows-${rows} bubbles-${bubbles} clamped-${clamped} expanded-${expandedCount}`,
+          };
+          if (scan && scan.length) fields['messages-scan'] = scan.join(' ');
+          if (first) {
+            const style = getComputedStyle(first.bubble);
+            fields['messages-first'] = [
+              `lines-${first.lines}`,
+              `max-${style.maxHeight || 'none'}`,
+              `h-${first.bubble.clientHeight}`,
+              `scroll-${first.bubble.scrollHeight}`,
+              `pb-${style.paddingBottom}`,
+              `lh-${style.lineHeight}`,
+              `box-${style.boxSizing}`,
+            ].join('-');
+          }
+          const signature = JSON.stringify(fields);
+          if (signature === published) return;
+          published = signature;
+          const tokens = {};
+          for (const [key, value] of Object.entries(fields)) {
+            tokens[`--vt-report-${sanitize(key)}-${sanitize(value)}`] = { light: '', dark: '' };
+          }
+          try {
+            revoke = ctx.theme.overrideTokens('vt-interface:messages', tokens);
+          } catch (err) { /* diagnostics must never break the visual layer */ }
+        };
+
+        const unwire = (bubble, entry) => {
+          entries.delete(entry);
+          wired.delete(bubble);
+          try { entry.icon.dispose(); } catch (err) { /* already gone */ }
+          entry.tail.remove();
+          bubble.removeAttribute(STATE);
+          bubble.removeAttribute('data-vt-clamp-lines');
+        };
+
+        const wire = (bubble, lines, expanded) => {
+          const key = flowKey(bubble);
+
+          const more = document.createElement('span');
+          more.className = MORE;
+          more.setAttribute('aria-hidden', 'true');
+          more.textContent = '…';
+
+          const toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = TOGGLE;
+          const caption = document.createElement('span');
+          caption.className = 'vt-msg-clamp-label';
+          const icon = chevron(expanded);
+          toggle.appendChild(caption);
+          toggle.appendChild(icon.host);
+
+          /*
+           * The disclosure is a SIBLING of the bubble, never a child: the clamp
+           * uses `overflow: hidden`, which clips at the padding box, so any row
+           * reserved inside the bubble would still be painted over by the text
+           * that overflows the content box.
+           */
+          const tail = document.createElement('div');
+          tail.className = TAIL;
+          tail.appendChild(more);
+          tail.appendChild(toggle);
+
+          const entry = { bubble, tail, toggle, more, icon, caption, key, lines, expanded };
+
+          const paint = () => {
+            bubble.setAttribute(STATE, entry.expanded ? 'expanded' : 'clamped');
+            bubble.setAttribute('data-vt-clamp-lines', String(entry.lines));
+            toggle.setAttribute('aria-expanded', String(entry.expanded));
+            caption.textContent = entry.expanded ? label.close : label.open;
+            icon.paint(entry.expanded);
+          };
+
+          toggle.addEventListener('click', (event) => {
+            // The transcript row has its own click affordances; a disclosure is
+            // not one of them.
+            event.preventDefault();
+            event.stopPropagation();
+            entry.expanded = !entry.expanded;
+            if (entry.key) {
+              if (entry.expanded) open.add(entry.key);
+              else open.delete(entry.key);
+              narrowed();
+            }
+            paint();
+            schedule();
+          });
+
+          bubble.after(tail);
+          entries.add(entry);
+          wired.set(bubble, entry);
+          paint();
+          return entry;
+        };
+
+        const sweep = () => {
+          timer = 0;
+          // A row that left the document must release its nodes and its React
+          // root instead of waiting for dispose.
+          for (const entry of [...entries]) {
+            if (entry.bubble.isConnected) continue;
+            entries.delete(entry);
+            try { entry.icon.dispose(); } catch (err) { /* already gone */ }
+            entry.tail.remove();
+          }
+
+          const rows = document.querySelectorAll(ROW_SELECTOR);
+          const bubbles = [];
+          for (const row of rows) {
+            let found;
+            try { found = row.querySelectorAll(bubbleSelector()); } catch (err) { found = []; }
+            for (const bubble of found) bubbles.push(bubble);
+          }
+
+          let clamped = 0;
+          let expandedCount = 0;
+          let first = null;
+          const scan = [];
+
+          for (const bubble of bubbles) {
+            let entry = wired.get(bubble) || null;
+            // A re-render can drop our nodes while keeping the bubble: rebuild.
+            if (entry && !entry.tail.isConnected) {
+              unwire(bubble, entry);
+              entry = null;
+            }
+            if (!entry) {
+              if (bubble.getAttribute(STATE) === 'none') continue;
+              const lines = lineCount(bubble);
+              if (scan.length < 4) {
+                scan.push(`${lines}L/${bubble.clientHeight}h/${bubble.scrollHeight}s/${bubble.getAttribute(STATE) || '-'}`);
+              }
+              if (lines <= 0) continue;
+              if (lines <= MESSAGE_CLAMP.rows) {
+                bubble.setAttribute(STATE, 'none');
+                continue;
+              }
+              entry = wire(bubble, lines, open.has(flowKey(bubble)));
+              // Measured post-condition: keep the clamp only if it hides text.
+              if (!entry.expanded && !overflows(bubble)) {
+                unwire(bubble, entry);
+                bubble.setAttribute(STATE, 'none');
+                continue;
+              }
+            }
+            if (entry.expanded) expandedCount += 1;
+            else {
+              clamped += 1;
+              if (!first) first = entry;
+            }
+          }
+
+          publish(rows.length, bubbles.length, clamped, expandedCount, first, scan);
+        };
+
+        const schedule = () => {
+          if (timer) return;
+          timer = setTimeout(sweep, SETTLE_MS);
+        };
+
+        // A language switch relabels every visible disclosure row.
+        const relabel = () => {
+          label.open = translate('展开', 'Show more');
+          label.close = translate('收起', 'Show less');
+          for (const entry of entries) entry.caption.textContent = entry.expanded ? label.close : label.open;
+        };
+        const unsubscribe = locale && typeof locale.subscribe === 'function' ? locale.subscribe(relabel) : null;
+
+        const observer = typeof MutationObserver === 'undefined'
+          ? null
+          : new MutationObserver(schedule);
+        if (observer) observer.observe(document.body, { childList: true, subtree: true });
+
+        sweep();
+
+        return () => {
+          clearTimeout(timer);
+          if (observer) observer.disconnect();
+          if (typeof unsubscribe === 'function') unsubscribe();
+          for (const entry of [...entries]) {
+            entries.delete(entry);
+            try { entry.icon.dispose(); } catch (err) { /* already gone */ }
+            entry.tail.remove();
+          }
+          for (const bubble of document.querySelectorAll(`[${STATE}]`)) bubble.removeAttribute(STATE);
+          for (const bubble of document.querySelectorAll('[data-vt-clamp-lines]')) {
+            bubble.removeAttribute('data-vt-clamp-lines');
+          }
+          if (typeof revoke === 'function') safeCall(revoke);
+        };
+      }
+
+      /**
        * Behaviour implementations, keyed by the name a patch declares.
        *
        * The data section names the intent (`behavior: 'native-tooltip'`); only this
@@ -1771,6 +2261,7 @@ ${responseLine} {
         'native-tooltip': (readSelectors) => installNativeTitleTakeover(readSelectors),
         'scroll-edges': () => installScrollEdgeFade(),
         'view-switch': () => installViewSwitch(ctx),
+        'message-clamp': (readSelectors) => installMessageClamp(readSelectors),
       };
 
       return {
@@ -1809,7 +2300,7 @@ ${responseLine} {
             try {
               const factory = BEHAVIORS[patch.behavior];
               if (typeof factory !== 'function') throw new Error(`unknown behaviour "${patch.behavior}"`);
-              disposers.push(factory(readSelectors));
+              disposers.push(factory(readSelectors, behaviorMetrics));
               installed += 1;
             } catch (err) {
               // A behaviour that throws must not take the visual layer down, but
@@ -1817,12 +2308,21 @@ ${responseLine} {
               behaviorErrors.push(`${patch.id}: ${err && err.message ? err.message : String(err)}`);
             }
           }
+          // Encoded into report tokens, so a failed install is also readable
+          // without DevTools (see the `behaviors` field in docs/VERIFY.md).
+          behaviorMetrics.behaviors = `${installed}-of-${patches.behaviors.length}`;
+          if (behaviorErrors.length > 0) behaviorMetrics['behaviour-errors'] = behaviorErrors.join(' | ');
           return { installed, total: patches.behaviors.length, errors: behaviorErrors };
         },
 
         /** Why behaviours failed; empty when all of them installed. */
         behaviorErrors() {
           return [...behaviorErrors];
+        },
+
+        /** Live readings a behaviour publishes for the report channel. */
+        behaviorMetrics() {
+          return { ...behaviorMetrics };
         },
 
         dispose() {
@@ -2218,7 +2718,7 @@ ${responseLine} {
           .filter((node) => String(node.dataset.pluginCss || '').startsWith(`${PLUGIN_ID}/`))
           .map((node) => node.textContent || '')
           .join('\n')
-          .slice(0, 12000);
+          .slice(0, 16000);
       }
       // Resolved selectors and patch states, handed in by the engine: the ground
       // truth for "which element did this patch actually land on".
@@ -2487,6 +2987,9 @@ ${responseLine} {
 
       sync();
       const behaviors = ui.installBehaviors(() => lastSelectors);
+      // The install count is recorded while behaviours install; one more publish
+      // makes it visible without waiting for the next body mutation.
+      sync();
 
       // Plugin stylesheets are injected asynchronously during boot, so the first
       // discovery pass may legitimately find nothing. Re-resolve when style
@@ -2555,6 +3058,14 @@ ${responseLine} {
         /** How many behaviours installed, and why the rest failed. */
         behaviors() {
           return { ...behaviors, errors: ui.behaviorErrors() };
+        },
+        /**
+         * Live readings published by behaviours: how many user rows the clamp
+         * found, how many are clamped or expanded, and the first clamped
+         * bubble's measured geometry. Same values as its report tokens.
+         */
+        messages() {
+          return ui.behaviorMetrics();
         },
         /** Resolved selectors per patch, for auditing what each patch targets. */
         selectors() {
