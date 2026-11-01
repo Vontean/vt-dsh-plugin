@@ -20,10 +20,10 @@
 | `author` / `homepage` / `repository` / `bugs` | 见下方模板 |
 | `keywords` | 含 `dsh-plugin`、`deepseek-harness` 及本插件相关词 |
 | `engines.dsh` | 固定 `">=0.2.1-rc.5 <0.3.0"`（与应用运行时版本对齐，改这里等于改安装门槛） |
-| `exports` | 至少 `.` → `./index.js`、`./client` → `./client.js` |
+| `exports` | 至少 `.` → `./index.js`；**有浏览器半边时**再加 `./client` → `./client.js` |
 | `files` | 只列真正要发出去的文件（含 `cordis.patch.yml`、`README.md`） |
 | `dsh.bundle.patch` | `"./cordis.patch.yml"` |
-| `dsh.client` | `platform: "web"`、`immediately: true`、`inject` 列出用到的 `@deepseek-ai/dsh-client-*` 模块 |
+| `dsh.client` | **仅当插件有浏览器半边时必填**：`platform: "web"`、`immediately: true`、`inject` 列出用到的 `@deepseek-ai/dsh-client-*` 模块 |
 
 ```json
 {
@@ -53,6 +53,9 @@
   }
 }
 ```
+
+> 上面是**带界面**插件的模板。纯 host 插件删掉 `exports["./client"]`、`files` 里的
+> `client.js` 和整个 `dsh.client` 段，见 §2.2。
 
 ## 2. 身份一致性（改名时最容易漏）
 
@@ -90,7 +93,20 @@ node scripts/check-client-bundles.mjs
 ```
 
 它会按 `exports["./client"]` 找到每个插件的 client 入口，拼接后编译一遍，并核对
-`load({ id })` 与包名、`VERSION` 与 `package.json` 是否一致。
+`load({ id })` 与包名、`VERSION` 与 `package.json` 是否一致。既不导出 `./client`、
+也不声明 `dsh.client` 的纯 host 插件会被跳过并单独计数（见 §2.2）。
+
+### 2.2 纯 host 插件
+
+有些插件只有宿主半边（例：只注册系统提示段、技能 provider 或工具），没有界面要画。
+这类插件**不要**写一个空 `client.js` 去满足校验：
+
+- 不写 `exports["./client"]`，不声明 `dsh.client`，目录里不放 `client.js`；
+- 包根仍要导出 `apply(ctx, config)`（loader 导入的就是包根）；
+- `check-client-bundles.mjs` 会识别并跳过它，不再报「找不到 client 入口」；
+- README 里说明「本插件没有界面，只影响模型行为」。
+
+判断标准：如果插件在浏览器里没有任何可观察效果，就不该有浏览器半边。
 
 ## 3. market.json（市场展示信息，不发布到 npm）
 
@@ -139,7 +155,8 @@ node scripts/check-client-bundles.mjs
 ```bash
 cd plugins/<slug>
 node --check index.js          # 语法
-node --check client.js
+node --check client.js         # 有浏览器半边时才有这一步
+node --test test/*.test.mjs    # 有 test/ 目录时
 pnpm pack --dry-run            # 看 files 清单（在仓库根 pnpm install 之后）
 cd ../.. && pnpm market        # 生成并校验 market/index.json
 ```

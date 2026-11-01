@@ -12,6 +12,9 @@
  *   1. 所有插件的 client 入口拼起来可以正常解析（没有顶层重名）；
  *   2. `load({ id })` 的字面量与包名一致；
  *   3. client 里的 `VERSION` 与 package.json 的 version 一致。
+ *
+ * 纯 host 插件（既不导出 `./client`、也不声明 `dsh.client`）没有浏览器半边，
+ * 直接跳过：它们不参与拼接，也就没有重名与 id 一致性问题。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
@@ -23,6 +26,7 @@ const PLUGINS_DIR = path.join(ROOT, 'plugins')
 
 const problems = []
 const chunks = []
+let hostOnly = 0
 
 for (const dir of readdirSync(PLUGINS_DIR).sort()) {
   const pluginDir = path.join(PLUGINS_DIR, dir)
@@ -30,6 +34,11 @@ for (const dir of readdirSync(PLUGINS_DIR).sort()) {
   if (!existsSync(manifestPath)) continue
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
   const exported = manifest.exports?.['./client']
+  // 纯 host 插件没有浏览器半边，不参与拼接。
+  if (exported === undefined && manifest.dsh?.client === undefined) {
+    hostOnly += 1
+    continue
+  }
   const relative = typeof exported === 'string' ? exported : exported?.default ?? './client.js'
   const entry = path.join(pluginDir, relative)
   if (!existsSync(entry)) {
@@ -66,4 +75,7 @@ if (problems.length > 0) {
   process.exit(1)
 }
 
-process.stdout.write(`✓ ${String(chunks.length)} 个 client 模块拼接后可解析，包名与 VERSION 一致\n`)
+process.stdout.write(
+  `✓ ${String(chunks.length)} 个 client 模块拼接后可解析，包名与 VERSION 一致` +
+    `（另有 ${String(hostOnly)} 个纯 host 插件已跳过）\n`,
+)
