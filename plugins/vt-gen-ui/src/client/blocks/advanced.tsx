@@ -11,6 +11,7 @@ import css from '../GenuiBlock.module.css'
 import { GENUI_LIMITS } from '../genui-runtime/index.ts'
 import { renderMermaid } from '../mermaid-lazy.ts'
 import { PlotBlock } from '../PlotBlock.tsx'
+import { IconGlyph } from './icon.tsx'
 import { renderNode } from './render-node.tsx'
 import { codeBlockLabels, diffBlockLabels, jsonTreeLabels } from '../primitive-labels.ts'
 import { useT } from '../i18n/index.ts'
@@ -48,7 +49,10 @@ export const StepsNode = memo(function StepsNode({ steps }: { steps: GenuiSteps 
         const active = i === current
         return (
           <li key={i} className={`${css.step} ${done ? css.stepDone : ''} ${active ? css.stepActive : ''}`}>
-            <span className={css.stepMarker}>{done ? '✓' : String(i + 1)}</span>
+            {/* Glyph, not the typed `✓`: a character is laid out by its font's
+                ascent/descent, so U+2713 drifts off-centre in the 20px circle on
+                stacks where it sits low. The SVG centres by geometry. */}
+            <span className={css.stepMarker}>{done ? <IconGlyph name="Check" size={12} /> : String(i + 1)}</span>
             <span className={css.stepContent}>
               <span className={css.stepTitle}>{renderInline(step.title)}</span>
               {step.desc !== undefined && <span className={css.stepDesc}>{renderInline(step.desc)}</span>}

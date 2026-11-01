@@ -1043,6 +1043,9 @@ img.mediaPlayer { aspect-ratio: 16 / 9; object-fit: cover; background: var(--dsl
   place-items: center;
   font-size: var(--dsl-g-font-title);
   font-weight: 600;
+  /* Initials: centre the letter, not its line box (same class of drift as the
+     steps marker). */
+  line-height: 1;
   color: #fff;
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -1086,6 +1089,9 @@ img.mediaPlayer { aspect-ratio: 16 / 9; object-fit: cover; background: var(--dsl
 /* ---------- steps ---------- */
 
 .steps {
+  /* Marker diameter is the rail's only input: the connector centre is derived
+     from it, so the line never sits half a pixel off the circle. */
+  --dsl-g-step-marker: 20px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -1098,7 +1104,7 @@ img.mediaPlayer { aspect-ratio: 16 / 9; object-fit: cover; background: var(--dsl
 .step:not(:last-child)::before {
   content: "";
   position: absolute;
-  left: 9px;
+  left: calc(var(--dsl-g-step-marker) / 2 - 0.5px);
   top: 23px;
   bottom: calc(-1 * var(--dsl-g-gap-md));
   width: 1px;
@@ -1113,13 +1119,18 @@ img.mediaPlayer { aspect-ratio: 16 / 9; object-fit: cover; background: var(--dsl
    badge and competed with the step title; the sequence rail already carries the
    "this is a list" signal, so the marker only has to say "done / current". */
 .stepMarker {
-  width: 20px;
-  height: 20px;
+  width: var(--dsl-g-step-marker);
+  height: var(--dsl-g-step-marker);
   border-radius: 50%;
   display: grid;
   place-items: center;
+  /* The done state is an SVG (see StepsNode); the pending state is a digit.
+     line-height:1 keeps the digit's line box from being the thing that gets
+     centred, which is what pushed glyphs off-centre on some font stacks. */
   font-size: 11px;
   font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   background: var(--dsl-g-surface);
   border: 1px solid var(--dsl-g-border-surface);

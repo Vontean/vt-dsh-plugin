@@ -62,6 +62,23 @@ function useIcon(name: string): BundledIcon | undefined {
   return glyph
 }
 
+/**
+ * Bare glyph, no wrapper and no plate. Other blocks that need an icon inside a
+ * fixed-size box (the steps marker) must use this instead of a text glyph:
+ * a character is positioned by its font's ascent/descent inside the line box,
+ * so `✓` lands a few px off-centre on some font stacks and cannot be fixed
+ * without pinning a font. An SVG is centred by geometry, on every stack.
+ */
+export const IconGlyph = memo(function IconGlyph({ name, size }: { name: string; size: number }) {
+  const icon = useIcon(name)
+  if (icon === undefined) return null
+  return (
+    <svg {...icon.attrs} viewBox={icon.viewBox} width={size} height={size} focusable="false" aria-hidden="true">
+      {icon.shapes.map((shape, i) => renderShape(shape, i))}
+    </svg>
+  )
+})
+
 export const IconNode = memo(function IconNode({ node }: { node: GenuiIcon }) {
   const icon = useIcon(node.name)
   const size = clampSize(node.size)
