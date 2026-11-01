@@ -38,5 +38,51 @@
     "labels": {},
     "sortKeys": {}
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "dsh-vt-uiux-enhancer",
+      "title": {
+        "zh": "VT UI/UX 增强",
+        "en": "VT UI/UX Enhancer"
+      },
+      "description": {
+        "zh": "把 Harness 调成干净的白纸界面：纯白画布、暖调中性文字、统一的控件形状与间距、有信息量的动效；插件关闭后精确回到出厂外观。",
+        "en": "Turns Harness into a clean paper-like surface: white canvas, warm neutral text, unified control shapes and spacing, motion that carries information. Disabling it restores the shipped interface exactly."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ildhcm0gbmV1dHJhbCBwYWxldHRlIj4KICA8cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHJ4PSIxNCIgZmlsbD0iIzFiMWIxYyIvPgogIDxnPgogICAgPHJlY3QgeD0iMTQiIHk9IjE0IiB3aWR0aD0iMzYiIGhlaWdodD0iNiIgcng9IjMiIGZpbGw9IiNjZmQzZDYiLz4KICAgIDxyZWN0IHg9IjE0IiB5PSIyNSIgd2lkdGg9IjM2IiBoZWlnaHQ9IjYiIHJ4PSIzIiBmaWxsPSIjZjFlZGU5Ii8+CiAgICA8cmVjdCB4PSIxNCIgeT0iMzYiIHdpZHRoPSIzNiIgaGVpZ2h0PSI2IiByeD0iMyIgZmlsbD0iI2EzOWI5MyIvPgogICAgPHJlY3QgeD0iMTQiIHk9IjQ3IiB3aWR0aD0iMzYiIGhlaWdodD0iNiIgcng9IjMiIGZpbGw9IiM0ODQ0NDAiLz4KICA8L2c+Cjwvc3ZnPgo=",
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-uiux-enhancer#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "directory": "plugins/vt-uiux-enhancer"
+      },
+      "metadata": {
+        "category": "ui",
+        "keywords": [
+          "ui",
+          "theme",
+          "appearance",
+          "design",
+          "motion"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1793500244,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "eda3c1570be2b1365187dea86754dd7b4d0adb3f",
+            "path": "plugins/vt-uiux-enhancer"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    }
+  ]
 }
