@@ -203,7 +203,8 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
 - **聊天行的语义钩子**：flowItem 上有 `data-chat-flow-kind`（ChatNodeKind：`user`/`steering`/…）、
   `data-chat-flow-key`、`data-chat-node-key`、`data-chat-turn`。用户消息就用
   `[data-chat-flow-kind="user"],[data-chat-flow-kind="steering"]` 定位 —— 不用类名，不受构建哈希影响。
-  transcript 本身不虚拟化，但切会话、compaction 与热更新都会重挂节点，所以展开状态按 flow key 记。
+  transcript 本身不虚拟化，但切会话、compaction 与热更新都会重挂节点：重挂即回到折叠态，
+  展开状态只活在该节点上（这是有意的，见 `DESIGN.md` 的决策记录）。
 - **图标来自旧的 primitives 包**：`@deepseek-ai/dsh-client-ui-primitives` 在磁盘上没有独立包，
   它是壳的 **seed 模块**（`staticModules` 里就有），`require` 在同步阶段一定命中，
   **不需要**写进 `dsh.client.inject`（那里的 id 必须是 boot graph 的行，否则被静默跳过）。

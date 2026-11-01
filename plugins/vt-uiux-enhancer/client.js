@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.1.0';
+    const VERSION = '1.1.1';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -1954,9 +1954,11 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
        *    actually hide anything (an inline chip inflated a line, or the estimate
        *    rounded up), the clamp is released. A measured post-condition beats a
        *    clever formula.
-       * 3. The transcript re-mounts rows on session switches and compaction, so
-       *    expansion is remembered per flow key, not per node, otherwise the
-       *    message the reader just opened would close again.
+       * 3. Expansion lives on the node and nowhere else. Session switches,
+       *    compaction and hot reloads re-mount rows, and a re-mounted message
+       *    comes back folded — a message the reader opened in the previous
+       *    session is not a reading position worth restoring, and keeping a
+       *    memory for it would be state this plugin has no business holding.
        *
        * Failure surface: a missing chevron icon module or a missing
        * `react-dom/client` throws into `installBehaviors`, which reports it as a
@@ -1970,8 +1972,6 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         const TAIL = 'vt-msg-clamp-tail';
         /** Settle time: the transcript mutates continuously while a turn streams. */
         const SETTLE_MS = 120;
-        /** Expansion memory is bounded so switching sessions cannot grow it forever. */
-        const MEMORY = 400;
 
         const React = require('react');
         const reactDom = require('react-dom/client');
@@ -1989,8 +1989,6 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         );
         const label = { open: translate('展开', 'Show more'), close: translate('收起', 'Show less') };
 
-        /** Expanded flow keys, so the memory survives the re-mounts. */
-        const open = new Set();
         /** Live disclosure entries, so dispose removes exactly what we added. */
         const entries = new Set();
         /** bubble -> entry; a WeakMap keeps dropped rows collectable. */
@@ -1998,16 +1996,6 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         let timer = 0;
         let published = '';
         let revoke = null;
-
-        const narrowed = () => {
-          while (open.size > MEMORY) open.delete(open.values().next().value);
-        };
-
-        /** Flow key of the row a bubble sits in — the identity that outlives the node. */
-        const flowKey = (bubble) => {
-          const row = bubble.closest('[data-chat-flow-key]');
-          return row ? (row.getAttribute('data-chat-flow-key') || '') : '';
-        };
 
         /** The bubble class resolved by the `user-bubble` patch, else its own fallback. */
         const bubblePatch = patches.components.find((patch) => patch.id === 'user-bubble');
@@ -2092,9 +2080,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           bubble.removeAttribute('data-vt-clamp-lines');
         };
 
-        const wire = (bubble, lines, expanded) => {
-          const key = flowKey(bubble);
-
+        const wire = (bubble, lines) => {
           const more = document.createElement('span');
           more.className = MORE;
           more.setAttribute('aria-hidden', 'true');
@@ -2105,7 +2091,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           toggle.className = TOGGLE;
           const caption = document.createElement('span');
           caption.className = 'vt-msg-clamp-label';
-          const icon = chevron(expanded);
+          const icon = chevron(false);
           toggle.appendChild(caption);
           toggle.appendChild(icon.host);
 
@@ -2120,7 +2106,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           tail.appendChild(more);
           tail.appendChild(toggle);
 
-          const entry = { bubble, tail, toggle, more, icon, caption, key, lines, expanded };
+          const entry = { bubble, tail, toggle, more, icon, caption, lines, expanded: false };
 
           const paint = () => {
             bubble.setAttribute(STATE, entry.expanded ? 'expanded' : 'clamped');
@@ -2136,11 +2122,6 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
             event.preventDefault();
             event.stopPropagation();
             entry.expanded = !entry.expanded;
-            if (entry.key) {
-              if (entry.expanded) open.add(entry.key);
-              else open.delete(entry.key);
-              narrowed();
-            }
             paint();
             schedule();
           });
@@ -2194,7 +2175,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
                 bubble.setAttribute(STATE, 'none');
                 continue;
               }
-              entry = wire(bubble, lines, open.has(flowKey(bubble)));
+              entry = wire(bubble, lines);
               // Measured post-condition: keep the clamp only if it hides text.
               if (!entry.expanded && !overflows(bubble)) {
                 unwire(bubble, entry);

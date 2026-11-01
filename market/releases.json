@@ -29,6 +29,16 @@
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
       }
+    },
+    {
+      "version": "1.1.1",
+      "publishTimestamp": 1793512101,
+      "source": {
+        "type": "npm"
+      },
+      "engines": {
+        "dsh": ">=0.2.1-rc.5 <0.3.0"
+      }
     }
   ],
   "dsh-vt-gen-ui": [
