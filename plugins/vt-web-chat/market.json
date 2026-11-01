@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "网页对话",
+    "en": "Web Chat"
+  },
+  "description": {
+    "zh": "在「新会话」下方新增网页对话入口，用桌面端内嵌浏览器整页打开 chat.deepseek.com，并记住上次的对话。",
+    "en": "Adds a Web Chat entry under New Session that opens chat.deepseek.com as a full main-area panel in the desktop embedded browser and remembers the last conversation."
+  },
+  "icon": "icon.svg",
+  "category": "ui",
+  "keywords": ["ui", "chat", "webview", "sidebar"]
+}

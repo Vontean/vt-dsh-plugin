@@ -1,0 +1,55 @@
+{
+  "name": "dsh-vt-web-chat",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Adds a Web Chat entry under New Session that opens chat.deepseek.com as a full main-area panel in the desktop embedded browser and remembers the last conversation.",
+  "license": "MIT",
+  "author": "Vontean",
+  "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-web-chat#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vontean/vt-dsh-plugin.git",
+    "directory": "plugins/vt-web-chat"
+  },
+  "bugs": {
+    "url": "https://github.com/Vontean/vt-dsh-plugin/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "web-chat",
+    "chat",
+    "sidebar",
+    "embedded-browser"
+  ],
+  "engines": {
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

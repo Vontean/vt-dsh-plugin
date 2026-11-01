@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Web Chat",
+    "description": "Adds a \"Web Chat\" entry under New Session that opens chat.deepseek.com as a full main-area panel in the desktop embedded browser, remembering the last conversation."
+  }
+}

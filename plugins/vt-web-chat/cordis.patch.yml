@@ -1,0 +1,5 @@
+# dsh-vt-web-chat bundle patch: one insert mounts the plugin row.
+# insert.name must be the package name; insert.id must be unique in the loader tree.
+- insert:
+    - id: dsh-vt-web-chat
+      name: dsh-vt-web-chat
