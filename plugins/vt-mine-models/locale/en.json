@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Model picker (MineCodex style)",
+    "description": "Turns the composer model picker into a two-stage panel: the current model and a reasoning-effort slider open first, the model list opens on demand, and model rows carry provider icons."
+  }
+}

@@ -1,0 +1,10 @@
+# dsh-vt-mine-models — 把插件挂进 DSH 配置树。
+#
+# 纯客户端界面插件：Host 半侧（index.js）只有空 apply，浏览器半侧（client.js）
+# 向 `conversation.input.model` slot 注册 MCX 风格的模型选择面板。
+#
+# 通过 plugin_manager 的 install_bundle 安装时，工具会自己写 profile 的
+# package.json 与 bundle 列表，不需要手工编辑本文件之外的任何配置。
+- insert:
+    - id: vt-mine-models
+      name: 'dsh-vt-mine-models'

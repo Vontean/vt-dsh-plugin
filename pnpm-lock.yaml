@@ -229,6 +229,8 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
+  plugins/vt-mine-models: {}
+
   plugins/vt-quote-bar: {}
 
   plugins/vt-system-prompt: {}
