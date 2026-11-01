@@ -12,6 +12,19 @@
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
       }
+    },
+    {
+      "version": "1.0.1",
+      "publishTimestamp": 1793502837,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "commit": "189d846af02b76271ec93e93c209bc754eabb1b3",
+        "path": "plugins/vt-uiux-enhancer"
+      },
+      "engines": {
+        "dsh": ">=0.2.1-rc.5 <0.3.0"
+      }
     }
   ],
   "dsh-vt-gen-ui": [
