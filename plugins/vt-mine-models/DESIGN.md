@@ -111,7 +111,7 @@ DSH 实例占用）。subagent 会话通过 `sessions.subagentAddress(sessionId)
 | 菜单间距 | 底边 = chip 底边；距视口边 `12px`（`MENU_MARGIN`）；右边缘对齐 chip | 面板打开后 chip 被遮住，不再有 chip 上方的 8px 间隙 |
 | 菜单可用高度 | `max(160, chip.bottom − 12 − 12)`，再 `min(360, …)` | 两个 12 = 视口边距与顶部安全余量；`360px` 是原生 `ModelSelect` 的 `max-height` 上限 |
 | 面板 shell | 高度 = 当前段实测高度，上限 = 菜单可用高度 | 两段之间做纯高度补间 |
-| 列表滚动区 | `max-height: max(120, 菜单可用高度)` | 超出滚动；分组标题吸顶 |
+| 列表滚动区 | `max-height: max(120, 菜单可用高度)`，`overflow-y: auto` + `overflow-x: hidden` | 只纵向滚动；模型名过长时单行省略号截断，行与分组标题不允许把面板撑宽 |
 | chip | 高 `28px`，`padding: 0 4px 0 8px`，`gap: 4px`，字号 `13/20`，圆角 `--dsw-radius-sm` | 沿用原生 chip 几何 |
 | chip 最大宽 | `min(360px, 45cqw)` | 文本溢出省略 |
 | 强度面板内边距 | `8px`（四周同值） | 滑条与面板边缘的留白全部由这一层提供 |
