@@ -114,11 +114,11 @@ DSH 实例占用）。subagent 会话通过 `sessions.subagentAddress(sessionId)
 | 列表滚动区 | `max-height: max(120, 菜单可用高度)` | 超出滚动；分组标题吸顶 |
 | chip | 高 `28px`，`padding: 0 4px 0 8px`，`gap: 4px`，字号 `13/20`，圆角 `--dsw-radius-sm` | 沿用原生 chip 几何 |
 | chip 最大宽 | `min(360px, 45cqw)` | 文本溢出省略 |
-| 强度面板内边距 | `10px 8px 8px` | 左右 8px 留白，滑条自己再留 2px |
+| 强度面板内边距 | `8px`（四周同值） | 滑条与面板边缘的留白全部由这一层提供 |
 | 强度档位标签 | `min-height: 18px`，`13/18`，weight `500` | 居中，强调蓝；与 DSH 正文同一字号 |
 | 强度面板模型行 | `min-height: 20px`，`margin: 2px 0 0`，`padding: 0 6px`，`gap: 4px`，`13/18` | 圆角 `--dsw-radius-sm`；只显示模型名 + chevron 12px，不显示厂商图标 |
-| 滑轨容器 | 高 `30px`，`margin: 10px 2px 2px`；宽度 = 面板内容宽（约 `244px`） | 左右 2px 微缩进，缩进主体由面板 padding 提供 |
-| 轨道 | 高 `18px`，距滑轨顶 `6px`，圆角 `999px`，底 `--dsw-specific-selector` | `corner-shape: round`；轨道中心线在 y=15px |
+| 滑轨容器 | 高 `30px`，`margin: 8px 0 0`；宽度 = 面板内容宽（240–420px 减去两侧各 8px padding） | 不再有左右/下额外缩进 |
+| 轨道 | 高 `16px`，距滑轨顶 `7px`，圆角 `999px`，底 `--dsw-specific-selector` | `corner-shape: round`；轨道中心线仍在 y=15px，与 24px 拇指同心 |
 | 填充 | 在轨道内部（`top:0; bottom:0`），宽度 = 档位百分比，圆角继承轨道 | 宽度不做端点修正 |
 | 刻度点 | `4×4px`，顶 `15px` 且 `translate(-50%,-50%)`（垂直居中于轨道），横向按端点修正 | 常态 `opacity: .55`，已过档位反色且 `opacity: .9`，避免视觉过实 |
 | 拇指 | `24×24px`，距顶 `3px`，`translateX(-50%)`，`0.5px` 描边 | 阴影 `elevation-soft`；横向按端点修正 |

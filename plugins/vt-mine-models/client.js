@@ -87,7 +87,7 @@ window.__ModuleLoader__.load({
 
 /* ── effort stage ───────────────────────────────────────────────────────── */
 
-.vtmm_effort{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;padding:10px 8px 8px;transition:opacity 140ms linear}
+.vtmm_effort{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;padding:8px;transition:opacity 140ms linear}
 .vtmm_effort[data-hidden]{opacity:0;pointer-events:none}
 .vtmm_effortValue{min-height:18px;text-align:center;color:var(--dsw-alias-state-business-primary);font-size:13px;font-weight:500;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color 160ms ease}
 .vtmm_modelRow{display:flex;align-items:center;justify-content:center;gap:4px;min-height:20px;margin:2px 0 0;padding:0 6px;border:0;border-radius:var(--dsw-radius-sm);background:0 0;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:18px;cursor:pointer;outline:none;text-align:center}
@@ -98,8 +98,8 @@ window.__ModuleLoader__.load({
 
 /* 滑轨几何照抄 MineCodex：rail 38 / track 16（top 12）/ thumb 26（top 7）/ tick 6。
    两端按 thumbRadius 修正，让拇指和端点刻度收进轨道，不越过胶囊端头。 */
-.vtmm_rail{position:relative;height:30px;margin:10px 2px 2px;cursor:pointer;touch-action:none;outline:none}
-.vtmm_track{position:absolute;left:0;right:0;top:6px;height:18px;border-radius:999px;corner-shape:round;background:var(--dsw-specific-selector)}
+.vtmm_rail{position:relative;height:30px;margin:8px 0 0;cursor:pointer;touch-action:none;outline:none}
+.vtmm_track{position:absolute;left:0;right:0;top:7px;height:16px;border-radius:999px;corner-shape:round;background:var(--dsw-specific-selector)}
 .vtmm_fill{position:absolute;top:0;bottom:0;left:0;border-radius:inherit;corner-shape:round;background:var(--dsw-alias-state-business-primary);transition:width 180ms cubic-bezier(.23,1,.32,1),background-color 160ms ease}
 .vtmm_tick{position:absolute;top:15px;width:4px;height:4px;border-radius:999px;corner-shape:round;transform:translate(-50%,-50%);background:var(--dsw-alias-label-caption);opacity:.55;transition:opacity 160ms ease;pointer-events:none}
 .vtmm_tick[data-passed]{background:var(--dsw-alias-label-primary-inverted);opacity:.9}
