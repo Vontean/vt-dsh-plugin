@@ -41,6 +41,10 @@ dsh plugin --profile <profile> add dsh-vt-quote-bar@1.0.1
 npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view <包名>@<版本>` 能查到即可）。
 还没发到 npm 时，请用市场索引或 Release tarball：三条通道发出去的是同一份构建。
 
+刚发完的那几分钟，本地 `npm view` 可能返回 404（registry 传播与本地缓存都还没跟上），
+**不要据此判断发布失败、更不要重发**：直接看 Release 里 `+ <包名>@<版本>` 那行，或隔几分钟
+再查 `https://registry.npmjs.org/<包名>/<版本>`。同一个版本号重发会被 npm 拒绝。
+
 ### Release tarball
 
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载对应插件的 `.tgz`，然后：
