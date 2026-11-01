@@ -100,15 +100,15 @@ DSH 实例占用）。subagent 会话通过 `sessions.subagentAddress(sessionId)
 
 ## 布局与尺寸表
 
-坐标全部是视口 `fixed` 定位：底边贴 chip 上方 8px，水平以 chip 中心居中后钳进视口。
+坐标全部是视口 `fixed` 定位：底边贴 chip 上方 8px，右边缘对齐 chip 右边缘，再钳进视口（与原生 `ModelSelect` 同一套规则）。
 
 | 元素 | 数值 | 说明 |
 |---|---|---|
-| 菜单宽度 | `264px`（`min-width` / `max-width` 同值） | 与 MCX 一致；两段共用宽度，切段不横跳 |
+| 菜单宽度 | `240–420px`，内容自适应 | 照原生规则：用 13px 字宽量出最长模型名 + 行内固定占位 60px，夹在 240–420；两段共用同一测量宽度，切段不横跳 |
 | 菜单内边距 | 四周 `6px` | 列表滚动区贴着这圈内边距 |
 | 菜单 z-index | `1100` | 与 DSH 原生模型菜单同层 |
 | 菜单圆角 / 描边 | `MenuSurface` 提供（`lg`），描边 token 改指 `--dsw-alias-border-l1` | 不自绘浮层材质 |
-| 菜单间距 | 距 chip 上方 `8px`（`MENU_GAP`），距视口边 `12px`（`MENU_MARGIN`） | |
+| 菜单间距 | 距 chip 上方 `8px`（`MENU_GAP`），距视口边 `12px`（`MENU_MARGIN`）；右边缘对齐 chip | |
 | 菜单可用高度 | `max(160, chip.top − 8 − 12 − 12)`，再 `min(360, …)` | 8 = 菜单与 chip 的间距；两个 12 = 视口边距与顶部安全余量；`360px` 是原生 `ModelSelect` 的 `max-height` 上限 |
 | 面板 shell | 高度 = 当前段实测高度，上限 = 菜单可用高度 | 两段之间做纯高度补间 |
 | 列表滚动区 | `max-height: max(120, 菜单可用高度)` | 超出滚动；分组标题吸顶 |

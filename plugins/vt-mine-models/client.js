@@ -54,8 +54,12 @@ window.__ModuleLoader__.load({
     const VERSION = '1.0.0';
     /** 本插件拥有的 locale 命名空间。 */
     const NS = 'vtMineModels';
-    /** 共享菜单宽度：与 MineCodex 一致，两个舞台共用同一宽度避免横向跳动。 */
-    const MENU_WIDTH = 264;
+    /** 菜单宽度规则照 DSH 原生 ModelSelect：内容自适应，夹在 240–420 之间。 */
+    const MENU_WIDTH_DEFAULT = 264;
+    const MENU_WIDTH_MIN = 240;
+    const MENU_WIDTH_MAX = 420;
+    /** 行内固定占位：左右 padding 14 + 图标 16 + 两个 gap 8 + 勾选位 14。 */
+    const ROW_CHROME = 60;
     /** 视口安全边距。 */
     const MENU_MARGIN = 12;
     /** 面板底边与触发按钮的间距（原生菜单是 8px）。 */
@@ -79,7 +83,7 @@ window.__ModuleLoader__.load({
 
 /* ── menu shell ─────────────────────────────────────────────────────────── */
 .vtmm_menu > div:first-child{background:var(--dsw-alias-bg-layer-1) !important;backdrop-filter:none !important}
-.vtmm_menu{z-index:1100;--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);width:264px;min-width:264px;max-width:264px;box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-primary);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border:0;flex-direction:column;padding:6px;display:flex;position:fixed;overflow:hidden;animation:vtmm_menu_in 150ms cubic-bezier(.23,1,.32,1) both}
+.vtmm_menu{z-index:1100;--dsw-elevation-stroke-color:var(--dsw-alias-border-l1);width:240px;max-width:min(420px,100vw - 32px);box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-primary);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border:0;flex-direction:column;padding:6px;display:flex;position:fixed;overflow:hidden;animation:vtmm_menu_in 150ms cubic-bezier(.23,1,.32,1) both}
 .vtmm_shell{position:relative;min-height:0;overflow:hidden;transition:height 320ms cubic-bezier(.19,1,.22,1)}
 .vtmm_menu:not([data-ready]) .vtmm_shell{transition:none}
 
@@ -221,6 +225,25 @@ window.__ModuleLoader__.load({
         focusable: 'false',
         dangerouslySetInnerHTML: { __html: icon.inner },
       });
+    }
+
+    /**
+     * Measure the widest model name at the list's 13px body size and turn it into
+     * a menu content width, clamped to the native menu range. The two stages share
+     * this width so the panel never jumps horizontally when drilling in.
+     * @param {string[]} names - catalog model names.
+     * @returns {number} content width in CSS pixels.
+     */
+    function menuContentWidth(names) {
+      if (typeof document === 'undefined' || names.length === 0) return MENU_WIDTH_DEFAULT;
+      const context = document.createElement('canvas').getContext('2d');
+      const family = getComputedStyle(document.body).fontFamily || 'sans-serif';
+      if (context !== null) context.font = `400 13px ${family}`;
+      let widest = 0;
+      for (const name of names) {
+        widest = Math.max(widest, context === null ? name.length * 7 : context.measureText(name).width);
+      }
+      return Math.round(clamp(widest + ROW_CHROME, MENU_WIDTH_MIN, MENU_WIDTH_MAX));
     }
 
     /** Native provider order: DeepSeek account, DeepSeek official, then catalog order. */
@@ -374,6 +397,11 @@ window.__ModuleLoader__.load({
       const shownEffortIndex = clamp(previewIndex ?? effortIndex, 0, Math.max(0, effortChoices.length - 1));
       const shownEffort = effortChoices[shownEffortIndex];
       const shownEffortLabel = shownEffort?.label ?? effortLabel;
+      const menuContentW = useMemo(
+        () => menuContentWidth(choices.map((choice) => choice.model.name ?? '')),
+        [choices],
+      );
+      const menuTotalW = menuContentW + 12;
       const { pending } = state;
       const busy = pending !== null;
       const waiting = currentChoice === undefined && state.status === 'loading';
@@ -504,10 +532,11 @@ window.__ModuleLoader__.load({
       const availableHeight = anchor === null ? 400 : Math.max(160, anchor.top - MENU_GAP - MENU_MARGIN - 12);
       // DSH 的菜单上限是 360px（原生 ModelSelect 的 max-height）；两个舞台共用该上限。
       const maxHeight = Math.min(360, availableHeight);
+      // 与原生 ModelSelect 一致：右边缘对齐 chip，再钳进视口。
       const menuLeft = anchor === null ? -9999 : clamp(
-        anchor.left + anchor.width / 2 - MENU_WIDTH / 2,
+        anchor.right - menuTotalW,
         MENU_MARGIN,
-        Math.max(MENU_MARGIN, window.innerWidth - MENU_WIDTH - MENU_MARGIN),
+        Math.max(MENU_MARGIN, window.innerWidth - menuTotalW - MENU_MARGIN),
       );
       const menuBottom = anchor === null ? 0 : window.innerHeight - anchor.top + MENU_GAP;
       const effectiveShellHeight = Math.min(shellHeight, maxHeight);
@@ -1028,7 +1057,7 @@ window.__ModuleLoader__.load({
                   style: {
                     left: `${menuLeft}px`,
                     bottom: `${menuBottom}px`,
-                    width: `${MENU_WIDTH}px`,
+                    width: `${menuContentW}px`,
                   },
                   role: stage === 'model' ? 'menu' : 'dialog',
                   'aria-label': t('menu.aria'),
