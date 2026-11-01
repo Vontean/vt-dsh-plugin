@@ -220,5 +220,20 @@
         "dsh": ">=0.2.1-rc.5 <0.3.0"
       }
     }
+  ],
+  "dsh-vt-use-figma": [
+    {
+      "version": "1.0.0",
+      "publishTimestamp": 1793544439,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "commit": "0700798970c4367e39c92f1d54537d213ce78022",
+        "path": "plugins/vt-use-figma"
+      },
+      "engines": {
+        "dsh": ">=0.2.1-rc.5 <0.3.0"
+      }
+    }
   ]
 }

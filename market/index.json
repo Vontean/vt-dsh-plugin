@@ -383,6 +383,52 @@
       ]
     },
     {
+      "name": "dsh-vt-use-figma",
+      "title": {
+        "zh": "Figma 使用手册",
+        "en": "Use Figma"
+      },
+      "description": {
+        "zh": "提问里出现 Figma 链接时自动走远程 Figma MCP，并按官方要求先加载对应技能；同时把 Figma 官方技能接进 DSH，无需复制文件。",
+        "en": "Routes Figma links to the remote Figma MCP server, loads Figma's official skill before each Figma tool call, and exposes those skills to DSH without copying files."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IkZpZ21hIHZpYSByZW1vdGUgTUNQIGFuZCBvZmZpY2lhbCBza2lsbHMiPgogIDxyZWN0IHg9IjIiIHk9IjIiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcng9IjE1IiBmaWxsPSIjNDMzOGNhIi8+CiAgPHJlY3QgeD0iMTIiIHk9IjEyIiB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHJ4PSI2IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMyIvPgogIDxwYXRoIGQ9Ik0yNyAyNWwtNiA3IDYgN00zNyAyNWw2IDctNiA3IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPGNpcmNsZSBjeD0iNDkiIGN5PSIxNSIgcj0iNiIgZmlsbD0iI2ZmZDE2NiIgc3Ryb2tlPSIjNDMzOGNhIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+Cg==",
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-use-figma#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "directory": "plugins/vt-use-figma"
+      },
+      "metadata": {
+        "category": "workflow",
+        "keywords": [
+          "figma",
+          "mcp",
+          "oauth",
+          "skills",
+          "design-to-code",
+          "workflow"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1793544439,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "0700798970c4367e39c92f1d54537d213ce78022",
+            "path": "plugins/vt-use-figma"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    },
+    {
       "name": "dsh-vt-web-chat",
       "title": {
         "zh": "网页对话",
