@@ -172,6 +172,50 @@
           }
         }
       ]
+    },
+    {
+      "name": "dsh-vt-web-chat",
+      "title": {
+        "zh": "网页对话",
+        "en": "Web Chat"
+      },
+      "description": {
+        "zh": "在「新会话」下方新增网页对话入口，用桌面端内嵌浏览器整页打开 chat.deepseek.com，并记住上次的对话。",
+        "en": "Adds a Web Chat entry under New Session that opens chat.deepseek.com as a full main-area panel in the desktop embedded browser and remembers the last conversation."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIj4KICA8cGF0aCBkPSJNMjAuMjUgMTEuNWMwIDQuMjgtMy43IDcuNzUtOC4yNSA3Ljc1LS41MyAwLTEuMDUtLjA1LTEuNTUtLjE0bC00LjEgMS45Yy0uNi4yOC0xLjI2LS4yMi0xLjE4LS44N2wuNS0zLjkzQzQuNCAxNC45IDMuNzUgMTMuMjcgMy43NSAxMS41YzAtNC4yOCAzLjctNy43NSA4LjI1LTcuNzVzOC4yNSAzLjQ3IDguMjUgNy43NVoiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjEuMyIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik04LjUgMTEuNWguMDFNMTIgMTEuNWguMDFNMTUuNSAxMS41aC4wMSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMS42IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+Cg==",
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-web-chat#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "directory": "plugins/vt-web-chat"
+      },
+      "metadata": {
+        "category": "ui",
+        "keywords": [
+          "ui",
+          "chat",
+          "webview",
+          "sidebar"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1793500813,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "f086d5fa366ba0eb8ff74d1416c2fec368af881f",
+            "path": "plugins/vt-web-chat"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
     }
   ]
 }
