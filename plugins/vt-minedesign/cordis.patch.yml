@@ -1,0 +1,46 @@
+# dsh-vt-minedesign bundle for DeepSeek Harness (dsh).
+#
+# The host half does four things:
+#   1. registers one system-prompt section that routes design work to the local
+#      MineDesign MCP server and states where the editor link comes from;
+#   2. registers a skill provider that exposes MineDesign's own `design` and
+#      `design-system` skills by reading the installed plugin in place (no files
+#      copied, no user directory written), with a DSH adaptation appended;
+#   3. enriches `mcp__minedesign__*` tool results, because MineDesign's editor is
+#      an MCP App and this harness bridges tools only — the editor address and the
+#      annotation payloads live in `structuredContent`, which the model cannot see;
+#   4. serves `GET /vt-minedesign/sessions`, the one read-only route the web half
+#      polls to know which document is open. The web half (`client.js`) registers
+#      a right-Sidebar tab type with its own top bar and frames MineDesign's local
+#      editor, so the editor is a panel rather than a generic browser tab.
+#
+# It also mounts the stdio MCP entry itself. MineDesign's MCP is local, so there
+# is no OAuth step: one child process, launched by `bin/mdn-mcp.mjs`, which
+# resolves the install at run time. The two `!!js` expressions keep this package
+# free of any absolute path: `baseUrl` is the profile directory the loader
+# anchors every bundle entry at (the plugin is installed at
+# `<profile>/node_modules/dsh-vt-minedesign`), and `process.execPath` is the node
+# binary already running this harness — `ELECTRON_RUN_AS_NODE` makes that also
+# true when the harness runs inside the desktop app's Electron binary.
+#
+# `client.js` is the web half declared by `dsh.client` in package.json: one tab
+# type (`kind: minedesign`), its guide capsule, its body and its chip title. It
+# depends only on client packages named in `dsh.client.inject`.
+- insert:
+    - id: dsh-vt-minedesign
+      name: dsh-vt-minedesign
+    - id: mcp-minedesign
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: minedesign
+        transport: stdio
+        command: !!js process.execPath
+        args:
+          - !!js String(baseUrl).replace(/^file:\/\//, '') + 'node_modules/dsh-vt-minedesign/bin/mdn-mcp.mjs'
+        env:
+          ELECTRON_RUN_AS_NODE: "1"
+        # `minedesign_events` may wait up to 25 s and `design_check` scans a whole
+        # work; the 60 s default would cut both off.
+        toolCallTimeoutMs: 120000
+        # A missing MineDesign must not stop the harness from booting.
+        failOnStartupError: false

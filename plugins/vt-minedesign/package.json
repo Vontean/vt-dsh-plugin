@@ -1,0 +1,68 @@
+{
+  "name": "dsh-vt-minedesign",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Connects DeepSeek Harness to the local MineDesign install: its stdio MCP tools, its design skills, and the editor link that MCP Apps cannot deliver here.",
+  "license": "MIT",
+  "author": "Vontean",
+  "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-minedesign#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vontean/vt-dsh-plugin.git",
+    "directory": "plugins/vt-minedesign"
+  },
+  "bugs": {
+    "url": "https://github.com/Vontean/vt-dsh-plugin/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "minedesign",
+    "mdn",
+    "mcp",
+    "skills",
+    "design",
+    "design-system",
+    "canvas"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json",
+    "./client": "./client.js"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "src/*.js",
+    "bin/*.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "icon.svg",
+    "assets/*",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES/*"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

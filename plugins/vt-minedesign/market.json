@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "MineDesign 设计稿",
+    "en": "Use MineDesign"
+  },
+  "description": {
+    "zh": "把本机已装的 MineDesign 接进 DSH：本地 MCP 工具、设计稿与设计系统技能都能用，并把编辑器地址交到你手上。",
+    "en": "Connects the MineDesign install on this machine: its local MCP tools and design skills, plus the editor link MCP Apps cannot deliver here."
+  },
+  "icon": "icon.svg",
+  "category": "workflow",
+  "keywords": ["minedesign", "design", "mcp", "skills", "canvas", "design-system"]
+}
