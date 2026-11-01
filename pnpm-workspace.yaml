@@ -1,0 +1,3 @@
+# One directory under plugins/ is one independently published npm package.
+packages:
+  - plugins/*

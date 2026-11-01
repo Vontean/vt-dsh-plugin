@@ -1,0 +1,195 @@
+name: Release
+
+# 发布一个插件版本：tag 名 = <插件目录名>-v<version>，例如 vt-quote-bar-v1.0.0。
+# 依次做：校验 tag 与 package.json 一致 → 可选发布 npm → 打包 .tgz 挂 GitHub Release
+# → 记账并重新生成 market/index.json（官方校验器把关）→ 提交到 main → 重新部署 Pages。
+#
+# npm 发布是可选的：没有 NPM_TOKEN secret 时跳过，市场索引自动退回 commit 固定的 git 来源。
+# 之后补发 npm 后，用 workflow_dispatch 重跑同一个 tag，索引会刷新成 npm 来源。
+
+on:
+  push:
+    tags:
+      - "*-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要（重新）发布的 tag，例如 vt-quote-bar-v1.0.0"
+        required: true
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+
+      - name: Read plugin and version from the tag
+        id: tag
+        run: |
+          set -euo pipefail
+          tag="$TAG"
+          version="${tag##*-v}"
+          slug="${tag%-v*}"
+          dir="plugins/$slug"
+          test -f "$dir/package.json" || { echo "tag $tag 不对应任何插件目录 ($dir)"; exit 1; }
+          name=$(node -p "require('./$dir/package.json').name")
+          manifest_version=$(node -p "require('./$dir/package.json').version")
+          test "$manifest_version" = "$version" || { echo "$dir/package.json 是 $manifest_version，tag 却是 $version"; exit 1; }
+          {
+            echo "slug=$slug"
+            echo "dir=$dir"
+            echo "name=$name"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+          echo "发布 $name@$version（目录 $dir）"
+
+      - name: Refuse a tag that is not on main
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main || { echo "tag 提交不在 main 上，拒绝发布"; exit 1; }
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish to npm when a token is configured
+        id: npm
+        continue-on-error: true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          name='${{ steps.tag.outputs.name }}'
+          version='${{ steps.tag.outputs.version }}'
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "没有 NPM_TOKEN secret，跳过 npm 发布"
+            exit 0
+          fi
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version 已存在于 npm，跳过"
+            exit 0
+          fi
+          cd '${{ steps.tag.outputs.dir }}'
+          npm publish --access public
+
+      - name: Record the release and regenerate the market index
+        run: |
+          set -euo pipefail
+          name='${{ steps.tag.outputs.name }}'
+          version='${{ steps.tag.outputs.version }}'
+          commit=$(git rev-parse HEAD)
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            kind=npm
+            sha=''
+            echo "npm 上已有 $name@$version，索引来源记为 npm"
+          else
+            kind=git
+            sha="$commit"
+            echo "npm 上没有 $name@$version，索引来源记为 commit $commit 的 git 子树"
+          fi
+          node scripts/record-release.mjs "$name" "$version" "$kind" "$sha"
+          node scripts/build-market.mjs
+
+      - name: Pack the tarball
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cd '${{ steps.tag.outputs.dir }}'
+          pnpm pack --pack-destination "$GITHUB_WORKSPACE/release"
+          ls -l "$GITHUB_WORKSPACE/release"
+
+      - name: Create or update the GitHub Release with the tarball
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          name='${{ steps.tag.outputs.name }}'
+          version='${{ steps.tag.outputs.version }}'
+          slug='${{ steps.tag.outputs.slug }}'
+          notes=$(mktemp)
+          cat > "$notes" <<EOF
+          \`$name\` $version — 由总集仓库 [vt-dsh-plugin](https://github.com/Vontean/vt-dsh-plugin) 发布。
+
+          ## 安装
+
+          插件市场（推荐）：在「插件 → 发现 → 添加索引源」里填入
+          \`https://vontean.github.io/vt-dsh-plugin/index.json\`，找到本插件点安装。
+
+          npm：\`dsh plugin --profile <profile> add $name@$version\`
+
+          Release tarball：\`dsh plugin --profile <profile> add <本页附件 .tgz 的路径或 URL>\`
+
+          ## 说明
+
+          - 运行环境：DSH \`>=0.2.1-rc.5 <0.3.0\`（超范围会在加载前被拒绝）。
+          - 插件代码在用户进程内运行，没有沙箱；只安装你信任的来源。
+          - 市场里的「更新」是卸载再安装；升级前请自行确认配置是否需要迁移。
+          - 安装或升级后需要**重启 dsh**，刷新页面不生效。
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/*.tgz --clobber
+            gh release edit "$TAG" --title "$name $version" --notes-file "$notes"
+          else
+            gh release create "$TAG" release/*.tgz --title "$name $version" --notes-file "$notes"
+          fi
+
+      - name: Commit the market index
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add market/releases.json market/index.json
+          if git diff --cached --quiet; then
+            echo "market 索引没有变化，跳过提交"
+            exit 0
+          fi
+          git commit -m "chore(market): record ${{ steps.tag.outputs.name }}@${{ steps.tag.outputs.version }}"
+          # 并发发布由 concurrency 组串行化，这里只兜底一次冲突。
+          git push origin HEAD:main || {
+            echo "推送 main 失败（可能有并发提交），请用 workflow_dispatch 重跑 tag=$TAG"
+            exit 1
+          }
+
+  deploy-pages:
+    needs: release
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Stage the index
+        run: |
+          mkdir -p _site
+          cp market/index.json _site/index.json
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

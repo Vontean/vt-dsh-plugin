@@ -1,0 +1,28 @@
+name: Checks
+
+# 每次推送 main 或 PR：装依赖、重新生成并校验市场索引，确认提交进去的索引是最新的。
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  market:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - name: Regenerate and validate market/index.json
+        run: node scripts/build-market.mjs
+      - name: Fail when the committed index is stale
+        run: git diff --exit-code market/index.json

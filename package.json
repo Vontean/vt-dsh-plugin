@@ -1,0 +1,24 @@
+{
+  "name": "vt-dsh-plugin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DSH plugin collection: a pnpm workspace that holds several DeepSeek Harness plugins, a validated market index and the release automation that publishes both.",
+  "license": "MIT",
+  "author": "Vontean",
+  "homepage": "https://github.com/Vontean/vt-dsh-plugin#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vontean/vt-dsh-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Vontean/vt-dsh-plugin/issues"
+  },
+  "scripts": {
+    "market": "node scripts/build-market.mjs",
+    "check": "node scripts/build-market.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-plugin-market-index": "0.2.1-rc.5"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "title": {
+    "zh": "Vontean 的 DSH 插件",
+    "en": "Vontean DSH plugins"
+  },
+  "description": {
+    "zh": "面向 DeepSeek Harness 的一组插件：界面增强、用量面板、系统提示词编辑、生成式界面与网页对话。",
+    "en": "A set of DeepSeek Harness plugins: UI enhancements, usage quota panel, system prompt editor, generative UI and web chat."
+  },
+  "metadata": {
+    "categories": {
+      "ui": {
+        "title": { "zh": "界面与外观", "en": "UI & appearance" }
+      },
+      "usage": {
+        "title": { "zh": "用量与额度", "en": "Usage & quota" }
+      },
+      "workflow": {
+        "title": { "zh": "工作流与提示词", "en": "Workflow & prompts" }
+      },
+      "render": {
+        "title": { "zh": "生成式界面", "en": "Generative UI" }
+      }
+    },
+    "labels": {},
+    "sortKeys": {}
+  }
+}

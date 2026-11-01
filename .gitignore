@@ -1,0 +1,11 @@
+# Local toolchain artifacts — regenerable, never committed
+node_modules/
+.codegraph/
+dist/
+
+# OS / editor noise
+.DS_Store
+*.log
+
+# Release leftovers
+*.tgz
