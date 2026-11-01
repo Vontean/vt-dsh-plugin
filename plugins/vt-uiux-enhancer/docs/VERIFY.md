@@ -49,6 +49,7 @@ cordis_inspect_query(platform="client", provider="Theme", method="listTokens")
 --vt-report-messages-rows-<n>-bubbles-<n>-clamped-<n>-expanded-<n>   长消息折叠的读数
 --vt-report-scroll-pin-turn-<n>-engaged-<0|1>-released-<0|1>-pull-<n>px-top-<n>-req-<n>-ok-<n>   阅读位置冻结的读数（req = 应用想滚到的位置，ok = 实际被允许的位置）
 --vt-report-scroll-pin-hook-<installed|no-accessor>   写入接管是否真的挂上了（拿不到 Element 的 scrollTop 访问器时是 no-accessor）
+--vt-report-to-bottom-below-<0|1>   「回到底部」按钮是否该显示（1 = 下方确实还有内容）
 ```
 
 `messages-*` 由 `message-clamp` 自己写入独立主题层（`vt-interface:messages`），不等引擎的重发周期 ——

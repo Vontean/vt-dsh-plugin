@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.2.1';
+    const VERSION = '1.2.2';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -1284,6 +1284,25 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
          */
         behavior: 'scroll-pin',
       },
+      {
+        kind: 'behavior',
+        id: 'to-bottom-visibility',
+        /**
+         * The floating "back to bottom" button, shown only when something is
+         * actually hidden below.
+         *
+         * DSH renders it on one condition — `!followingTail` — and never looks at
+         * the scroll geometry, so it appears the moment the app decides it is not
+         * following, even with nothing left below the fold. The reader's rule is
+         * the geometric one: there is more content down there, so offer the way
+         * back.
+         *
+         * A behaviour, not CSS: reading `scrollTop` and `scrollHeight` is the whole
+         * job, and no selector can do that. It only toggles `display` on that one
+         * button, remembers nothing else, and restores it on dispose.
+         */
+        behavior: 'to-bottom-visibility',
+      },
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2366,6 +2385,96 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
 
 
       /**
+       * Hide the floating "back to bottom" button while everything is visible.
+       *
+       * The button is React's, and its only render condition is "not following the
+       * tail" — the geometry is never consulted. This behaviour supplies the
+       * missing half: it finds that one button (a button whose parent is the
+       * zero-height sticky/absolute slot), decides from the scrollport whether
+       * content remains below, and hides or restores it. Nothing else is touched:
+       * no node is added, no attribute of the app's is changed.
+       */
+      function installToBottomVisibility(metrics) {
+        let scroller = null;
+        let button = null;
+        let hidden = false;
+        let frame = 0;
+        let hostObserver = null;
+
+        const findButton = () => {
+          if (!scroller) return null;
+          for (const candidate of scroller.querySelectorAll('button')) {
+            const parent = candidate.parentElement;
+            if (!parent) continue;
+            const style = getComputedStyle(parent);
+            if (style.position !== 'sticky' && style.position !== 'absolute') continue;
+            if (parent.getBoundingClientRect().height > 0) continue;
+            return candidate;
+          }
+          return null;
+        };
+
+        const paint = () => {
+          frame = 0;
+          if (!scroller || !scroller.isConnected) return;
+          if (!button || !button.isConnected) button = findButton();
+          if (!button) return;
+          const max = scroller.scrollHeight - scroller.clientHeight;
+          const below = max > 2 && scroller.scrollTop < max - 2;
+          if (below === !hidden) {
+            metrics['to-bottom'] = `below-${below ? 1 : 0}`;
+            return;
+          }
+          hidden = !below;
+          if (hidden) button.style.setProperty('display', 'none', 'important');
+          else button.style.removeProperty('display');
+          metrics['to-bottom'] = `below-${below ? 1 : 0}`;
+        };
+
+        const schedule = () => {
+          if (frame) return;
+          frame = requestAnimationFrame(paint);
+        };
+
+        const unbind = () => {
+          if (frame) { cancelAnimationFrame(frame); frame = 0; }
+          if (scroller) scroller.removeEventListener('scroll', schedule);
+          window.removeEventListener('resize', schedule);
+          if (button) button.style.removeProperty('display');
+          scroller = null;
+          button = null;
+          hidden = false;
+        };
+
+        const bind = () => {
+          const next = pickTranscriptScroller();
+          if (!next || next === scroller) return false;
+          unbind();
+          scroller = next;
+          next.addEventListener('scroll', schedule, { passive: true });
+          window.addEventListener('resize', schedule);
+          paint();
+          return true;
+        };
+
+        bind();
+
+        // The button mounts and unmounts with React's follow state, and the
+        // viewport remounts per session; re-evaluate on structural changes.
+        hostObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+          if (!scroller || !scroller.isConnected) bind();
+          else schedule();
+        });
+        if (hostObserver) hostObserver.observe(document.body, { childList: true, subtree: true });
+
+        return () => {
+          if (hostObserver) hostObserver.disconnect();
+          unbind();
+        };
+      }
+
+
+      /**
        * Owns the single injected stylesheet. Styled with the loader's documented
        * markers so the client module loader can reclaim it, and removed on dispose.
        */
@@ -2824,6 +2933,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         'native-tooltip': (readSelectors) => installNativeTitleTakeover(readSelectors),
         'scroll-edges': () => installScrollEdgeFade(),
         'scroll-pin': (readSelectors, metrics) => installScrollPin(readSelectors, metrics),
+        'to-bottom-visibility': (readSelectors, metrics) => installToBottomVisibility(metrics),
         'view-switch': () => installViewSwitch(ctx),
         'message-clamp': (readSelectors) => installMessageClamp(readSelectors),
       };

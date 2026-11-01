@@ -19,6 +19,7 @@ DeepSeek Harness 的界面改善插件：把外观调成**一张干净的白纸*
 - **阅读位置冻结**：回答**正在写正文**时视口继续跟随，到你这条消息吸顶（距顶等于原生内距）就停住，
   文字继续在下方增长 —— 不会再把自己的开头一行行推出屏幕。思考与工具阶段照常跟随；
   之后自己滚回底部或点「回到最新」，本轮即交还跟随。
+- **「回到底部」按钮**：只在下方确实还有内容被遮住时出现；内容全部可见时自动隐去。
 - **细节**：会话边缘上下 24px 渐隐、队列消息卡片用"比画布深一档"的底色。
 
 每条补丁的取值理由写在 `client.js` 的注释里；跨补丁的取舍记在 `DESIGN.md`。
@@ -39,16 +40,16 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 **npm**
 
 ```bash
-dsh plugin --profile <profile> add dsh-vt-uiux-enhancer@1.2.1
+dsh plugin --profile <profile> add dsh-vt-uiux-enhancer@1.2.2
 ```
 
 **Release tarball**
 
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载
-`dsh-vt-uiux-enhancer-1.2.1.tgz`，然后：
+`dsh-vt-uiux-enhancer-1.2.2.tgz`，然后：
 
 ```bash
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-uiux-enhancer-1.2.1.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-uiux-enhancer-1.2.2.tgz
 ```
 
 ## 支持的 DSH 版本
