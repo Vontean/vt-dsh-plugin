@@ -133,6 +133,22 @@ git tag vt-example-v1.0.0
 git push origin vt-example-v1.0.0
 ```
 
-Tag 推送后 `.github/workflows/release.yml` 会：校验版本 → 可选发布 npm
-（存在 `NPM_TOKEN` secret 时）→ 打包 `.tgz` 挂到 GitHub Release → 更新
-`market/releases.json` 与 `market/index.json`（校验通过才提交）→ 重新部署 GitHub Pages。
+Tag 推送后 `.github/workflows/release.yml` 会：校验版本 → 用 npm Trusted Publishing（OIDC）
+发布 npm → 打包 `.tgz` 挂到 GitHub Release → 更新 `market/releases.json` 与
+`market/index.json`（校验通过才提交）→ 重新部署 GitHub Pages。
+
+### npm 首次上线（每个包一次）
+
+npm 要求发布必须过 2FA，granular token 即使勾了 bypass 2FA 也不能直接发布；
+CI 只能走 OIDC。所以每个新包第一次上线要手动做两步（之后不再需要登录 npm）：
+
+```bash
+# 1. 首次发布（本次会要求 2FA）
+cd plugins/<slug> && npm publish --access public
+
+# 2. 绑定 Trusted Publisher，只允许本仓库 release.yml 直接发布
+npm trust github <包名> --repo Vontean/vt-dsh-plugin --file release.yml --allow-publish -y
+```
+
+配置必须在 2 天内完成首个成功发布才算生效。之后的版本推送 tag 即自动发布，
+不用填 token、不用登录。

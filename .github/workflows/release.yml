@@ -1,11 +1,13 @@
 name: Release
 
 # 发布一个插件版本：tag 名 = <插件目录名>-v<version>，例如 vt-quote-bar-v1.0.0。
-# 依次做：校验 tag 与 package.json 一致 → 可选发布 npm → 打包 .tgz 挂 GitHub Release
-# → 记账并重新生成 market/index.json（官方校验器把关）→ 提交到 main → 重新部署 Pages。
+# 依次做：校验 tag 与 package.json 一致 → 用 npm Trusted Publishing（OIDC）发布到 npm
+# → 打包 .tgz 挂 GitHub Release → 记账并重新生成 market/index.json（官方校验器把关）
+# → 提交到 main → 重新部署 Pages。
 #
-# npm 发布是可选的：没有 NPM_TOKEN secret 时跳过，市场索引自动退回 commit 固定的 git 来源。
-# 之后补发 npm 后，用 workflow_dispatch 重跑同一个 tag，索引会刷新成 npm 来源。
+# npm 发布走 OIDC：不需要任何 token，也不需要 npm 登录。前提是 npmjs.com 上该包已配置
+# Trusted Publisher（组织/用户 Vontean、仓库 vt-dsh-plugin、workflow release.yml、允许 publish）。
+# 未配置时 publish 步骤失败但工作流继续，市场索引退回 commit 固定的 git 来源，之后再补发布即可。
 
 on:
   push:
@@ -20,6 +22,7 @@ on:
 permissions:
   contents: write
   actions: write
+  id-token: write # OIDC：npm Trusted Publishing 用它换取一次性发布凭证
 
 concurrency:
   group: release
@@ -82,23 +85,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
+      # Trusted Publishing 需要 npm >= 11.5.1，Node 22 自带的 npm 版本通常更低。
+      - name: Install an npm that supports trusted publishing
+        run: npm install --global npm@11.19.0
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Publish to npm when a token is configured
+      - name: Publish to npm with OIDC trusted publishing
         id: npm
         continue-on-error: true
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           name='${{ steps.tag.outputs.name }}'
           version='${{ steps.tag.outputs.version }}'
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "没有 NPM_TOKEN secret，跳过 npm 发布"
-            exit 0
-          fi
           if npm view "$name@$version" version >/dev/null 2>&1; then
             echo "$name@$version 已存在于 npm，跳过"
             exit 0

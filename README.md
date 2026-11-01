@@ -107,19 +107,34 @@ git push origin vt-quote-bar-v1.0.0
 tag 推上去后 `.github/workflows/release.yml` 会：
 
 1. 校验 tag 与 `package.json` 的版本一致、且 tag 提交在 `main` 上；
-2. 若仓库配置了 `NPM_TOKEN` secret 就发布到 npm（没有则跳过）；
+2. 用 **npm Trusted Publishing（OIDC）** 发布到 npm——不需要 npm token，也不需要登录；
 3. 打包 `.tgz` 挂到 GitHub Release；
 4. 把版本写进 `market/releases.json`，重新生成并经官方解析器校验 `market/index.json`；
 5. 提交索引到 `main`，重新部署 GitHub Pages。
 
-之后补上 npm 发布时，用 Actions 的 **Refresh market sources** 工作流跑一次：它会把 npm 上已存在的
-版本从 git 来源改成 npm 来源，重新生成索引并部署 Pages。也可以单独给某个 tag 重跑 `Release` 工作流。
+### npm 发布：Trusted Publishing（OIDC）
 
-CI 发布 npm 需要仓库 secret `NPM_TOKEN`（npm 的 Automation / Granular token，带 publish 权限）：
+npm 现在要求发布必须过 2FA，granular token 即使勾了「bypass 2FA」也不能直接发布
+（见 [npm 公告](https://gh.io/npm-gat-bypass2fa-deprecation)）。所以 CI 发布走 OIDC：
+GitHub Actions 用短时凭证向 npm 换一次性发布权，仓库里不存任何长期 token，provenance 自动生成。
+
+**每个包上线时只需要配置一次**（包必须先存在于 npm 上，所以首次发布要手动过一次 2FA）：
 
 ```bash
-gh secret set NPM_TOKEN --repo Vontean/vt-dsh-plugin
+# 首次发布（会要求 2FA；之后不再需要）
+cd plugins/vt-quote-bar && npm publish --access public
+
+# 绑定 Trusted Publisher：只允许本仓库 release.yml 直接发布这个包
+npm trust github dsh-vt-quote-bar --repo Vontean/vt-dsh-plugin --file release.yml --allow-publish -y
 ```
+
+也可以到 npmjs.com 的包设置页 → Trusted Publisher 手动填：用户 `Vontean`、仓库
+`vt-dsh-plugin`、workflow `release.yml`、勾选 **Allow npm publish**。配置需在 2 天内完成首次
+成功发布才算生效。之后每个新插件上线时重复这两步即可，日常发版不再需要登录 npm。
+
+如果某个包的 OIDC 发布失败（还没配 Trusted Publisher），工作流不会中断：索引先退回 commit
+固定的 git 来源；配好之后重跑该 tag 的 `Release` 工作流，或跑一次 **Refresh market sources**，
+索引来源就会刷新成 npm 包。
 
 ## 版本策略
 
