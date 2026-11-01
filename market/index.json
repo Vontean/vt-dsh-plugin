@@ -117,11 +117,11 @@
       "versions": [
         {
           "version": "1.0.0",
-          "publishTimestamp": 1793500637,
+          "publishTimestamp": 1793501789,
           "source": {
             "type": "git",
             "url": "https://github.com/Vontean/vt-dsh-plugin",
-            "commit": "56a4a5d6f800c1771f3b024cd81785d7c7ddd479",
+            "commit": "507058218fec4e761303598fc30603600db2ec56",
             "path": "plugins/vt-quote-bar"
           },
           "engines": {
