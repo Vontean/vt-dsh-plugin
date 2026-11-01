@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.2.0';
+    const VERSION = '1.2.1';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -2151,7 +2151,24 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           }
           if (!current) return requested;
           if (current.released) return requested;
+          // A fold batch drives `scrollTop` on its own frame clock to hold visible
+          // content still while rows collapse; capping that would fight it.
           if (current.column.hasAttribute('data-input-fold')) return requested;
+          const start = scroller.scrollTop;
+          // Frozen: hold this position for the rest of the turn *and* for the
+          // turn's own closing follow, until the reader takes the tail back.
+          // Upward navigation (clicking a turn mark) still goes through.
+          if (current.engaged) {
+            current.requested = Math.round(requested);
+            if (requested < start) {
+              current.allowed = Math.round(requested);
+              publish();
+              return requested;
+            }
+            current.allowed = Math.round(start);
+            publish();
+            return start;
+          }
           if (!isRunning(current)) return requested;
           const answer = resolveAnswer(current);
           if (!answer) return requested;
@@ -2164,7 +2181,6 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           const phase = livePhaseNow(Number(current.turn));
           if (phase === false) return requested;
           if (phase === null && answer.getBoundingClientRect().height < 1) return requested;
-          const start = scroller.scrollTop;
           const offset = offsetOf(current);
           const row = current.user.getBoundingClientRect();
           // A message taller than the viewport has no reachable pin line; the
@@ -2191,11 +2207,26 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           current.prevPinTop = pinTop;
           current.pinTop = Math.round(pinTop);
           current.ceiling = Math.round(ceiling);
+          /**
+           * Freeze here. The 1px step is the important part: it is below the eye's
+           * threshold but above the scroll sampler's 0.5px tolerance, so the app's
+           * own reader sampling concludes "the reader took over" and stops
+           * following. Without it the app still believes it owns the tail, and when
+           * the turn closes it runs one last follow-to-bottom — the jump this patch
+           * exists to remove. With it, the closing fold also stops treating the tail
+           * as its target and compensates instead.
+           */
+          const freeze = (top) => {
+            const nudged = Math.max(0, Math.min(top, start - 1));
+            current.engaged = true;
+            current.requested = Math.round(requested);
+            current.allowed = Math.round(nudged);
+            publish();
+            return nudged;
+          };
           if (ceiling >= start || crossed) {
             const next = Math.min(requested, ceiling);
-            if (next < requested - 0.5) {
-              current.engaged = true;
-            }
+            if (next < requested - 0.5) return freeze(next);
             current.requested = Math.round(requested);
             current.allowed = Math.round(next);
             publish();
@@ -2204,20 +2235,9 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           // The pin line is above the current position: this turn's message is
           // already out of view (a long process phase pushed it away), or the app
           // wants to move up. Upward requests go through; otherwise freeze where
-          // the view is instead of jumping — a jump would be a second, larger
-          // surprise than the scroll this patch exists to remove.
+          // the view is instead of jumping.
           if (requested < start) return requested;
-          current.requested = Math.round(requested);
-          if (!first && current.engaged) {
-            current.allowed = Math.round(start);
-            publish();
-            return start;
-          }
-          current.engaged = true;
-          current.pulled = 0;
-          current.allowed = Math.round(start);
-          publish();
-          return start;
+          return first ? freeze(start) : requested;
         };
 
         /**
