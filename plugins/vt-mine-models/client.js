@@ -62,8 +62,6 @@ window.__ModuleLoader__.load({
     const ROW_CHROME = 60;
     /** 视口安全边距。 */
     const MENU_MARGIN = 12;
-    /** 面板底边与触发按钮的间距（原生菜单是 8px）。 */
-    const MENU_GAP = 8;
 
     // ── styles ────────────────────────────────────────────────────────────────
     // Every class is namespaced `vtmm_` so a DSH build can never collide with it.
@@ -427,8 +425,9 @@ window.__ModuleLoader__.load({
         return () => document.removeEventListener('mousedown', closeOutside);
       });
 
-      // Placement: the panel is bottom-anchored to the trigger and horizontally
-      // centred on it (MineCodex), clamped into the viewport (DSH menu margin).
+      // Placement: the panel's right edge sits on the chip's right edge and its
+      // bottom edge on the chip's bottom edge, so opening the panel covers the
+      // chip row instead of floating above it. Clamped into the viewport.
       const measureAnchor = React.useCallback(() => {
         const rect = triggerRef.current?.getBoundingClientRect();
         if (rect === undefined) return;
@@ -436,6 +435,7 @@ window.__ModuleLoader__.load({
           left: rect.left,
           right: rect.right,
           top: rect.top,
+          bottom: rect.bottom,
           width: rect.width,
           height: rect.height,
         });
@@ -529,7 +529,7 @@ window.__ModuleLoader__.load({
 
       if (!available) return null;
 
-      const availableHeight = anchor === null ? 400 : Math.max(160, anchor.top - MENU_GAP - MENU_MARGIN - 12);
+      const availableHeight = anchor === null ? 400 : Math.max(160, anchor.bottom - MENU_MARGIN - 12);
       // DSH 的菜单上限是 360px（原生 ModelSelect 的 max-height）；两个舞台共用该上限。
       const maxHeight = Math.min(360, availableHeight);
       // 与原生 ModelSelect 一致：右边缘对齐 chip，再钳进视口。
@@ -538,7 +538,7 @@ window.__ModuleLoader__.load({
         MENU_MARGIN,
         Math.max(MENU_MARGIN, window.innerWidth - menuTotalW - MENU_MARGIN),
       );
-      const menuBottom = anchor === null ? 0 : window.innerHeight - anchor.top + MENU_GAP;
+      const menuBottom = anchor === null ? 0 : window.innerHeight - anchor.bottom;
       const effectiveShellHeight = Math.min(shellHeight, maxHeight);
 
       const loadIfNeeded = () => {

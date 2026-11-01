@@ -54,7 +54,7 @@ reduced-motion 都属于「必须跟随 DSH」，不是可选装饰。
 | `effort` | `Escape` | `closed`（焦点回 chip） |
 | `effort` | `Shift+Tab` | `closed`（把 Tab 交给页面，焦点回 chip） |
 | 任意 `open` | 点面板外 / `mousedown` 外部 / 焦点离开 root+menu | `closed` |
-| 任意 `open` | 点 chip 本身 | `closed` |
+| 任意 `open` | 点 chip 本身 | 面板已盖住 chip，这条不可达；关闭走外点 / `Escape` / `Shift+Tab` |
 
 滑条提交（`commitEffort`）只换档位、**不关面板**：调强度是连续动作，关掉会打断。若目标档位
 与当前档位相同，直接返回、不发请求。选择模型（`choose`）是终态动作，提交成功后关闭。
@@ -100,7 +100,7 @@ DSH 实例占用）。subagent 会话通过 `sessions.subagentAddress(sessionId)
 
 ## 布局与尺寸表
 
-坐标全部是视口 `fixed` 定位：底边贴 chip 上方 8px，右边缘对齐 chip 右边缘，再钳进视口（与原生 `ModelSelect` 同一套规则）。
+坐标全部是视口 `fixed` 定位：底边与 chip 底边齐平（打开时面板把 chip 整行盖住），右边缘对齐 chip 右边缘，再钳进视口。
 
 | 元素 | 数值 | 说明 |
 |---|---|---|
@@ -108,8 +108,8 @@ DSH 实例占用）。subagent 会话通过 `sessions.subagentAddress(sessionId)
 | 菜单内边距 | 四周 `6px` | 列表滚动区贴着这圈内边距 |
 | 菜单 z-index | `1100` | 与 DSH 原生模型菜单同层 |
 | 菜单圆角 / 描边 | `MenuSurface` 提供（`lg`），描边 token 改指 `--dsw-alias-border-l1` | 不自绘浮层材质 |
-| 菜单间距 | 距 chip 上方 `8px`（`MENU_GAP`），距视口边 `12px`（`MENU_MARGIN`）；右边缘对齐 chip | |
-| 菜单可用高度 | `max(160, chip.top − 8 − 12 − 12)`，再 `min(360, …)` | 8 = 菜单与 chip 的间距；两个 12 = 视口边距与顶部安全余量；`360px` 是原生 `ModelSelect` 的 `max-height` 上限 |
+| 菜单间距 | 底边 = chip 底边；距视口边 `12px`（`MENU_MARGIN`）；右边缘对齐 chip | 面板打开后 chip 被遮住，不再有 chip 上方的 8px 间隙 |
+| 菜单可用高度 | `max(160, chip.bottom − 12 − 12)`，再 `min(360, …)` | 两个 12 = 视口边距与顶部安全余量；`360px` 是原生 `ModelSelect` 的 `max-height` 上限 |
 | 面板 shell | 高度 = 当前段实测高度，上限 = 菜单可用高度 | 两段之间做纯高度补间 |
 | 列表滚动区 | `max-height: max(120, 菜单可用高度)` | 超出滚动；分组标题吸顶 |
 | chip | 高 `28px`，`padding: 0 4px 0 8px`，`gap: 4px`，字号 `13/20`，圆角 `--dsw-radius-sm` | 沿用原生 chip 几何 |
@@ -253,6 +253,7 @@ DSH 实例占用）。subagent 会话通过 `sessions.subagentAddress(sessionId)
    插件不自带测宽，因此窄容器下是否退化成图标 + 省略完全跟随宿主。
 8. **reduced-motion 由 CSS 媒体查询处理**，JS 不跑一套并行的动画时钟；高度、pane、滑条、
    强度面板淡出与 chevron 的过渡全部为 0，列表卸载等定时器仍按原时长执行（不可见）。
+10. **面板打开时盖住 chip**：底边与 chip 底边齐平是刻意的视觉选择，代价是 chip 不可见也不可点，关闭只能外点、`Escape` 或列表返回后 `Escape`。
 9. **`selectionFocus` 只压制 chip 的焦点环**，不改变真实焦点位置；可访问性名称（`aria-label`）
    始终包含当前模型与档位。
 
