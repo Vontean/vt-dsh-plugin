@@ -1,0 +1,11 @@
+# dsh-vt-system-prompt — 把插件挂进 DSH 配置树。
+#
+# 本插件由两部分组成：
+#   · Host 半侧（index.js）：注册 /vt-system-prompt/api/* 路由，读写全局 AGENTS.md；
+#   · Client 半侧（client.js）：在「设置」里注册一个 section 页面。
+#
+# 通过 plugin_manager 的 install_bundle 安装时，工具会自己写 profile 的
+# package.json 与 bundle 列表，不需要手工编辑本文件之外的任何配置。
+- insert:
+    - id: vt-system-prompt-editor
+      name: 'dsh-vt-system-prompt'

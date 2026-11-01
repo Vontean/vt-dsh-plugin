@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="AGENTS.md instructions">
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="#1f6feb"/>
+  <rect x="16" y="12" width="24" height="32" rx="4" fill="#ffffff"/>
+  <path d="M22 21h12M22 27h12M22 33h7" stroke="#1f6feb" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M44.5 27.5l-9.2 9.2-1.4 4.6 4.6-1.4 9.2-9.2z" fill="#ffd166" stroke="#0f4c9e" stroke-width="1.6" stroke-linejoin="round"/>
+</svg>

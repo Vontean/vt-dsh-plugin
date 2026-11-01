@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "全局提示词",
+    "en": "Global instructions"
+  },
+  "description": {
+    "zh": "在设置页里查看并编辑全局系统提示词（AGENTS.md），支持保存、放弃修改与重新载入。",
+    "en": "View and edit the global system prompt (AGENTS.md) from Settings, with save, discard and reload."
+  },
+  "icon": "icon.svg",
+  "category": "workflow",
+  "keywords": ["workflow", "prompt", "agents-md", "settings"]
+}
