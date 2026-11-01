@@ -40,6 +40,51 @@
   },
   "plugins": [
     {
+      "name": "dsh-vt-quote-bar",
+      "title": {
+        "zh": "模型额度",
+        "en": "Model quota"
+      },
+      "description": {
+        "zh": "在侧边栏账号行上方显示 DeepSeek 余额与 OpenCode Go 的 5 小时 / 本周 / 本月额度。",
+        "en": "Show your DeepSeek balance and OpenCode Go 5-hour / weekly / monthly quota above the account row in the DSH sidebar."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ik1vZGVsIHF1b3RhIj4KICA8cmVjdCB4PSIyIiB5PSIyIiB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHJ4PSIxNSIgZmlsbD0iIzExNmI3YSIvPgogIDxyZWN0IHg9IjE0IiB5PSI0MCIgd2lkdGg9IjgiIGhlaWdodD0iMTAiIHJ4PSIyLjUiIGZpbGw9IiNhN2YzZDAiLz4KICA8cmVjdCB4PSIyOCIgeT0iMzAiIHdpZHRoPSI4IiBoZWlnaHQ9IjIwIiByeD0iMi41IiBmaWxsPSIjNWVlYWQ0Ii8+CiAgPHJlY3QgeD0iNDIiIHk9IjIwIiB3aWR0aD0iOCIgaGVpZ2h0PSIzMCIgcng9IjIuNSIgZmlsbD0iI2YwZmRmYSIvPgogIDxjaXJjbGUgY3g9IjQ4IiBjeT0iMTUiIHI9IjciIGZpbGw9IiNmYmJmMjQiLz4KICA8cGF0aCBkPSJNNDggMTEuNXY3TTQ0LjUgMTVoNyIgc3Ryb2tlPSIjMTE2YjdhIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K",
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-quote-bar#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "directory": "plugins/vt-quote-bar"
+      },
+      "metadata": {
+        "category": "usage",
+        "keywords": [
+          "quota",
+          "balance",
+          "usage",
+          "sidebar",
+          "opencode"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1793500637,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "56a4a5d6f800c1771f3b024cd81785d7c7ddd479",
+            "path": "plugins/vt-quote-bar"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    },
+    {
       "name": "dsh-vt-uiux-enhancer",
       "title": {
         "zh": "VT UI/UX 增强",
