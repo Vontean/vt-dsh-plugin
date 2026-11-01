@@ -205,7 +205,7 @@
     "echarts": "^5.6.0",
     "echarts-wordcloud": "2.1.0",
     "lightningcss": "^1.25.0",
-    "mermaid": "11.16.0",
+    "pele": "1.13.0",
     "react-dom": "^18.3.1",
     "three": "^0.180.0",
     "tsdown": "^0.22.2",

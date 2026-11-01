@@ -40,7 +40,7 @@ flowchart LR
 | --- | --- | --- |
 | host 半边 | `lib/index.js`（≈190 KB） | 教模型写围栏、注册 `render_ui` / `validate_dsh_ui`、回合末自修、托管懒加载资产、注册 `genui` 技能 |
 | client 半边 | `lib/client.js`（≈780 KB） | 观察会话 DOM、解析围栏、修复容错、挂载 React 组件、本地交互、状态持久化、面板 dock、导出 |
-| 懒加载资产 | `lib/assets/*.js` | 重型引擎按需下载：mermaid 3.4 MB、three 700 KB、echarts-core 588 KB / full 1.04 MB、icons 969 KB、standalone 1.1 MB |
+| 懒加载资产 | `lib/assets/*.js` | 重型引擎按需下载：pele 700 KB、three 700 KB、echarts-core 588 KB / full 1.04 MB、icons 969 KB、standalone 1.1 MB |
 | 技能 | `SKILL.md` | 48 KB 的模型手册：语法铁律、组件词汇、内容→组件映射、编排范式、6 个完整范例 |
 | 构建 | `tsdown.config.ts` | 8 个产物：host、client、standalone、5 个 IIFE 资产；CSS Modules 在构建期内联成 `<style>` |
 
@@ -141,7 +141,7 @@ flowchart LR
 | CSS | CSS Modules 在构建期被 `lightningcss` 转换为字符串 + 注入 `<style data-plugin-css>`，**不进 bundle 的 CSS 通道** |
 | 资产 | 由 host 的 `webserver` 服务注册前缀路由 `/plugins/<包名>/assets/*`，client 用 `?rev=` 缓存击穿 |
 | **共存风险** | 新旧插件**不能同时启用**：都会注入同一个 system prompt 段、都观察 `dsh-ui` 围栏 DOM、都注册同名工具与技能 → 双渲染 / 工具冲突。切换时必须先禁用 `genui` 这一 row |
-| 许可 | MIT。fork 必须保留 `LICENSE` 与 `THIRD_PARTY_NOTICES.md`（mermaid / three / echarts / katex 等） |
+| 许可 | MIT。fork 必须保留 `LICENSE` 与 `THIRD_PARTY_NOTICES.md`（pele / three / echarts / katex 等） |
 
 ---
 
@@ -167,5 +167,5 @@ flowchart LR
 | 构建 | `npx tsdown` 通过 → `lib/index.js` + `lib/client.js` + `lib/assets/*`（8 个产物） |
 | 类型检查 | `npx tsc -p tsconfig.json` 通过 → `lib/types/**` |
 | 清单 | `package.json`（`dsh.bundle` / `dsh.client`）+ `cordis.patch.yml`（insert id `dsh-vt-gen-ui`） |
-| 装机 | **已切换**（2026-11-01）：旧插件 `@changfenhuang/dsh-genui` 已禁用 → 新插件 `dsh-vt-gen-ui@0.1.0` 已 link 安装（`application: applied`）。三条验证：`render_ui`/`validate_dsh_ui` 工具在位、`genui` 技能回到技能目录、client 端 `genui-panel` 已占位 `conversation.input.dock`、`/plugins/dsh-vt-gen-ui/assets/mermaid.js` 返回 200 |
+| 装机 | **已切换**（2026-11-01）：旧插件 `@changfenhuang/dsh-genui` 已禁用 → 新插件 `dsh-vt-gen-ui@0.1.0` 已 link 安装（`application: applied`）。三条验证：`render_ui`/`validate_dsh_ui` 工具在位、`genui` 技能回到技能目录、client 端 `genui-panel` 已占位 `conversation.input.dock`、`/plugins/dsh-vt-gen-ui/assets/pele.js` 返回 200 |
 | 回滚 | `plugin_manager set_bundle dsh-vt-gen-ui enabled=false` → 再 `set_bundle @changfenhuang/dsh-genui enabled=true`（顺反了会因重复注册抛错） |

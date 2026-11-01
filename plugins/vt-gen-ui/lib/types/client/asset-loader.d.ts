@@ -1,6 +1,6 @@
 /**
  * Asset-bundle loader: fetches one of the plugin's lazy engine bundles
- * (`lib/assets/mermaid.js` / `lib/assets/three.js`) by script injection and
+ * (`lib/assets/pele.js` / `lib/assets/three.js`) by script injection and
  * hands back the engine surface the bundle registered on
  * `window.__VtGenuiAssets__`.
  *
@@ -27,7 +27,7 @@ export declare function assetUrl(file: string): string;
  * file: repeated requests (several mermaid nodes, re-renders) share one
  * script load; a failed load stays failed for the page (the component shows
  * its fallback).
- * @param name - 'mermaid', 'three', 'echarts-core', 'echarts-full', or 'icons'.
+ * @param name - 'pele', 'three', 'echarts-core', 'echarts-full', or 'icons'.
  * @returns the registered engine surface.
  */
-export declare function loadGenuiAsset<T>(name: 'mermaid' | 'three' | 'echarts-core' | 'echarts-full' | 'icons'): Promise<T>;
+export declare function loadGenuiAsset<T>(name: 'pele' | 'three' | 'echarts-core' | 'echarts-full' | 'icons'): Promise<T>;

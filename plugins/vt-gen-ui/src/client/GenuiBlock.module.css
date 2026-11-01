@@ -1746,7 +1746,35 @@ img.mediaPlayer { aspect-ratio: 16 / 9; object-fit: cover; background: var(--dsl
 
 /* ---------- mermaid ---------- */
 
-.mermaid { overflow-x: auto; padding: var(--dsl-g-gap-xs) 0; }
+.mermaid {
+  overflow-x: auto;
+  padding: var(--dsl-g-gap-xs) 0;
+  /* Pele paints from these variables, not from a theme object: mapping them to
+     host tokens keeps every diagram inside the design system, and a theme flip
+     repaints the SVG without a re-render. Series reuse the categorical ramp the
+     native chart and ECharts already share. */
+  --pele-bg: transparent;
+  --pele-fg: var(--dsw-alias-label-primary);
+  --pele-muted: var(--dsw-alias-label-tertiary);
+  --pele-line: var(--dsw-alias-label-tertiary);
+  --pele-surface: var(--dsw-alias-bg-layer-2);
+  --pele-surface-alt: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-layer-2));
+  --pele-border: var(--dsl-g-border);
+  --pele-accent: var(--dsl-g-accent);
+  --pele-radius: var(--dsl-g-radius-control);
+  /* Text on a filled node: the surface colour is the theme's own contrast
+     pair, so it inverts with the theme exactly like the diagram does. */
+  --pele-fg-on-dark: var(--dsl-g-surface);
+  --pele-fg-on-light: var(--dsl-g-surface);
+  --pele-series-1: var(--dsl-g-data-1);
+  --pele-series-2: var(--dsl-g-data-2);
+  --pele-series-3: var(--dsl-g-data-3);
+  --pele-series-4: var(--dsl-g-data-4);
+  --pele-series-5: var(--dsl-g-data-5);
+  --pele-series-6: var(--dsl-g-data-6);
+  --pele-series-7: var(--dsl-g-data-2);
+  --pele-series-8: var(--dsl-g-data-3);
+}
 .mermaid svg {
   /* Mermaid writes its natural width as an inline max-width; this rule keeps
      that (narrow diagrams stay narrow, wide ones scroll) but centres the

@@ -178,7 +178,7 @@ react · react/jsx-runtime · react-dom · react-dom/client
 
 ### 3.5 lazy 资产为什么单独出 IIFE + host 路由
 
-1. **体积**：mermaid 3.4 MB、echarts-full 1.0 MB、icons 969 KB、three 700 KB。主 bundle 若含引擎，首屏要下 ~9 MB（`tsdown.config.ts:210-218` 注释）。
+1. **体积**：pele 700 KB、echarts-full 1.0 MB、icons 969 KB、three 700 KB。主 bundle 若含引擎，首屏要下 ~9 MB（`tsdown.config.ts:210-218` 注释）。
 2. **加载协议不同**：lazy 资产**不走** module loader，而是 script 注入后读全局 `window.__GenuiAssets__`（`src/client/asset-loader.ts:68-95`）。
 3. **服务端由插件自己的 host 半边提供**：`ASSET_ROUTE_PATH = '/plugins/@changfenhuang/dsh-genui/assets'`，通过 `webServer.register({kind:'prefix', path, handler})` 注册（`src/plugin/index.ts:38,242-248`），从 `lib/assets/` 读文件（`:70-73`）。
 4. **为什么能抢在通用 `/plugins` 之前**：webserver 的匹配规则是"先精确、再**最长前缀**、再 fallback"（`dsh-host-webserver` README §62）。我们的前缀比 `/plugins` 长，所以赢。
@@ -247,7 +247,7 @@ react · react/jsx-runtime · react-dom · react-dom/client
 |---|---|---|
 | `vitest` / `jsdom` / `@testing-library/*` | ✅ 可裁 | 上游**没有发布 tests/**（`files` 里无 tests，实测包内无该目录），`pnpm test` 在 fork 里本来也无测试可跑 |
 | `vite` / `tsx` | ✅ 可裁 | 只服务上游的开发/测试脚本 |
-| `three` / `mermaid` / `echarts` / `echarts-wordcloud` / `@types/three` | ⚠️ 视裁剪 | 只有保留 scene3d/mermaid/echart 块时才需要；它们只被 `asset-*.ts` 入口引用 |
+| `three` / `pele` / `echarts` / `echarts-wordcloud` / `@types/three` | ⚠️ 视裁剪 | 只有保留 scene3d/mermaid/echart 块时才需要；它们只被 `asset-*.ts` 入口引用 |
 | `shiki` / `@shikijs/langs` / `anser` / `diff` | ⚠️ 视裁剪 | 代码块高亮相关 |
 | `simple-icons` | ⚠️ 视裁剪 | 品牌图标 |
 | `immer` / `zustand` / `clsx` | ⚠️ 视裁剪 | client 状态/样式工具 |
@@ -269,7 +269,7 @@ react · react/jsx-runtime · react-dom · react-dom/client
 | `lib/index.js` | 199 KB | host 半边，ESM，只 import node 内建 |
 | `lib/client.js` | 791,947 B ≈ 792 KB（单文件 minified） | 浏览器半边，CJS + module-loader banner |
 | `lib/types/{plugin,client}/**/*.d.ts` | — | tsc 声明输出 |
-| `lib/assets/mermaid.js` | 3.39 MB | lazy IIFE |
+| `lib/assets/pele.js` | 0.70 MB | lazy IIFE |
 | `lib/assets/three.js` | 700 KB | lazy IIFE |
 | `lib/assets/echarts-core.js` | 588 KB | lazy IIFE |
 | `lib/assets/echarts-full.js` | 1.04 MB | lazy IIFE |

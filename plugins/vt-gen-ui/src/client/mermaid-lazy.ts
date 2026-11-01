@@ -76,7 +76,7 @@ function pump(): void {
       let deferred = false
       try {
         job.signal?.throwIfAborted()
-        const api = await loadGenuiAsset<MermaidAssetApi>('mermaid')
+        const api = await loadGenuiAsset<MermaidAssetApi>('pele')
         job.signal?.throwIfAborted()
         // Loading the engine may outlive a scroll or visibility change.
         if (document.hidden || performance.now() < scrollUntil) {

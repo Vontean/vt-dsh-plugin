@@ -454,7 +454,7 @@ raw fence body
 
 ### 6.5 `mermaid`
 
-- 只接受 `code`（≤8000 字符）；引擎 `lib/assets/mermaid.js`（3.4 MB）按需 script 注入（`src/client/mermaid-lazy.ts:1-11`；`advanced.tsx:335`）。
+- 只接受 `code`（≤8000 字符）；引擎 `lib/assets/pele.js`（0.7 MB）按需 script 注入（`src/client/mermaid-lazy.ts:1-11`；`advanced.tsx:335`）。
 - 调度：视口内（IntersectionObserver，前瞻一屏）才渲染；滚动/页面隐藏时排队等待，避免布局抖动阻塞输入（`advanced.tsx:336-423`；`mermaid-lazy.ts:36-99`）。
 - 失败/加载中：显示原始源码 + 提示，不显示空白（`advanced.tsx:431-434`）。
 - 主题联动：读取宿主 token 变化后重渲染（`advanced.tsx:372-413`）。
@@ -485,7 +485,7 @@ raw fence body
 
 | 资产 | 大小 | 触发条件 | 依据 |
 | --- | --- | --- | --- |
-| `lib/assets/mermaid.js` | 3.4 MB | 出现 `mermaid` 节点且进入视口 | `mermaid-lazy.ts:79` |
+| `lib/assets/pele.js` | 0.7 MB | 出现 `mermaid` 节点且进入视口 | `mermaid-lazy.ts:79` |
 | `lib/assets/three.js` | 700 KB | 出现 `scene3d` 节点 | `scene3d-lazy.ts:23-25` |
 | `lib/assets/echarts-core.js` | 588 KB | preset ∈ core 六种 | `echarts-engine.ts:3-9` |
 | `lib/assets/echarts-full.js` | 1.04 MB | 其他 preset 或 `option` 直通 | 同上 |

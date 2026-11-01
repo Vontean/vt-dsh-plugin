@@ -49,7 +49,16 @@ The colour values referenced by the `--dsl-g-*` token layer are *not* copied
 from that project: they resolve through the host's `--dsw-alias-*` tokens, and
 the literals in `GenuiBlock.module.css` are last-resort fallbacks.
 
-## KaTeX / Mermaid / ECharts / three.js
+## Pele (MIT) — the Mermaid-compatible diagram engine
 
-Those engines are loaded at runtime from their own packages under their own
-licenses; they are not vendored into this repository.
+`mermaid` nodes are rendered by [`pele`](https://github.com/obsidianmd/pele)
+1.13.0 (MIT, `Copyright (c) 2026 Obsidian`) instead of mermaid.js: it parses the
+same Mermaid 12.1 syntax and paints from CSS variables. Pele is built into the
+lazy asset `lib/assets/pele.js`; no source is vendored into this repository.
+Its parsers and grammar files derive from Mermaid (also MIT).
+
+## KaTeX / Pele / ECharts / three.js
+
+Those engines are built from their own packages under their own licenses into
+the `lib/assets/*.js` bundles; no engine source is vendored into this
+repository.
