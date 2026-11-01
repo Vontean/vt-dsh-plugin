@@ -1,5 +1,5 @@
 /**
- * dsh-vt-Interface — client half.
+ * dsh-vt-uiux-enhancer — client half.
  *
  * ── Architecture ─────────────────────────────────────────────────────────────
  * The plugin is layered so that adding another UI fix is a data change, not a
@@ -38,12 +38,12 @@
  */
 
 window.__ModuleLoader__.load({
-  id: 'dsh-vt-interface',
+  id: 'dsh-vt-uiux-enhancer',
   factory(require) {
     'use strict';
 
-    const PLUGIN_ID = 'dsh-vt-interface';
-    const VERSION = '2.6.3';
+    const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
+    const VERSION = '1.0.0';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it

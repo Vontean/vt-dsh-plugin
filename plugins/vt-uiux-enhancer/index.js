@@ -1,5 +1,5 @@
 /**
- * Host half of dsh-vt-Interface.
+ * Host half of dsh-vt-uiux-enhancer.
  *
  * Carries no behaviour. Every visual change lives in `client.js`, and both
  * verification channels are client-side (the always-on report tokens and the

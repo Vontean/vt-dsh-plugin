@@ -1,4 +1,4 @@
-# DEVELOPMENT — dsh-vt-Interface
+# DEVELOPMENT — dsh-vt-uiux-enhancer
 
 实施层的判断依据：补丁怎么选、以及会让你白改一轮的机制陷阱。
 设计方向与取舍在 `DESIGN.md`；验证方法在 `docs/VERIFY.md`。

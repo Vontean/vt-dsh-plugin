@@ -1,4 +1,4 @@
-# dsh-vt-Interface
+# dsh-vt-uiux-enhancer
 
 DeepSeek Harness 的 UI/UX 改善插件（Cordis bundle + client 半边）。
 改外观 = 改 `client.js` 的 DOMAIN 数据；插件关闭即完全还原。
@@ -61,8 +61,12 @@ DeepSeek Harness 的 UI/UX 改善插件（Cordis bundle + client 半边）。
 
 ## 环境
 
-- 插件本体：本目录（软链进 `~/.dsh/profiles/desktop/node_modules`）。
+- 插件本体：本目录，即总集仓库 `vt-dsh-plugin` 的 `plugins/vt-uiux-enhancer`（软链进
+  `~/.dsh/profiles/desktop/node_modules`）。
 - 客户端半边只能是一个文件（装载器拼装下发），见 `DEVELOPMENT.md`「打包与装载约束」。
-- 运行中的应用：DeepSeek Harness 桌面端，Harness 版本 `0.2.1-rc.5`。
+- 运行中的应用：DeepSeek Harness 桌面端，Harness 版本 `0.2.1-rc.5`；`package.json` 的
+  `engines.dsh` 声明兼容范围，改这里等于改安装门槛。
+- 版本：`package.json` 的 `version` 与 `client.js` 的 `VERSION` 必须同值；发布流程与 tag 命名见
+  仓库根 `README.md` 的「发布」段。
 - 代码索引：`.codegraph/`（`codegraph explore "<问题>"` 查符号与调用链）。本地产物，已 gitignore。
 - 版本控制：git，分支 `main`。

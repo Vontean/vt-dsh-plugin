@@ -1,4 +1,4 @@
-# DESIGN — dsh-vt-Interface
+# DESIGN — dsh-vt-uiux-enhancer
 
 这份文档只回答**设计**问题：要什么观感、否掉过什么、跨补丁的取舍是什么。
 实施细节（补丁类型怎么选、会踩什么坑、Harness 内部机制）在 `DEVELOPMENT.md`。
