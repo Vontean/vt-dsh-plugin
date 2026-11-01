@@ -186,6 +186,19 @@
       },
       "versions": [
         {
+          "version": "1.0.1",
+          "publishTimestamp": 1793502790,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "dcc8de277fb25805045218379191f6872a93b1af",
+            "path": "plugins/vt-system-prompt"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        },
+        {
           "version": "1.0.0",
           "publishTimestamp": 1793500771,
           "source": {
