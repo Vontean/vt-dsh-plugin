@@ -13,6 +13,7 @@
 | [模型额度](plugins/vt-quote-bar/README.md) | `dsh-vt-quote-bar` | 在侧边栏显示 DeepSeek 余额与 OpenCode Go 的额度 | 用量与额度 |
 | [网页对话](plugins/vt-web-chat/README.md) | `dsh-vt-web-chat` | 「新建会话」下方的网页对话入口，把 chat.deepseek.com 作为主区面板打开 | 界面与外观 |
 | [全局提示词](plugins/vt-system-prompt/README.md) | `dsh-vt-system-prompt` | 设置页里的全局系统提示词（`AGENTS.md`）查看与编辑 | 工作流与提示词 |
+| [Figma 使用手册](plugins/vt-use-figma/README.md) | `dsh-vt-use-figma` | 遇到 Figma 链接自动走远程 Figma MCP，并按官方要求先加载对应技能；把 Figma 官方技能就地接进 DSH | 工作流与提示词 |
 
 ## 安装
 

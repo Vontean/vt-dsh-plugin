@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "Figma 使用手册",
+    "en": "Use Figma"
+  },
+  "description": {
+    "zh": "提问里出现 Figma 链接时自动走远程 Figma MCP，并按官方要求先加载对应技能；同时把 Figma 官方技能接进 DSH，无需复制文件。",
+    "en": "Routes Figma links to the remote Figma MCP server, loads Figma's official skill before each Figma tool call, and exposes those skills to DSH without copying files."
+  },
+  "icon": "icon.svg",
+  "category": "workflow",
+  "keywords": ["figma", "mcp", "oauth", "skills", "design-to-code", "workflow"]
+}

@@ -1,0 +1,17 @@
+# dsh-vt-use-figma bundle for DeepSeek Harness (dsh).
+#
+# Host half only. It does two things:
+#   1. registers one system-prompt section that routes Figma links and Figma
+#      requests to the remote Figma MCP server and lists the skill that must be
+#      loaded before each Figma tool call;
+#   2. registers a skill provider that exposes Figma's official `figma-*` skills
+#      by reading the Codex plugin cache in place (no files copied, no user
+#      directory written).
+#
+# It deliberately declares no `dsh.client` and ships no `client.js`: there is no
+# browser half. `scripts/check-client-bundles.mjs` skips host-only plugins.
+#
+# The MCP connection itself is owned by dsh-oauth-mcp-client, not by this bundle.
+- insert:
+    - id: dsh-vt-use-figma
+      name: dsh-vt-use-figma

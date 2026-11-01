@@ -1,0 +1,50 @@
+{
+  "name": "dsh-vt-use-figma",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Teaches DeepSeek Harness to route Figma links to the remote Figma MCP server and to load Figma's official skills before each Figma tool call.",
+  "license": "MIT",
+  "author": "Vontean",
+  "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-use-figma#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vontean/vt-dsh-plugin.git",
+    "directory": "plugins/vt-use-figma"
+  },
+  "bugs": {
+    "url": "https://github.com/Vontean/vt-dsh-plugin/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "figma",
+    "mcp",
+    "oauth",
+    "skills",
+    "design-to-code"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "README.md",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
