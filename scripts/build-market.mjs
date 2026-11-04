@@ -7,6 +7,7 @@
  *   plugins/<dir>/market.json    —— 市场展示信息（标题、说明、图标、分类）
  *   market/releases.json         —— 已发布版本账本（release 工作流写入）
  *   market/config.json           —— 索引标题与分类声明
+ *   market/external.json         —— 收录的第三方插件（别人发布的 npm 包，我按自己装的版本钉住）
  *
  * 只有账本里已有发布记录的插件才会进入索引；生成后交给官方
  * @deepseek-ai/dsh-plugin-market-index 的 parseMarketIndex 校验，
@@ -46,6 +47,8 @@ async function inlineIcon(pluginDir, iconPath) {
 
 const config = await readJson(path.join(MARKET_DIR, 'config.json'))
 const ledger = await readJson(LEDGER_PATH)
+const externalPath = path.join(MARKET_DIR, 'external.json')
+const external = existsSync(externalPath) ? await readJson(externalPath) : { plugins: [] }
 
 const plugins = []
 const warnings = []
@@ -86,6 +89,38 @@ for (const dir of (await readdir(PLUGINS_DIR)).sort()) {
       labels: meta.labels ?? [],
     },
     versions: released,
+  })
+}
+
+// 第三方插件：直接声明成市场记录，版本由我手工钉住（只收自己在用的版本）。
+// 只允许 npm 来源；git 来源要现场构建，pnpm 默认拒绝执行依赖的构建脚本，装不出来。
+const categories = config.metadata?.categories ?? {}
+const names = new Set(plugins.map((plugin) => plugin.name))
+for (const [position, entry] of (external.plugins ?? []).entries()) {
+  const at = `market/external.json plugins[${String(position)}]`
+  if (names.has(entry.name)) throw new Error(`${at}: ${entry.name} 与 plugins/ 下的自研插件重名`)
+  names.add(entry.name)
+  if (entry.category !== undefined && categories[entry.category] === undefined) {
+    throw new Error(`${at}: 分类 ${entry.category} 未在 market/config.json 声明`)
+  }
+  if (!Array.isArray(entry.versions) || entry.versions.some((version) => version.source?.type !== 'npm')) {
+    throw new Error(`${at}: 第三方插件只收 npm 来源，versions[].source.type 必须是 npm`)
+  }
+
+  plugins.push({
+    name: entry.name,
+    ...(entry.title === undefined ? {} : { title: entry.title }),
+    ...(entry.description === undefined ? {} : { description: entry.description }),
+    ...(entry.icon === undefined ? {} : { icon: await inlineIcon(MARKET_DIR, entry.icon) }),
+    ...(entry.author === undefined ? {} : { author: entry.author }),
+    ...(entry.homepage === undefined ? {} : { homepage: entry.homepage }),
+    ...(entry.repository === undefined ? {} : { repository: entry.repository }),
+    metadata: {
+      ...(entry.category === undefined ? {} : { category: entry.category }),
+      keywords: entry.keywords ?? [],
+      labels: entry.labels ?? [],
+    },
+    versions: entry.versions,
   })
 }
 

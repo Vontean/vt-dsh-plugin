@@ -2,6 +2,8 @@
 
 一组面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的插件，放在同一个仓库里统一维护、统一发布。
 每个插件目录都是一个**独立发布的 npm 包**，可以单独安装、单独升级。
+仓库同时维护一份市场索引：除了这里的插件，还收录[我在用的第三方插件](#收录的第三方插件)，
+方便别人直接复刻这套配置。
 
 ## 插件
 
@@ -16,6 +18,21 @@
 | [Figma 使用手册](plugins/vt-use-figma/README.md) | `dsh-vt-use-figma` | 遇到 Figma 链接自动走远程 Figma MCP，并按官方要求先加载对应技能；把 Figma 官方技能就地接进 DSH | 工作流与提示词 |
 | [MineDesign 设计稿](plugins/vt-minedesign/README.md) | `dsh-vt-minedesign` | 把本机已装的 MineDesign 接进 DSH：本地 MCP 工具、设计稿与设计系统技能都能用，并把编辑器地址交到你手上 | 工作流与提示词 |
 | [插话立即生效](plugins/vt-steer-now/README.md) | `dsh-vt-steer-now` | 插入消息卡在慢工具上时，在待生效气泡下方给一个「立即发送」：点击中断当前工具，让消息立刻被读到 | 界面与外观 |
+
+### 收录的第三方插件
+
+下面这些**不是我写的**，是我自己在跑、并且钉进了市场索引的版本。它们在
+[`market/external.json`](market/external.json) 里声明，由各自作者维护与发布；收录等于「我在用」，
+不等于我审计过。版本固定在我实际安装的那一个，要升级就改声明里的 `version` 与 `publishTimestamp`。
+
+| 插件 | 包名 | 作者 | 作用 | 分类 |
+|---|---|---|---|---|
+| [侧边栏工作台](https://github.com/omdsh-dev/DSH-better-sidebar) | `dsh-better-sidebar` | omdsh-dev | 文件树与编辑器、终端、Git、任务、侧边对话，每个会话独立 | 界面与外观 |
+| [浏览器自动化](https://github.com/Fisfzy/dsh-ego-browser) | `dsh-ego-browser` | Fisfzy | 用结构化工具驱动真实 Chromium，侧边栏实时镜像画面，可随时接手 | 工具与自动化 |
+| [桌面宠物](https://github.com/PC2005-cloud/dsh-pet) | `dsh-pet` | PC2005-cloud | 住在界面里的蓝色大肥鱼，会溜达、会被拖动、会陪你工作 | 界面与外观 |
+| [消息重做](https://github.com/Imzl-zl/dsh-redo) | `dsh-redo` | Imzl-zl | 改写或重试已发送的消息，在原位重新生成 | 工作流与提示词 |
+| [过程纪律](https://github.com/Adamaik/dsh-progress-rules) | `dsh-progress-rules` | Adamaik | 系统提示里加一段过程纪律，让模型在静默的工具步骤之间通报进展；没有界面 | 工作流与提示词 |
+| [OAuth MCP 客户端](https://github.com/Vontean/dsh-oauth-mcp-client) | `@vontean/dsh-oauth-mcp-client` | Vontean（fork 自 springbrand） | 需要 OAuth 的远程 MCP 服务器接入：设置页里添加并登录，令牌存本地，断线重连 | 工具与自动化 |
 
 ## 安装
 
@@ -64,16 +81,21 @@ dsh plugin --profile <profile> add 'git+https://github.com/Vontean/vt-dsh-plugin
 
 ## 支持的 DSH 版本
 
-每个插件在 `package.json` 的 `engines.dsh` 里声明兼容范围，目前统一为
+本仓库的每个插件在 `package.json` 的 `engines.dsh` 里声明兼容范围，目前统一为
 `>=0.2.1-rc.5 <0.3.0`。超出范围时 DSH 会在加载前拒绝该插件，不会带着不兼容的代码跑起来。
 DSH 大版本升级后，通常需要插件跟进发布新版本。
+
+第三方插件沿用它们自己的声明：`dsh-redo` 要求 `>=0.2.0-rc.1 <0.3.0`，`dsh-progress-rules` 要求
+`>=0.0.1`；`dsh-better-sidebar`、`dsh-ego-browser`、`dsh-pet` 没有声明 `engines.dsh`，等于不设门槛，
+DSH 不会替它们把关。这三个也要跟着 DSH 大版本升级时自己确认能不能跑。
 
 ## 安全边界
 
 - 插件代码在**用户进程内**运行，没有沙箱，也没有额外的权限边界；它能读写页面 DOM、
   能发起网络请求（个别插件会请求余额接口）。只安装你信任的来源。
 - 本仓库的插件不上传遥测、不写系统文件；每个插件 README 的「安全边界」一节写明它实际会做什么。
-- 市场索引只指向本仓库发布物（npm 包、Release tarball、commit 固定的 git 子树），不指向第三方来源。
+- 索引里的第三方插件是别人的 npm 包，只指向 npm 上的固定版本，不内联、不转存它们的代码；
+  它们做什么由各自仓库说明，我没有逐行审计。要更严格的边界，就只装本仓库的插件。
 
 ## 仓库结构
 
@@ -83,6 +105,7 @@ vt-dsh-plugin/
 ├─ market/
 │  ├─ config.json           # 索引标题与分类声明
 │  ├─ releases.json         # 已发布版本账本（CI 写入）
+│  ├─ external.json         # 收录的第三方插件（手工钉版本）
 │  └─ index.json            # 市场索引，官方解析器校验后部署到 Pages
 ├─ scripts/
 │  ├─ build-market.mjs      # 生成 + 校验 index.json

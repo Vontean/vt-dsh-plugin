@@ -188,3 +188,57 @@ npm trust github <包名> --repo Vontean/vt-dsh-plugin --file release.yml --allo
 
 配置必须在 2 天内完成首个成功发布才算生效。之后的版本推送 tag 即自动发布，
 不用填 token、不用登录。
+
+## 9. 收录第三方插件（market/external.json）
+
+市场索引除了本仓库的插件，还可以收录**别人发布、我自己在用**的插件，让别人一次装到同一套配置。
+这些条目写在 [`market/external.json`](../market/external.json)，`scripts/build-market.mjs` 会把它们合并进
+`market/index.json` 并一起校验。
+
+### 9.1 硬规则
+
+- **只收 npm 来源**。`versions[].source.type` 必须是 `npm`；写 `git` 会在构建时直接报错。
+  原因：git 来源要在安装现场跑 `prepare` 构建，而 pnpm 10 默认拒绝执行依赖的构建脚本
+  （`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`），市场安装路径不会替它开白名单，结果就是装完没有 `lib/`。
+- **版本固定在我实际安装的那一个**。索引是「我这套配置」，不是版本追踪器。升级时同时改
+  `version` 和 `publishTimestamp`（取自 `https://registry.npmjs.org/<包名>` 的 `time[version]`，单位是秒）。
+- **包名不能和 `plugins/` 下的自研插件重名**，重名会让构建失败。
+- **分类必须在 `market/config.json` 里声明过**，否则构建失败。
+- **必须声明 `dsh.bundle`**，否则它不是一个 DSH 插件，装了也不会被加载。
+- `title` / `description` 的 `zh` 与 `en` 都要写（校验器强制要求 `en`）；`author` 写包作者或仓库 owner，
+  不要写成 `Vontean`。
+- 没有界面的插件要在 `description` 里写明「没有界面」，否则用户会以为装了没反应。
+- `icon` 可选，路径相对 `market/`。用别人仓库里的图标前先确认许可，并在 `author` 保留归属。
+
+### 9.2 一条记录的形状
+
+```json
+{
+  "name": "dsh-redo",
+  "title": { "zh": "消息重做", "en": "Redo a Message" },
+  "description": { "zh": "一句话说明解决什么问题。", "en": "One sentence on the problem it solves." },
+  "author": "Imzl-zl",
+  "homepage": "https://github.com/Imzl-zl/dsh-redo#readme",
+  "repository": { "url": "https://github.com/Imzl-zl/dsh-redo" },
+  "category": "workflow",
+  "keywords": ["retry", "edit", "rewind", "session"],
+  "versions": [
+    {
+      "version": "0.4.0",
+      "publishTimestamp": 1793259505,
+      "source": { "type": "npm" },
+      "engines": { "dsh": ">=0.2.0-rc.1 <0.3.0" }
+    }
+  ]
+}
+```
+
+`engines` 只认 `dsh`；包上声明的 `node` / `pnpm` 门槛不会被写进索引。
+
+### 9.3 收录与删除
+
+- 加一条：从本机 profile 的 `node_modules/<包名>/package.json` 取 `name` / `version`，从 npm registry 取
+  `publishTimestamp` 与 `engines.dsh`，再补展示信息，然后 `pnpm market`。
+- 删一条：从 `market/external.json` 移除该记录即可，不影响已安装的用户。
+- 收录不代表背书：README 的「安全边界」已写明第三方插件由各自作者维护、没有逐行审计。
+

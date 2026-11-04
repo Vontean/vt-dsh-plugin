@@ -5,8 +5,8 @@
     "en": "Vontean DSH plugins"
   },
   "description": {
-    "zh": "面向 DeepSeek Harness 的一组插件：界面增强、用量面板、系统提示词编辑、生成式界面与网页对话。",
-    "en": "A set of DeepSeek Harness plugins: UI enhancements, usage quota panel, system prompt editor, generative UI and web chat."
+    "zh": "Vontean 的 DeepSeek Harness 插件集，加上我在用的第三方插件：界面增强、用量面板、系统提示词编辑、生成式界面、网页对话、浏览器自动化与过程纪律。",
+    "en": "Vontean's DeepSeek Harness plugins plus the third-party plugins I actually run: UI enhancements, quota panel, prompt editor, generative UI, web chat, browser automation and progress discipline."
   },
   "metadata": {
     "categories": {
@@ -32,6 +32,12 @@
         "title": {
           "zh": "生成式界面",
           "en": "Generative UI"
+        }
+      },
+      "tools": {
+        "title": {
+          "zh": "工具与自动化",
+          "en": "Tools & automation"
         }
       }
     },
@@ -587,6 +593,236 @@
           "engines": {
             "dsh": ">=0.2.1-rc.5 <0.3.0"
           }
+        }
+      ]
+    },
+    {
+      "name": "dsh-better-sidebar",
+      "title": {
+        "zh": "侧边栏工作台",
+        "en": "Better Sidebar"
+      },
+      "description": {
+        "zh": "把侧边栏变成完整工作台：文件树与编辑器、终端、Git、任务和侧边对话，每个会话独立一份。",
+        "en": "A full sidebar workbench: file tree and editor, terminal, Git, tasks and side chat, one set per conversation."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIHZpZXdCb3g9IjAgMCAzNiAzNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB4PSI2LjUiIHk9IjkiIHdpZHRoPSIyMyIgaGVpZ2h0PSIxOCIgcng9IjIuNSIgZmlsbD0idXJsKCNhKSIgLz4KICA8cmVjdCB4PSIyMS41IiB5PSI5IiB3aWR0aD0iOCIgaGVpZ2h0PSIxOCIgcng9IjIuNSIgZmlsbD0idXJsKCNiKSIgLz4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYSIgeDE9IjYuNSIgeTE9IjkiIHgyPSIyOS41IiB5Mj0iMjciIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KICAgICAgPHN0b3Agc3RvcC1jb2xvcj0iIzY5QjlGRiIgLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMzI0REUyIiAvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYiIgeDE9IjI1LjUiIHkxPSI5IiB4Mj0iMjUuNSIgeTI9IjI3IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CiAgICAgIDxzdG9wIHN0b3AtY29sb3I9IiM0NUU3QTQiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzA1OTA5RCIgLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgo8L3N2Zz4K",
+      "author": "omdsh-dev",
+      "homepage": "https://github.com/omdsh-dev/DSH-better-sidebar#readme",
+      "repository": {
+        "url": "https://github.com/omdsh-dev/DSH-better-sidebar"
+      },
+      "metadata": {
+        "category": "ui",
+        "keywords": [
+          "sidebar",
+          "editor",
+          "terminal",
+          "git",
+          "workbench"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.28.2",
+          "publishTimestamp": 1793114071,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {}
+        }
+      ]
+    },
+    {
+      "name": "dsh-ego-browser",
+      "title": {
+        "zh": "浏览器自动化",
+        "en": "Agent Browser"
+      },
+      "description": {
+        "zh": "用结构化工具驱动真实 Chromium：导航、语义快照、点击、表单、脚本与截图；侧边栏实时镜像画面，可随时接手操作。",
+        "en": "Drives a real Chromium browser with structured tools — navigation, snapshots, clicks, forms, scripts and screenshots — mirrored live in the sidebar for manual takeover."
+      },
+      "author": "Fisfzy",
+      "homepage": "https://github.com/Fisfzy/dsh-ego-browser#readme",
+      "repository": {
+        "url": "https://github.com/Fisfzy/dsh-ego-browser"
+      },
+      "metadata": {
+        "category": "tools",
+        "keywords": [
+          "browser",
+          "automation",
+          "chromium",
+          "cdp",
+          "screenshot"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.9.8",
+          "publishTimestamp": 1793540235,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {}
+        }
+      ]
+    },
+    {
+      "name": "dsh-pet",
+      "title": {
+        "zh": "桌面宠物",
+        "en": "Desktop Pet"
+      },
+      "description": {
+        "zh": "一只住在界面里的蓝色大肥鱼：会自己溜达、被你拖来甩去，忙时陪着你、闲时碎碎念。",
+        "en": "A blue fish pet living inside the interface: wanders around, gets dragged about, keeps you company while you work and chats when idle."
+      },
+      "author": "PC2005-cloud",
+      "homepage": "https://github.com/PC2005-cloud/dsh-pet#readme",
+      "repository": {
+        "url": "https://github.com/PC2005-cloud/dsh-pet"
+      },
+      "metadata": {
+        "category": "ui",
+        "keywords": [
+          "pet",
+          "desktop",
+          "mascot",
+          "fun"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.4.0",
+          "publishTimestamp": 1793521171,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {}
+        }
+      ]
+    },
+    {
+      "name": "dsh-redo",
+      "title": {
+        "zh": "消息重做",
+        "en": "Redo a Message"
+      },
+      "description": {
+        "zh": "改写或重试已经发出去的消息，在原位重新生成，不用重建会话。",
+        "en": "Edit or retry an already-sent message and regenerate in place, rewinding the model context without leaving the session."
+      },
+      "author": "Imzl-zl",
+      "homepage": "https://github.com/Imzl-zl/dsh-redo#readme",
+      "repository": {
+        "url": "https://github.com/Imzl-zl/dsh-redo"
+      },
+      "metadata": {
+        "category": "workflow",
+        "keywords": [
+          "retry",
+          "edit",
+          "rewind",
+          "session"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.4.0",
+          "publishTimestamp": 1793259505,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.0-rc.1 <0.3.0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dsh-progress-rules",
+      "title": {
+        "zh": "过程纪律",
+        "en": "Progress Rules"
+      },
+      "description": {
+        "zh": "给系统提示加一段过程纪律，并在连续静默的工具步骤之间给出确定性提醒，让回答逐步通报进展。没有界面，只影响模型行为。",
+        "en": "Adds a process-discipline system-prompt section and a deterministic nudge that makes the agent narrate progress between silent tool steps. No interface — it only changes model behaviour."
+      },
+      "author": "Adamaik",
+      "homepage": "https://github.com/Adamaik/dsh-progress-rules#readme",
+      "repository": {
+        "url": "https://github.com/Adamaik/dsh-progress-rules"
+      },
+      "metadata": {
+        "category": "workflow",
+        "keywords": [
+          "prompt",
+          "discipline",
+          "progress",
+          "narration"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.2.1",
+          "publishTimestamp": 1792483750,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.0.1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "@vontean/dsh-oauth-mcp-client",
+      "title": {
+        "zh": "OAuth MCP 客户端",
+        "en": "OAuth MCP Client"
+      },
+      "description": {
+        "zh": "把需要 OAuth 的远程 MCP 服务器接进 DSH：在设置页里添加并登录，令牌存在本地，断线自动重连；默认带一条 SpringBrand 连接。fork 自 springbrand-lab 的同名插件（MIT）。",
+        "en": "Connects OAuth-protected remote MCP servers to DSH: add and sign in from Settings, tokens stored locally, automatic reconnect, with a default SpringBrand connection. Forked from springbrand-lab's plugin (MIT)."
+      },
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/dsh-oauth-mcp-client#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/dsh-oauth-mcp-client"
+      },
+      "metadata": {
+        "category": "tools",
+        "keywords": [
+          "oauth",
+          "mcp",
+          "pkce",
+          "remote",
+          "connector"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "publishTimestamp": 1793804973,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {}
         }
       ]
     }
