@@ -31,7 +31,7 @@ window.__ModuleLoader__.load({
     /** Package identity: one source for the module id and every log/storage prefix. */
     const PLUGIN_ID = 'dsh-vt-web-chat';
     /** Must equal `version` in package.json; printed once in the mount trace below. */
-    const VERSION = '1.0.2';
+    const VERSION = '1.2.0';
 
     // Mount trace: one line naming the loaded build (DevTools → verbose level).
     console.debug(`[${PLUGIN_ID}] v${VERSION}`);
@@ -55,6 +55,22 @@ window.__ModuleLoader__.load({
     const PARTITION_KEY = 'panel:vt-web-chat';
     /** Last visited conversation, remembered across panel switches and reloads. */
     const STORAGE_KEY = `${PLUGIN_ID}:last-url`;
+    /**
+     * Record the site keeps its own UI preferences in. It is written by the
+     * site's storage kit, so a hand-written value must keep the same envelope
+     * (`{ value, __version }`) or the site discards it.
+     */
+    const SITE_PREFS_KEY = '__appKit_@deepseek/chat_lastSessionValue';
+    /**
+     * The site's own "environment warning dismissed" flag. The warning is shown
+     * because the embedded browser reports Electron; closing it writes this
+     * flag, so writing it here is the same dismissal without a click.
+     */
+    const UNSAFE_WARN_KEY = 'closeUnsafeEnvWarn';
+    /** Guest-side reload counter, so a failed write cannot reload forever. */
+    const PREF_GUARD_KEY = `${PLUGIN_ID}:pref-reloads`;
+    /** Reloads one guest session may perform while it settles its preferences. */
+    const PREF_RELOAD_LIMIT = 2;
     /** Paths that are not a conversation: a brand-new chat, or an auth page. */
     const AUTH_PATHS = new Set(['/sign_in', '/login', '/signup', '/auth']);
     /** A guest that never reaches `dom-ready` is reported instead of hanging. */
@@ -183,6 +199,87 @@ window.__ModuleLoader__.load({
         }
       } catch {
         /* storage unavailable: the panel still works, it just forgets */
+      }
+    }
+
+    /**
+     * Script that settles the site's own preferences before the panel is used.
+     *
+     * Two records carry the state, and the site reads both once at boot: the
+     * environment-warning dismissal and the sidebar state. Writing them without
+     * a reload has no effect, so the script writes only what differs and
+     * reloads once. A guest sessionStorage counter caps the reloads, so a site
+     * that refuses the write cannot loop. Without a sign-in token there is no
+     * sidebar yet, so only the warning is handled on the auth page.
+     * @returns the script text, safe to hand to `executeJavaScript`.
+     */
+    function guestPreferencesScript() {
+      return `(() => {
+  try {
+    const reloads = Number(sessionStorage.getItem('${PREF_GUARD_KEY}') || '0');
+    if (reloads >= ${PREF_RELOAD_LIMIT}) return 'settled';
+    const read = (key) => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw === null) return null;
+        const parsed = JSON.parse(raw);
+        return parsed !== null && typeof parsed === 'object' ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    };
+    const write = (key, value) => {
+      const record = read(key) || {};
+      record.value = value;
+      if (typeof record.__version !== 'string') record.__version = '0';
+      localStorage.setItem(key, JSON.stringify(record));
+    };
+    let reload = false;
+    const warning = read('${UNSAFE_WARN_KEY}');
+    if (warning === null || warning.value !== true) {
+      write('${UNSAFE_WARN_KEY}', true);
+      reload = true;
+    }
+    const token = read('userToken');
+    if (token !== null && token.value !== null && token.value !== undefined) {
+      const prefs = read('${SITE_PREFS_KEY}');
+      const value = prefs !== null && prefs.value !== null && typeof prefs.value === 'object' ? prefs.value : {};
+      if (value.siderCollapsed !== true) {
+        const next = prefs === null ? {} : prefs;
+        next.value = Object.assign({}, value, { siderCollapsed: true });
+        if (typeof next.__version !== 'string') next.__version = '0';
+        localStorage.setItem('${SITE_PREFS_KEY}', JSON.stringify(next));
+        reload = true;
+      }
+    }
+    if (!reload) return 'ready';
+    sessionStorage.setItem('${PREF_GUARD_KEY}', String(reloads + 1));
+    location.reload();
+    return 'reloading';
+  } catch (error) {
+    return 'unavailable';
+  }
+})()`;
+    }
+
+    /**
+     * Apply the guest preferences to a live guest.
+     *
+     * The changes go through the site's own records rather than its DOM, so a
+     * site redesign cannot break them into wrong clicks. Every failure stays
+     * inside this panel: a guest that refuses the script keeps its own layout
+     * and its own warning.
+     * @param element - webview element hosting the site.
+     */
+    function applyGuestPreferences(element) {
+      if (!attached(element)) return;
+      try {
+        const pending = element.executeJavaScript(guestPreferencesScript(), false);
+        if (pending !== undefined && pending !== null && typeof pending.catch === 'function') {
+          pending.catch(() => {});
+        }
+      } catch {
+        /* scripting disabled for this guest: keep the site's own behaviour */
       }
     }
 
@@ -525,6 +622,8 @@ window.__ModuleLoader__.load({
           const raw = readUrl(element);
           if (raw !== undefined) remember(raw);
           restoring = false;
+          // Only a site document can carry the preferences; about:blank cannot.
+          if (parseChatUrl(raw) !== undefined) applyGuestPreferences(element);
           try {
             setPhase('ready');
             setFailure(undefined);
@@ -541,6 +640,8 @@ window.__ModuleLoader__.load({
         const onNavigateInPage = (event) => {
           if (disposed || event?.isMainFrame !== true) return;
           onNavigate();
+          // Signing in can be an in-page route change, which skips did-stop-loading.
+          applyGuestPreferences(element);
         };
 
         const onFailLoad = (event) => {

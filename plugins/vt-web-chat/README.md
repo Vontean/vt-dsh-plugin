@@ -1,13 +1,21 @@
 # dsh-vt-web-chat · 网页对话
 
 在 DSH 桌面版的「新会话」正下方加一行「网页对话」入口，点开后在主内容区整页显示
-`chat.deepseek.com`，用官网自己的对话历史，并记住上次停留的对话。
+`chat.deepseek.com`，用官网自己的对话历史，记住上次停留的对话，默认收起网页自己的
+会话侧边栏，并关掉站点的「使用环境异常」提示。
 
 ## 它改了什么
 
 - 侧栏「新会话」下面多一行「网页对话」，点击后在主内容区打开整页网页对话；
 - 载体是桌面壳的 guest 租约桥（Electron `<webview>`）。官网返回
   `frame-ancestors 'none'`，普通 iframe 无法承载，租约是主进程唯一放行的建法；
+- 进入面板时把网页自己的会话侧边栏收起：改写站点存在 localStorage 里的
+  `siderCollapsed` 记录并重载一次，不依赖站点按钮的 DOM；每次进面板都会回到收起状态，
+  你在本次停留里手动展开不会被覆盖；
+- 进入面板时关掉站点的「使用环境异常」提示：写站点自己的 `closeUnsafeEnvWarn` 记录，
+  等同于点一次弹窗上的 X。**不改 UA、不伪装运行环境**，因此站点仍然知道自己在 Electron
+  里运行，只把这条提示的“别再显示”提前替你勾上；
+- 两条记录都在同一次重载里生效，guest 侧有重载次数上限，写失败也不会死循环；
 - 离开面板会释放 guest，回来时按本机记录的上次对话地址恢复；
 - 纯 Web 环境（没有桌面桥）显示说明卡，并可「在浏览器打开」；
 - 入口文案与面板文案随宿主语言切换（zh / en）。
@@ -24,7 +32,7 @@
 
 1. **插件市场（推荐）**：在「插件 → 发现 → 添加索引源」里填入
    `https://vontean.github.io/vt-dsh-plugin/index.json`，找到「网页对话」点安装。
-2. **npm**：`dsh plugin --profile <profile> add dsh-vt-web-chat@1.0.2`。
+2. **npm**：`dsh plugin --profile <profile> add dsh-vt-web-chat@1.2.0`。
 3. **Release tarball**：从 GitHub Release 下载 `.tgz`，再执行
    `dsh plugin --profile <profile> add <该 .tgz 的本地路径或 URL>`。
 
