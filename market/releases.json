@@ -316,5 +316,20 @@
         "dsh": ">=0.2.1-rc.5 <0.3.0"
       }
     }
+  ],
+  "dsh-mcx-prompt-preset": [
+    {
+      "version": "0.1.0",
+      "publishTimestamp": 1793813394,
+      "source": {
+        "type": "git",
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "commit": "62dee8499a89441f63fe2bf96eb9b4f05f75c6ff",
+        "path": "plugins/mcx-prompt-preset"
+      },
+      "engines": {
+        "dsh": ">=0.2.1-rc.5 <0.3.0"
+      }
+    }
   ]
 }

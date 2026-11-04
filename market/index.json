@@ -52,6 +52,51 @@
   },
   "plugins": [
     {
+      "name": "dsh-mcx-prompt-preset",
+      "title": {
+        "zh": "提示词库",
+        "en": "Prompt Preset"
+      },
+      "description": {
+        "zh": "把 MineCodex 的提示词库接进 DSH：输入框「+」右侧多一个提示词按钮，点击弹出可搜索浮层，选中即填入输入框；侧边栏另有完整的管理页面。",
+        "en": "Brings the MineCodex prompt library into DSH: a prompt button right of the composer's add control opens a searchable library that fills the draft, plus a full Prompt Preset panel in the sidebar."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiIgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiBmaWxsPSJub25lIj4KICA8cmVjdCB4PSIxIiB5PSIxIiB3aWR0aD0iMzAiIGhlaWdodD0iMzAiIHJ4PSI5IiBmaWxsPSIjMTExODI3Ii8+CiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNiA2KSBzY2FsZSgwLjgzMzMzMykiIHN0cm9rZT0iI0Y5RkFGQiIgc3Ryb2tlLXdpZHRoPSIyLjEiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CiAgICA8cGF0aCBkPSJNMTIgN3YxNCIvPgogICAgPHBhdGggZD0iTTMgMThhMSAxIDAgMCAxLTEtMVY0YTEgMSAwIDAgMSAxLTFoNWE0IDQgMCAwIDEgNCA0IDQgNCAwIDAgMSA0LTRoNWExIDEgMCAwIDEgMSAxdjEzYTEgMSAwIDAgMS0xIDFoLTZhMyAzIDAgMCAwLTMgMyAzIDMgMCAwIDAtMy0zeiIvPgogIDwvZz4KICA8Y2lyY2xlIGN4PSIyMy41IiBjeT0iMjMuNSIgcj0iMy41IiBmaWxsPSIjN0M5QkZGIi8+Cjwvc3ZnPgo=",
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/mcx-prompt-preset#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "directory": "plugins/mcx-prompt-preset"
+      },
+      "metadata": {
+        "category": "ui",
+        "keywords": [
+          "prompt",
+          "preset",
+          "library",
+          "minecodex",
+          "composer"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "publishTimestamp": 1793813394,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "62dee8499a89441f63fe2bf96eb9b4f05f75c6ff",
+            "path": "plugins/mcx-prompt-preset"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    },
+    {
       "name": "dsh-vt-gen-ui",
       "title": {
         "zh": "VT GenUI 生成式界面",
