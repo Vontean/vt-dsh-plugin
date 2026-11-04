@@ -195,6 +195,16 @@
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
       }
+    },
+    {
+      "version": "1.2.0",
+      "publishTimestamp": 1793810710,
+      "source": {
+        "type": "npm"
+      },
+      "engines": {
+        "dsh": ">=0.2.1-rc.5 <0.3.0"
+      }
     }
   ],
   "dsh-vt-system-prompt": [
