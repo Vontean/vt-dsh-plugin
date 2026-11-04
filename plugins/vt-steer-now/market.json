@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "插话立即生效",
+    "en": "Send steering now"
+  },
+  "description": {
+    "zh": "插入消息卡在慢工具上时，在待生效气泡下方给一个「立即发送」：点击中断当前工具，让消息在下一个边界立刻被读到。",
+    "en": "When a steering message waits for a slow tool, a Send now action under the pending bubble interrupts the tool so the message is read at the next boundary."
+  },
+  "icon": "icon.svg",
+  "category": "ui",
+  "keywords": ["steering", "queue", "interrupt", "composer"]
+}

@@ -1,0 +1,59 @@
+{
+  "name": "dsh-vt-steer-now",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Make a pending steering message take effect immediately: a Send now action under the queued bubble interrupts the running tool and delivers the message at the next step.",
+  "license": "MIT",
+  "author": "Vontean",
+  "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-steer-now#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vontean/vt-dsh-plugin.git",
+    "directory": "plugins/vt-steer-now"
+  },
+  "bugs": {
+    "url": "https://github.com/Vontean/vt-dsh-plugin/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "steering",
+    "queue",
+    "interrupt",
+    "composer",
+    "ui"
+  ],
+  "engines": {
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "DESIGN.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

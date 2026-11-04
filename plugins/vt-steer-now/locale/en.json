@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Send steering now",
+    "description": "When a steering message waits for the running tool, show a Send now action under the pending bubble that interrupts the tool and delivers the message at the next boundary."
+  }
+}
