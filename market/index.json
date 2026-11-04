@@ -240,6 +240,50 @@
       ]
     },
     {
+      "name": "dsh-vt-steer-now",
+      "title": {
+        "zh": "插话立即生效",
+        "en": "Send steering now"
+      },
+      "description": {
+        "zh": "插入消息卡在慢工具上时，在待生效气泡下方给一个「立即发送」：点击中断当前工具，让消息在下一个边界立刻被读到。",
+        "en": "When a steering message waits for a slow tool, a Send now action under the pending bubble interrupts the tool so the message is read at the next boundary."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiIgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiBmaWxsPSJub25lIj4KICA8cmVjdCB4PSIxIiB5PSIxIiB3aWR0aD0iMzAiIGhlaWdodD0iMzAiIHJ4PSI5IiBmaWxsPSIjMTExODI3Ii8+CiAgPHBhdGggZD0iTTkgMTkuNWg5LjJhNC4zIDQuMyAwIDEgMC00LjMtNC4zIiBzdHJva2U9IiNGOUZBRkIiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cGF0aCBkPSJNMTIuNCAxNi4yIDkgMTkuNWwzLjQgMy4zIiBzdHJva2U9IiNGOUZBRkIiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KICA8cGF0aCBkPSJNMjEuNSAxMi41IDI0IDEwbS0yLjUgMi41TDI0IDE1IiBzdHJva2U9IiM3QzlCRkYiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+Cg==",
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-steer-now#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "directory": "plugins/vt-steer-now"
+      },
+      "metadata": {
+        "category": "ui",
+        "keywords": [
+          "steering",
+          "queue",
+          "interrupt",
+          "composer"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1793803480,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "29dedc1255f9f50ee9ef2bcd1bd3d296c6abfb2b",
+            "path": "plugins/vt-steer-now"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    },
+    {
       "name": "dsh-vt-system-prompt",
       "title": {
         "zh": "全局提示词",
