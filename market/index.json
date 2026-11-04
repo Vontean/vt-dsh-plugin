@@ -5,8 +5,8 @@
     "en": "Vontean DSH plugins"
   },
   "description": {
-    "zh": "Vontean 的 DeepSeek Harness 插件集，加上我在用的第三方插件：界面增强、用量面板、系统提示词编辑、生成式界面、网页对话、浏览器自动化与过程纪律。",
-    "en": "Vontean's DeepSeek Harness plugins plus the third-party plugins I actually run: UI enhancements, quota panel, prompt editor, generative UI, web chat, browser automation and progress discipline."
+    "zh": "Vontean 的 DeepSeek Harness 插件集，加上我在用的第三方插件：界面增强、用量面板、系统提示词编辑、生成式界面、网页对话、浏览器自动化、过程纪律与记忆上下文。",
+    "en": "Vontean's DeepSeek Harness plugins plus the third-party plugins I actually run: UI enhancements, quota panel, prompt editor, generative UI, web chat, browser automation, progress discipline and context memory."
   },
   "metadata": {
     "categories": {
@@ -38,6 +38,12 @@
         "title": {
           "zh": "工具与自动化",
           "en": "Tools & automation"
+        }
+      },
+      "memory": {
+        "title": {
+          "zh": "记忆与上下文",
+          "en": "Memory & context"
         }
       }
     },
@@ -823,6 +829,46 @@
             "type": "npm"
           },
           "engines": {}
+        }
+      ]
+    },
+    {
+      "name": "dsh-mnemon",
+      "title": {
+        "zh": "Mnemon 记忆上下文",
+        "en": "Mnemon"
+      },
+      "description": {
+        "zh": "可组合的上下文与记忆：来源与策略可插拔，自带分层记忆、自演进技能、文档与记忆空间视图；按需召回，不把上下文一次塞满。",
+        "en": "Composable, view-based context for DSH: pluggable sources and strategies with layered memory, self-evolving skills and document/memory-space views, recalling on demand instead of filling the context up front."
+      },
+      "author": "omdsh-dev",
+      "homepage": "https://github.com/omdsh-dev/dsh-mnemon#readme",
+      "repository": {
+        "url": "https://github.com/omdsh-dev/dsh-mnemon"
+      },
+      "metadata": {
+        "category": "memory",
+        "keywords": [
+          "memory",
+          "context",
+          "recall",
+          "skills",
+          "documents"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.5.39",
+          "publishTimestamp": 1793633936,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0"
+          }
         }
       ]
     }

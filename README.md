@@ -33,6 +33,7 @@
 | [消息重做](https://github.com/Imzl-zl/dsh-redo) | `dsh-redo` | Imzl-zl | 改写或重试已发送的消息，在原位重新生成 | 工作流与提示词 |
 | [过程纪律](https://github.com/Adamaik/dsh-progress-rules) | `dsh-progress-rules` | Adamaik | 系统提示里加一段过程纪律，让模型在静默的工具步骤之间通报进展；没有界面 | 工作流与提示词 |
 | [OAuth MCP 客户端](https://github.com/Vontean/dsh-oauth-mcp-client) | `@vontean/dsh-oauth-mcp-client` | Vontean（fork 自 springbrand） | 需要 OAuth 的远程 MCP 服务器接入：设置页里添加并登录，令牌存本地，断线重连 | 工具与自动化 |
+| [Mnemon 记忆上下文](https://github.com/omdsh-dev/dsh-mnemon) | `dsh-mnemon` | omdsh-dev | 可组合的上下文与记忆：来源与策略可插拔，分层记忆、自演进技能、文档与记忆空间视图，按需召回 | 记忆与上下文 |
 
 ## 安装
 

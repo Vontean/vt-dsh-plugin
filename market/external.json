@@ -140,6 +140,30 @@
           "source": { "type": "npm" }
         }
       ]
+    },
+    {
+      "name": "dsh-mnemon",
+      "title": {
+        "zh": "Mnemon 记忆上下文",
+        "en": "Mnemon"
+      },
+      "description": {
+        "zh": "可组合的上下文与记忆：来源与策略可插拔，自带分层记忆、自演进技能、文档与记忆空间视图；按需召回，不把上下文一次塞满。",
+        "en": "Composable, view-based context for DSH: pluggable sources and strategies with layered memory, self-evolving skills and document/memory-space views, recalling on demand instead of filling the context up front."
+      },
+      "author": "omdsh-dev",
+      "homepage": "https://github.com/omdsh-dev/dsh-mnemon#readme",
+      "repository": { "url": "https://github.com/omdsh-dev/dsh-mnemon" },
+      "category": "memory",
+      "keywords": ["memory", "context", "recall", "skills", "documents"],
+      "versions": [
+        {
+          "version": "0.5.39",
+          "publishTimestamp": 1793633936,
+          "source": { "type": "npm" },
+          "engines": { "dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0" }
+        }
+      ]
     }
   ]
 }
