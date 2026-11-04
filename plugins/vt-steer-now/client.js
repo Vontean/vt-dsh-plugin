@@ -31,7 +31,7 @@ window.__ModuleLoader__.load({
     /** 插件标识（与 package.json 的 name 一致）。 */
     const PLUGIN_ID = 'dsh-vt-steer-now';
     /** 与 package.json 的 version 保持一致。 */
-    const VERSION = '1.0.1';
+    const VERSION = '1.0.2';
     /** 文案命名空间。 */
     const NS = 'vt-steer-now';
     /** Host 路由前缀，与 index.js 的 ROUTE_PREFIX 必须一致。 */
@@ -187,9 +187,14 @@ window.__ModuleLoader__.load({
         // 上界必须是 wanted（按钮池在循环内按需创建），否则池为空时一个也建不出来。
         for (let index = 0; index < wanted; index += 1) {
           const button = buttonAt(index);
-          const bubble = bubbles[index];
-          const rect = bubble.getBoundingClientRect();
-          const visible = rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
+          // data-pending-steering 标在整行容器上：子元素依次是气泡本体和操作行
+          // （时间 + 复制等图标）。操作行是这一行的最后一个子元素。
+          const row = bubbles[index];
+          const children = row.children;
+          const bubble = children.length > 0 ? children[0] : row;
+          const actions = children.length > 1 ? children[children.length - 1] : null;
+          const bubbleRect = bubble.getBoundingClientRect();
+          const visible = bubbleRect.height > 0 && bubbleRect.bottom > 0 && bubbleRect.top < window.innerHeight;
           if (!visible) {
             button.style.display = 'none';
             continue;
@@ -200,17 +205,15 @@ window.__ModuleLoader__.load({
           }
           button.style.display = 'inline-flex';
 
-          // 气泡下面那一行是时间 + 图标操作区；把按钮放在它左侧，读起来像同一行的
-          // 一个动作，也不会压住时间与图标。结构不符时退回气泡右下角。
-          const row = bubble.parentElement;
-          const actions = row && row.lastElementChild !== bubble ? row.lastElementChild : null;
+          // 放在时间左侧，读起来像操作行里的第一个动作，也不会压住时间与图标。
+          // 操作行缺失时退回气泡右下角。
           const actionsRect = actions?.getBoundingClientRect();
           const anchor = actionsRect !== undefined && actionsRect.height > 0 ? actionsRect : undefined;
           const left = anchor === undefined
-            ? rect.right - button.offsetWidth
+            ? bubbleRect.right - button.offsetWidth
             : anchor.left - button.offsetWidth - 8;
           const top = anchor === undefined
-            ? rect.bottom + 6
+            ? bubbleRect.bottom + 6
             : anchor.top + (anchor.height - button.offsetHeight) / 2;
           button.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
         }
