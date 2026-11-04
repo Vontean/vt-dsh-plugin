@@ -3,20 +3,22 @@
  *
  * ── 它解决什么问题 ───────────────────────────────────────────────────────────
  * 「插入消息」（steer）只在 step 边界被 `preStep` claim。一个 step 里可能正在
- * 跑一个很慢的工具，于是这条消息要等工具返回后模型才看得到。本插件在「工具
- * 正在执行」且「有插入消息待生效」时，在那条待生效气泡下方放一个「立即发送」，
- * 点击后由 Host 原子地中断当前回合并把消息重新投递到下一个回合的第 1 步。
+ * 跑一个很慢的工具，也可能在长时间推理，于是这条消息要等当前 step 结束后模型
+ * 才看得到。本插件在「回合运行中 + 有插入消息待生效」时，在那条待生效气泡的
+ * 操作行里放一个「立即发送」，点击后由 Host 原子地中断当前回合并把消息重新
+ * 投递到下一个回合的第 1 步。
  *
- * ── 为什么按钮放在 DOM 层而不是槽位 ──────────────────────────────────────────
+ * ── 状态从哪来（0.2.x）────────────────────────────────────────────────────────
+ * `conversation.snapshot.queue` 只包含 `next-turn`；插入消息在 Host 的 `inbox`
+ * 会话投影里（`{ "next-turn": [], "next-step": [] }`），只有槽位里的
+ * `useProjection("inbox")` 能读到。因此这里注册一个渲染 null 的 dock 条目作为
+ * 桥：它把 `next-step` 的消息 id 与 `running` 写进镜像，DOM 层据此画按钮。
+ * 空组件不产生 DOM 节点，不影响输入框布局。
+ *
+ * ── 为什么按钮是 DOM 浮层而不是槽位 ──────────────────────────────────────────
  * 待生效的插入气泡由 ChatView 直接渲染（`pendingSteering.map(...)`），没有逐条
  * 槽位；唯一能包住它的槽位是 `conversation.chat.flow`（single），替换它等于重写
- * 整个聊天流。所以这里用 body 下的常驻浮层 + 气泡矩形定位：不动 React 树，
- * 也就不会干扰 React 的协调。
- *
- * ── 状态从哪来 ──────────────────────────────────────────────────────────────
- * `uiSession.current` 给出当前会话 binding，`binding.ctx.get('conversation')`
- * 的 snapshot 带 `queue`（含 placement）与 `running`。工具是否在跑用 DOM 判定：
- * 工具行渲染为 `div[data-tool][data-state="running"]`。
+ * 整个聊天流。所以用 body 下的常驻浮层 + 气泡矩形定位：不动 React 树。
  */
 
 window.__ModuleLoader__.load({
@@ -24,18 +26,18 @@ window.__ModuleLoader__.load({
   factory(require) {
     'use strict';
 
+    const React = require('react');
+
     /** 插件标识（与 package.json 的 name 一致）。 */
     const PLUGIN_ID = 'dsh-vt-steer-now';
     /** 与 package.json 的 version 保持一致。 */
-    const VERSION = '1.0.0';
+    const VERSION = '1.0.1';
     /** 文案命名空间。 */
     const NS = 'vt-steer-now';
     /** Host 路由前缀，与 index.js 的 ROUTE_PREFIX 必须一致。 */
     const API_PREFIX = '/vt-steer-now/api';
     /** 待生效插入气泡的标记（由 ChatView 的 UserStyleBubble 输出）。 */
     const BUBBLE_SELECTOR = '[data-pending-steering]';
-    /** 工具行的运行态标记（由 dsh-client-ui-tool 的 ToolRow 输出）。 */
-    const RUNNING_TOOL_SELECTOR = '[data-tool][data-state="running"]';
     /** 浮层重新定位的合并窗口：流式输出期间 DOM 变化很密。 */
     const RECONCILE_DELAY_MS = 120;
 
@@ -43,14 +45,14 @@ window.__ModuleLoader__.load({
       'action.now': '立即发送',
       'action.busy': '中断中…',
       'action.failed': '立即发送失败',
-      'action.hint': '当前工具正在执行。点击中断它，让这条插入消息立刻被读到。',
+      'action.hint': '当前回合还没读到这条插入消息。点击中断当前步骤，让它立刻被读到。',
     };
 
     const en = {
       'action.now': 'Send now',
       'action.busy': 'Interrupting…',
       'action.failed': 'Send now failed',
-      'action.hint': 'A tool is running. Click to interrupt it so this steering message is read immediately.',
+      'action.hint': 'The turn has not read this steering message yet. Click to interrupt the current step so it is read immediately.',
     };
 
     /** 当前会话的待生效状态镜像：会话切换与队列变化都会重写它。 */
@@ -177,12 +179,8 @@ window.__ModuleLoader__.load({
       function reconcile() {
         const state = mirror.get();
         const bubbles = Array.from(document.querySelectorAll(BUBBLE_SELECTOR));
-        const toolRunning = document.querySelector(RUNNING_TOOL_SELECTOR) !== null;
         const wanted =
-          state.sessionId !== undefined &&
-          state.running &&
-          toolRunning &&
-          state.steering.length > 0
+          state.sessionId !== undefined && state.running && state.steering.length > 0
             ? Math.min(bubbles.length, state.steering.length)
             : 0;
 
@@ -217,7 +215,7 @@ window.__ModuleLoader__.load({
           button.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
         }
 
-        // 多出来的按钮（气泡消失或工具结束后）一律收起。
+        // 多出来的按钮（气泡消失或回合结束后）一律收起。
         for (let index = wanted; index < buttons.length; index += 1) {
           buttons[index].style.display = 'none';
         }
@@ -240,7 +238,7 @@ window.__ModuleLoader__.load({
           childList: true,
           subtree: true,
           attributes: true,
-          attributeFilter: ['data-state', 'data-pending-steering'],
+          attributeFilter: ['data-pending-steering'],
         });
         window.addEventListener('scroll', schedule, true);
         window.addEventListener('resize', schedule, true);
@@ -265,8 +263,8 @@ window.__ModuleLoader__.load({
       return { mount, reconcile, schedule, refreshLabels };
     }
 
-    /** 客户端依赖：语言字典；uiSession 在 apply 内按可用性注入。 */
-    const inject = ['locale'];
+    /** 客户端依赖：槽位与语言字典。 */
+    const inject = ['slots', 'locale'];
 
     /**
      * @param ctx Client 插件上下文。
@@ -277,6 +275,27 @@ window.__ModuleLoader__.load({
       const t = ctx.locale.bind(NS);
       const mirror = createMirror();
       const overlay = createOverlay({ t, mirror });
+
+      /**
+       * dock 桥：渲染 null，只负责把 `inbox` 投影里的插入消息同步到镜像。
+       * @param props - 槽位注入的 sessionId，以及标准钩子 useSession / useProjection。
+       */
+      function SteerNowBridge({ sessionId, useSession, useProjection }) {
+        const inbox = useProjection('inbox');
+        const running = useSession((snapshot) => snapshot.running);
+        const steps = Array.isArray(inbox?.['next-step']) ? inbox['next-step'] : [];
+        // next-step 里也可能有非用户来源的上下文注入，只把用户插入消息算进来。
+        const steering = steps
+          .filter((message) => message?.source?.kind === 'user')
+          .map((message) => message.id);
+
+        React.useEffect(() => {
+          mirror.set({ sessionId, steering, running: running === true });
+          overlay.schedule();
+        }, [sessionId, inbox, running]);
+
+        return null;
+      }
 
       ctx.effect(() => {
         const disposeOverlay = overlay.mount();
@@ -289,41 +308,19 @@ window.__ModuleLoader__.load({
         };
       }, `${PLUGIN_ID}: overlay`);
 
-      ctx.inject(['uiSession'], (scope) => {
-        const uiSession = scope.uiSession;
-        let conversation;
-        let disposeQueue;
-
-        /** 读取当前会话的插入消息与运行状态，并同步到镜像。 */
-        const refresh = () => {
-          const binding = uiSession.current.getSnapshot();
-          const sessionId = binding?.key;
-          const next = sessionId === undefined ? undefined : binding.ctx?.get?.('conversation');
-          if (next !== conversation) {
-            disposeQueue?.();
-            conversation = next;
-            disposeQueue = conversation?.snapshot?.subscribe?.(refresh);
-          }
-          const snapshot = conversation?.snapshot?.getSnapshot?.();
-          const queue = Array.isArray(snapshot?.queue) ? snapshot.queue : [];
-          mirror.set({
-            sessionId,
-            steering: queue.filter((row) => row.placement === 'steering').map((row) => row.id),
-            running: snapshot?.running === true,
-          });
-          overlay.schedule();
-        };
-
-        scope.effect(() => {
-          const disposeCurrent = uiSession.current.subscribe(refresh);
-          refresh();
-          return () => {
-            disposeCurrent();
-            disposeQueue?.();
-            disposeQueue = undefined;
-            conversation = undefined;
-          };
-        }, `${PLUGIN_ID}: session mirror`);
+      ctx.inject(['slots'], (scope) => {
+        scope.slots.inject('conversation.input.dock', () =>
+          scope.slots.register(
+            {
+              name: 'conversation.input.dock',
+              id: 'steer-now',
+              order: 900,
+              locale: NS,
+              inject: (sessionId) => ({ sessionId }),
+            },
+            SteerNowBridge,
+          ),
+        );
       });
 
       ctx.effect(() => {

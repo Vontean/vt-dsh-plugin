@@ -41,9 +41,8 @@ agent.followup(message);                          // abort 已置位 → next-tu
 
 ## 4. 交互
 
-- **显示条件**：当前会话有 `placement === 'steering'` 的队列项 **且** `running` **且**
-  DOM 中存在 `div[data-tool][data-state="running"]`。三者同时满足才显示，避免干扰
-  正常快速生效的场景。
+- **显示条件**：当前会话的 `inbox` 投影里 `next-step` 有用户插入消息 **且** `running`。
+  两者同时满足就显示；插入消息被 claim 后自动消失。
 - **位置**：待生效气泡下方、与时间/图标同一行的左侧；按钮是 body 下常驻浮层的子节点，
   用气泡父容器里最后一个子元素（时间 + 图标操作行）的矩形做定位，结构不符时退回气泡右下角。
 - **视觉**（全部取自 DSH 的真实 token，不使用品牌蓝）：
@@ -57,7 +56,7 @@ agent.followup(message);                          // abort 已置位 → next-tu
   | 文字颜色 | `--dsw-alias-label-tertiary`（light `#81858c`），悬停 `label-secondary` |
   | 时间 | 13px，`label-tertiary`，右内边距 12px |
 
-- **文案**：`立即发送`；悬浮提示说明「当前工具正在执行，点击中断它」。
+- **文案**：`立即发送`；悬浮提示说明「当前回合还没读到这条消息，点击中断当前步骤」。
 - **失败**：`claimed` 表示消息已被正常 claim（此时队列变化会让按钮消失），静默收敛；
   其他失败显示「立即发送失败」并恢复可点。
 - **不做**：不改输入框区域、不加常驻状态条、不替换任何聊天行渲染。
@@ -66,8 +65,9 @@ agent.followup(message);                          // abort 已置位 → next-tu
 
 - `uiSession.current.getSnapshot()` → `{ key: sessionId, ctx }`；
 - `binding.ctx.get('conversation').snapshot` → 含 `queue` 与 `running` 的会话快照；
-- 工具运行态只能从 DOM 判定（快照里没有当前工具执行状态），这是本插件最脆的一处，
-  依赖 `data-tool` / `data-state` 两个属性名。
+- 插入消息来自 `inbox` 会话投影的 `next-step`，不是 `conversation.snapshot.queue`
+  （后者只含 `next-turn`）；桥接组件必须注册在 `conversation.input.dock` 才能拿到
+  `useProjection` 钩子。
 - DOM 变化用 `MutationObserver` + 120ms 合并窗口，滚动/缩放用捕获阶段监听重新定位。
 
 ## 6. 风险与已知限制

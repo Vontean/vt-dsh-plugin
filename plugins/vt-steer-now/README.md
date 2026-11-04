@@ -6,8 +6,8 @@
 
 ## 它改了什么
 
-- **只在需要时出现**：仅当「有插入消息待生效」且「确实有工具正在执行」时，才在那条
-  待生效气泡下方显示「立即发送」。正常的快速生效不显示，不干扰阅读。
+- **只在需要时出现**：仅当「回合运行中」且「有插入消息待生效」时，才在那条待生效
+  气泡的操作行里显示「立即发送」。没有待生效消息时不出现，不干扰阅读。
 - **点击后**：Host 先把消息移出队列，再中断当前回合，然后重新投递同一条消息
   （保留附件与消息身份）。回合收尾后立即开新回合，消息在第 1 步被读到。
 - **代价是可见的**：正在跑的工具会被中断，聊天流里会出现一条中断记录；如果当时正在
@@ -32,15 +32,15 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 ### npm
 
 ```bash
-dsh plugin --profile <profile> add dsh-vt-steer-now@1.0.0
+dsh plugin --profile <profile> add dsh-vt-steer-now@1.0.1
 ```
 
-npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view dsh-vt-steer-now@1.0.0` 能查到即可）。
+npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view dsh-vt-steer-now@1.0.1` 能查到即可）。
 
 ### Release tarball
 
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载
-`dsh-vt-steer-now-1.0.0.tgz`，然后：
+`dsh-vt-steer-now-1.0.1.tgz`，然后：
 
 ```bash
 dsh plugin --profile <profile> add /绝对路径/dsh-vt-steer-now-1.0.0.tgz
