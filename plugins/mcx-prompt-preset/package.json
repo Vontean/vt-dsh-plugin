@@ -1,0 +1,63 @@
+{
+  "name": "dsh-mcx-prompt-preset",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Bring the MineCodex prompt library into DeepSeek Harness: a prompt button beside the composer's add control opens a searchable library, and a Prompt Preset panel manages the same prompts.",
+  "license": "MIT",
+  "author": "Vontean",
+  "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/mcx-prompt-preset#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vontean/vt-dsh-plugin.git",
+    "directory": "plugins/mcx-prompt-preset"
+  },
+  "bugs": {
+    "url": "https://github.com/Vontean/vt-dsh-plugin/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "prompt",
+    "preset",
+    "prompt-library",
+    "minecodex",
+    "composer",
+    "ui"
+  ],
+  "engines": {
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "assets/prompt-icons.json",
+    "assets/phosphor-LICENSE",
+    "README.md",
+    "DESIGN.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

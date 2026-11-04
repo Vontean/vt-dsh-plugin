@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Prompt Preset",
+    "description": "Reads the MineCodex prompt library and puts it inside DSH: a prompt button between the composer's add control and the access-mode control opens a searchable library that fills the draft with one click, and a Prompt Preset panel manages the same prompts."
+  }
+}

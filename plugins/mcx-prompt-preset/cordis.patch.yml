@@ -1,0 +1,13 @@
+# dsh-mcx-prompt-preset — 把提示词库接进 DSH。
+#
+# 本插件由两部分组成：
+#   · Host 半侧（index.js）：读写本机 MineCodex 的提示词库（SQLite），
+#     以只读优先、写入复用同一套校验的方式暴露 /mcx-prompt-preset/api/*；
+#   · Client 半侧（client.js）：在输入框「+」与审查模式之间注入提示词按钮，
+#     浮层用于浏览与填入；侧边栏注册 Prompt Preset 页面做完整增删改。
+#
+# 通过 plugin_manager 的 install_bundle 安装时，工具会自己写 profile 的
+# package.json 与 bundle 列表，不需要手工编辑本文件之外的任何配置。
+- insert:
+    - id: mcx-prompt-preset
+      name: 'dsh-mcx-prompt-preset'

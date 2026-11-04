@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "提示词库",
+    "en": "Prompt Preset"
+  },
+  "description": {
+    "zh": "把 MineCodex 的提示词库接进 DSH：输入框「+」右侧多一个提示词按钮，点击弹出可搜索浮层，选中即填入输入框；侧边栏另有完整的管理页面。",
+    "en": "Brings the MineCodex prompt library into DSH: a prompt button right of the composer's add control opens a searchable library that fills the draft, plus a full Prompt Preset panel in the sidebar."
+  },
+  "icon": "icon.svg",
+  "category": "ui",
+  "keywords": ["prompt", "preset", "library", "minecodex", "composer"]
+}
