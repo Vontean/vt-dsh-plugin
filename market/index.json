@@ -270,12 +270,9 @@
       "versions": [
         {
           "version": "1.0.0",
-          "publishTimestamp": 1793803480,
+          "publishTimestamp": 1793803985,
           "source": {
-            "type": "git",
-            "url": "https://github.com/Vontean/vt-dsh-plugin",
-            "commit": "29dedc1255f9f50ee9ef2bcd1bd3d296c6abfb2b",
-            "path": "plugins/vt-steer-now"
+            "type": "npm"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.5 <0.3.0"
