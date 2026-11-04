@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.2.6';
+    const VERSION = '1.2.7';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -1108,6 +1108,62 @@ ${responseLine} {
             // rule ties with `.header:where(:not(:has(.tabs)))` on specificity.
             `${header}:has(${selector}) { min-height: 0 !important; padding-bottom: ${VIEW_TABS.headerBottom}px !important; }`,
           ].join('\n');
+        },
+      },
+      {
+        kind: 'component',
+        id: 'sidebar-new-session',
+        role: 'sidebar-primary-action',
+        /**
+         * The sidebar's "New session" button ships as a **solid pill**: the rule
+         * carries `--dsw-alias-button-elevated-fill`, and on macOS two literal
+         * plates (`#ffffff8c` light, `#ffffff26` dark) re-declare the same
+         * background on `[data-platform=darwin]`. So the fill is not one token
+         * that could be re-themed — it has to be re-declared on the element.
+         *
+         * It reads as an **outline** instead: transparent body, one hairline
+         * edge, and the fill returns only while the pointer is on it.
+         *
+         * Two cascade facts decide the shape of these rules, both consequences
+         * of using `!important` to beat the darwin literals:
+         *
+         *   1. `!important` on the base selector also outranks the shipped
+         *      `:hover` rules — specificity never beats `!important` — so hover
+         *      must be re-declared here, otherwise the button loses its only
+         *      feedback. It takes `interactive-bg-hover` (the token the sibling
+         *      icon buttons and panel rows already use in this sidebar) rather
+         *      than the shipped `button-floating-hover`: that one is neutral-75
+         *      against a neutral-50 sidebar, so it only read as feedback while
+         *      the plate underneath was still lifting it.
+         *   2. `border-color` cannot be raised unconditionally: the collapsed
+         *      rail paints its 36px icon form with `border-color: transparent`,
+         *      and `!important` would draw a ring around it. The rect is
+         *      therefore restored from the module sibling.
+         *
+         * Edge weight stays `.5px` as shipped (every sibling edge in this
+         * sidebar is that hairline); only the step moves l3 → l4. With the fill
+         * gone the edge *is* the affordance, and l3 (16% dark / 12% light)
+         * reads as a divider rather than as a button.
+         */
+        signature: [
+          'height:38px',
+          'container-type:inline-size',
+          'background:var(--dsw-alias-button-elevated-fill)',
+        ],
+        fallback: '.kB3qhq_newSession',
+        rules: (selector) => {
+          const collapsed = moduleSibling(selector, 'collapsed');
+          return `
+${selector} {
+  background: transparent !important;
+  border-color: var(--dsw-alias-border-l4) !important;
+}
+${selector}:hover {
+  background: var(--dsw-alias-interactive-bg-hover) !important;
+}
+${collapsed} ${selector} {
+  border-color: transparent !important;
+}`;
         },
       },
       {

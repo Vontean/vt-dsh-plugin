@@ -9,6 +9,8 @@ DeepSeek Harness 的界面改善插件：把外观调成**一张干净的白纸*
 - **配色**：纯白画布、中性浅色填充、暖灰文字、暖白侧栏；填充档不带暖，避免"脏灰"。
 - **层级**：浮起面用"有方向的阴影 + 可辨细边"，不用均匀灰雾。
 - **控件形状**：同类控件同一尺寸与形状；图标按钮统一 28px 正圆，并同时写 `corner-shape`。
+- **侧栏「新会话」**：实底改成描边 —— 透明底 + 一条细边，hover 才回填；与同列的裸字入口同一层级，
+  收起成图标轨道时不带边。
 - **排版**：中文控件字重比同排拉丁文字低一档，一行里只有一套字重体系。
 - **动效**：动画只表达"状态正在变"；轮次跳转条静止为短刻度、靠近指针才长出来。
 - **输入框**：原生 `title` tooltip 换成自绘气泡，沿用应用自己的 tooltip token。
@@ -40,16 +42,16 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 **npm**
 
 ```bash
-dsh plugin --profile <profile> add dsh-vt-uiux-enhancer@1.2.6
+dsh plugin --profile <profile> add dsh-vt-uiux-enhancer@1.2.7
 ```
 
 **Release tarball**
 
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载
-`dsh-vt-uiux-enhancer-1.2.6.tgz`，然后：
+`dsh-vt-uiux-enhancer-1.2.7.tgz`，然后：
 
 ```bash
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-uiux-enhancer-1.2.6.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-uiux-enhancer-1.2.7.tgz
 ```
 
 ## 支持的 DSH 版本
