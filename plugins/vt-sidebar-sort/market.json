@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "侧边栏排序",
+    "en": "Sidebar nav sort"
+  },
+  "description": {
+    "zh": "拖动「新会话」下方的入口调整顺序，拖到「更多」上即可收进更多菜单；拖拽时的小箭头与蓝线和会话列表一致。",
+    "en": "Drag the entries under New Session into your own order, or drop one on More to file it into the More menu; the drag caret is the same one the session list draws."
+  },
+  "icon": "icon.svg",
+  "category": "ui",
+  "keywords": ["ui", "sidebar", "sort", "drag", "nav"]
+}

@@ -1,0 +1,5 @@
+# dsh-vt-sidebar-sort bundle patch: one insert mounts the plugin row.
+# insert.name must be the package name; insert.id must be unique in the loader tree.
+- insert:
+    - id: dsh-vt-sidebar-sort
+      name: dsh-vt-sidebar-sort
