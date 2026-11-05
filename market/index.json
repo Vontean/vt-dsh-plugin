@@ -294,6 +294,48 @@
       ]
     },
     {
+      "name": "dsh-vt-sidebar-sort",
+      "title": {
+        "zh": "侧边栏排序",
+        "en": "Sidebar nav sort"
+      },
+      "description": {
+        "zh": "拖动「新会话」下方的入口调整顺序，拖到「更多」上即可收进更多菜单；拖拽时的小箭头与蓝线和会话列表一致。",
+        "en": "Drag the entries under New Session into your own order, or drop one on More to file it into the More menu; the drag caret is the same one the session list draws."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIj4KICA8cGF0aCBkPSJNNCA3LjI1aDEwTTQgMTJoMTBNNCAxNi43NWgxMCIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMS4zIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cGF0aCBkPSJNMTcuNiA4LjEgMTkuODUgNS44NSAyMi4xIDguMU0xNy42IDE1LjlsMi4yNSAyLjI1IDIuMjUtMi4yNSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMS4zIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+Cg==",
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-sidebar-sort#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "directory": "plugins/vt-sidebar-sort"
+      },
+      "metadata": {
+        "category": "ui",
+        "keywords": [
+          "ui",
+          "sidebar",
+          "sort",
+          "drag",
+          "nav"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1793856173,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    },
+    {
       "name": "dsh-vt-steer-now",
       "title": {
         "zh": "插话立即生效",
