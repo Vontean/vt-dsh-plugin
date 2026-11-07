@@ -316,11 +316,11 @@
     },
     {
       "version": "1.0.1",
-      "publishTimestamp": 1794039927,
+      "publishTimestamp": 1794041610,
       "source": {
         "type": "git",
         "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "55d08d1b9f200f7ef5caa5f8c6e52e60fd64440a",
+        "commit": "04fa63ebadd34fa70e710d5036952f4286571e58",
         "path": "plugins/vt-minedesign"
       },
       "engines": {
