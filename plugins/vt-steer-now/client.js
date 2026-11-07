@@ -38,6 +38,29 @@ window.__ModuleLoader__.load({
     const API_PREFIX = '/vt-steer-now/api';
     /** 待生效插入气泡的标记（由 ChatView 的 UserStyleBubble 输出）。 */
     const BUBBLE_SELECTOR = '[data-pending-steering]';
+    /** 气泡正文的插槽出口（0.2.2 起该行首个子节点是插槽出口而非气泡本体）。 */
+    const CONTENT_SLOT = '[data-slot="conversation.chat.user.content"]';
+
+    /** 元素是否真的有盒子。
+     * 插槽出口恒为 `display:contents`（`dsh-client-ui-renderer` 的 `ANCHOR_STYLE`），
+     * 这类元素不产生盒子，`getBoundingClientRect()` 各项为 0，不能用来判断可见性。 */
+    function hasBox(element) {
+      const rect = element.getBoundingClientRect();
+      return rect.height > 0 && rect.width > 0;
+    }
+
+    /** 行内第一个真正有盒子的后代：跳过插槽出口这类无盒子包装，拿到能测量与定位的元素。 */
+    function firstWithBox(root) {
+      const walk = (node) => {
+        for (const child of node.children) {
+          if (hasBox(child)) return child;
+          const nested = walk(child);
+          if (nested !== null) return nested;
+        }
+        return null;
+      };
+      return walk(root);
+    }
     /** 浮层重新定位的合并窗口：流式输出期间 DOM 变化很密。 */
     const RECONCILE_DELAY_MS = 120;
 
@@ -187,18 +210,23 @@ window.__ModuleLoader__.load({
         // 上界必须是 wanted（按钮池在循环内按需创建），否则池为空时一个也建不出来。
         for (let index = 0; index < wanted; index += 1) {
           const button = buttonAt(index);
-          // data-pending-steering 标在整行容器上：子元素依次是气泡本体和操作行
-          // （时间 + 复制等图标）。操作行是这一行的最后一个子元素。
+          // data-pending-steering 标在整行容器上。0.2.2 起行内的气泡被插槽出口包住，
+          // 首个子节点是 `display:contents` 的出口而非气泡本体，所以不能再用
+          // `children[0]` 测量；可见性按整行判断，定位另外挑一个真有盒子的元素。
           const row = bubbles[index];
           const children = row.children;
-          const bubble = children.length > 0 ? children[0] : row;
           const actions = children.length > 1 ? children[children.length - 1] : null;
-          const bubbleRect = bubble.getBoundingClientRect();
-          const visible = bubbleRect.height > 0 && bubbleRect.bottom > 0 && bubbleRect.top < window.innerHeight;
+          const rowRect = row.getBoundingClientRect();
+          const visible = rowRect.height > 0 && rowRect.bottom > 0 && rowRect.top < window.innerHeight;
           if (!visible) {
             button.style.display = 'none';
             continue;
           }
+          const outlet = row.querySelector(CONTENT_SLOT);
+          let bubble = outlet === null ? null : firstWithBox(outlet);
+          if (bubble === null) bubble = firstWithBox(row);
+          if (bubble === null) bubble = row;
+          const bubbleRect = bubble.getBoundingClientRect();
           if (button.dataset.busy !== '1') {
             button.textContent = t('action.now');
             button.title = t('action.hint');
@@ -242,6 +270,9 @@ window.__ModuleLoader__.load({
           subtree: true,
           attributes: true,
           attributeFilter: ['data-pending-steering'],
+          // 流式输出常以纯文本增量更新，不产生 childList 变化；不开这个的话
+          // 气泡高度变化后要等到下一次滚动或缩放才会重新定位。
+          characterData: true,
         });
         window.addEventListener('scroll', schedule, true);
         window.addEventListener('resize', schedule, true);
