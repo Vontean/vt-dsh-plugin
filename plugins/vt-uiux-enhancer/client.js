@@ -1213,7 +1213,6 @@ ${collapsed} ${selector} {
         // trusted here (the shipped fill token moved, and discovery then matched a
         // different rule while the real bubble sat unfound).
         fixedSelector: '[data-message-bubble]',
-        fallback: '[data-message-bubble]',
         rules: (selector) => {
           const { rows, rowGap, padding, stackGap, textGap, glyph, iconGap } = MESSAGE_CLAMP;
           return `
@@ -1555,9 +1554,9 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           const selectors = discovered.length
             ? (patch.match === 'all' ? discovered : discovered.slice(0, 1))
             : [patch.fallback];
-          status[patch.id] = discovered.length
-            ? `discovered:${selectors.length}`
-            : 'fallback';
+          status[patch.id] = patch.fixedSelector
+            ? 'fixed'
+            : (discovered.length ? `discovered:${selectors.length}` : 'fallback');
           selectorsById[patch.id] = selectors;
           blocks.push(patch.rules(selectors.join(',\n')));
         }

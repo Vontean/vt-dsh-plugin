@@ -25,7 +25,8 @@
 新增 `component` 时：
 
 1. 写**规则签名**，不写类名 —— 类名带每构建变化的哈希。
-2. 给一条 `fallback`（唯一硬编码选择器），保证 discovery 失败时仍在工作。
+2. 能定位到**语义属性**（`data-*`）就写 `fixedSelector`，跳过 discovery；否则给一条 `fallback`
+   （唯一硬编码选择器），保证 discovery 失败时仍在工作。两者互斥，写一个就够。
 3. 需要同一控件的第二个状态类时用 `moduleSibling()` 推导，不猜类名。
 4. 弹窗类、由 `useAnchoredPosition` 摆放的面板，直接套 `anchoredDialog()`。
 
@@ -37,7 +38,8 @@
 3. 选形态：要覆盖浏览器/原生绘制的东西走「接管 DOM」，要往官方列表里加一项走「贡献 slot」。
 4. 失败必须看得见：让异常抛到 `installBehaviors` 的 catch 里（进 `behaviorErrors`），不要自己吞掉。
 
-**完成判据**：`component` 是报告 token 里的 `discovered-N`（`fallback` 是可接受的降级但要记录原因）；
+**完成判据**：`component` 是报告 token 里的 `discovered-N`；用 `fixedSelector` 的补丁报 `fixed`，
+`fallback` 是可接受的降级但要记录原因；
 `behavior` 是 `__vtInterface.behaviors()` 里 `installed === total` 且 `errors` 为空 —— 这两条只管
 「装上了」，界面是否真的变了要另看探针（`docs/VERIFY.md`）。
 
@@ -85,7 +87,8 @@ Harness 全局声明 `--dsw-corner-shape: superellipse(1.5)` 并应用到 `*, ::
 兜住 hover 圆角，结果输入框里的附件缩略图（64×64、圆角 20px）hover 时变成正圆。
 
 - 现象：目标改对了，别处出现说不清的变化。
-- 做法：选择器只来自 discovery 或声明的 fallback；影响面必须能一句话说清是哪个类。
+- 做法：选择器只来自 discovery、声明的 `fallback`，或 `fixedSelector`；影响面必须能一句话说清
+  是哪个类或哪个属性。
 - 复核：探针只打印带 `!important` 的规则（上游不这么写），打印结果就是本插件的全部作用面。
 
 ### 5. `anchor-name` 全局唯一
@@ -244,7 +247,7 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
   （`_pill` / `_anchor` / `_label`），字号、6px 图标间距、hover 底色因此与原生项同源。
 - **用户消息是一串工厂 slot**：`conversation.chat.node`（keyed，key `user`/`steering`）→
   `UserStyleBubble` 的 `userRow` → 工厂 `conversation.chat.user.content` → `userStack` →
-  `.bubble`（全仓唯一用 `--dsw-specific-bubble` 上色的盒子）→ 工厂 `conversation.user.text`
+  `UserMessageBubble`（primitives 组件，带 `data-message-bubble`）→ 工厂 `conversation.user.text`
   （行内文本节点）。**气泡里没有可插入的 slot**：那个工厂只能有一个定义、子槽只有图片位，
   `conversation.user.text.node` 只出行内 chip。想在气泡里加控件只能改 DOM。
 - **用户气泡靠 `data-message-bubble` 定位，不要找类名**：气泡由 primitives 的

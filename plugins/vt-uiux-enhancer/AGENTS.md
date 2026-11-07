@@ -52,8 +52,9 @@ DeepSeek Harness 的 UI/UX 改善插件（Cordis bundle + client 半边）。
    cordis_inspect_query(platform="client", provider="Theme", method="listTokens")
    ```
 
-   **完成判据**：`component` 补丁每条都有 `--vt-report-<id>-discovered-N`（`fallback` 是可接受的降级，
-   但要记下原因），且 `--vt-report-build-<version>` 等于 `client.js` 里的 `VERSION`。
+   **完成判据**：`component` 补丁每条都有 `--vt-report-<id>-discovered-N`（用 `fixedSelector` 的报
+   `fixed`；`fallback` 是可接受的降级，但要记下原因），且 `--vt-report-build-<version>` 等于
+   `client.js` 里的 `VERSION`。
 
    `behavior` 补丁不产生这些 token。它要求在 `__vtInterface.behaviors()` 里 `installed` 等于 `total`
    且 `errors` 为空 —— 但「注册成功」不等于「界面上看得见」（见陷阱 9），所以再加一次探针读数。

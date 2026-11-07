@@ -70,7 +70,7 @@ cordis_inspect_query(platform="client", provider="Theme", method="listTokens")
 
 | token | 期望 | 说明 |
 |---|---|---|
-| `--vt-report-user-bubble-discovered-1` | 有 | 气泡类名解析到了（签名是 `--dsw-specific-bubble` 填充，全仓唯一） |
+| `--vt-report-user-bubble-fixed` | 有 | 气泡按 `data-message-bubble` 直接声明；出现即定位生效。（旧版的 `discovered-1` 表示签名解析，已不再使用） |
 | `--vt-report-user-bubble-box-content-box-22px` | 有 | 两个前提：`content-box`（Harness 没有全局 `border-box`）+ 行高 22px |
 | `--vt-report-messages-rows-<n>-bubbles-<m>-clamped-<k>` | `bubbles` > 0 且 `clamped` ≥ 1 | 长消息已折叠；`bubbles` 应与 `rows` 同量级，为 0 说明气泡定位失效 |
 | `--vt-report-messages-first-lines-<n>-max-418px-h-428-scroll-<n>-pb-0px-lh-22px-box-content-box` | 见左 | 14px 字号下：19 行 ≈ 418px 内容盒，气泡实测 428px（+10 上内距），`pb-0px` 是折叠态（内距归零，裁切边缘才对得上第 19 行的底边） |
