@@ -47,7 +47,7 @@ cordis_inspect_query(platform="client", provider="Theme", method="listTokens")
 --vt-report-behaviors-<installed>-of-<total>   行为是否都装上了；失败时会多一条
 --vt-report-behaviour-errors-<原因>            同 `__vtInterface.behaviors().errors`
 --vt-report-messages-rows-<n>-bubbles-<n>-clamped-<n>-expanded-<n>   长消息折叠的读数
---vt-report-scroll-pin-turn-<n>-pin-<user|answer>-armed-<0|1>-engaged-<0|1>-released-<0|1>-pull-<n>px-row-<n>px-ceil-<n>-req-<n>-ok-<n>   阅读位置冻结的读数（req = 应用想滚到的位置，ok = 实际被允许的位置）
+--vt-report-scroll-pin-turn-<n>-pin-<user|answer>-armed-<0|1>-engaged-<0|1>-released-<0|1>-pull-<n>px-row-<n>px-ceil-<n>-req-<n>-ok-<n>   阅读位置冻结的读数（req = 应用想滚到的位置，ok = 实际被允许的位置，pull = 首次冻结时向上拉回的距离；`engaged-1` 而 `ok == req` 且 `pull-0px` 表示停在原地、没有顶格）
 --vt-report-scroll-pin-hook-<installed|no-accessor>   写入接管是否真的挂上了（拿不到 Element 的 scrollTop 访问器时是 no-accessor）
 --vt-report-to-bottom-below-<0|1>   「回到底部」按钮是否该显示（1 = 下方确实还有内容）
 ```

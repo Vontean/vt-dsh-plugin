@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.2.7';
+    const VERSION = '1.2.8';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -376,6 +376,12 @@ window.__ModuleLoader__.load({
       nudge: 1,
       /** An answer row shorter than this has no text yet (thinking phase). */
       minAnswerHeight: 1,
+      /**
+       * A scroll that moved further than this did not come from the patched
+       * write, so the reader moved it. Kept above `nudge` by design: the 1px
+       * step must never read back as reader input.
+       */
+      readerEpsilon: 2,
       /**
        * Bottom slack when deciding whether the answer's first line survives the
        * pin: a line that only half-fits is not "visible". One line box (22px) is
@@ -2038,7 +2044,12 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         let restoreWrites = null;
         /** The un-shadowed setter, for the one write the app must not own. */
         let nativeWrite = null;
-        let flagObserver = null;
+        /**
+         * Where our own last write landed. A scroll event further than
+         * `SCROLL_PIN.readerEpsilon` from here did not come from this patch, so
+         * the reader moved it — the only trustworthy reader signal available.
+         */
+        let lastWriteTop = null;
         let revoke = null;
         let published = '';
         let publishedShape = '';
@@ -2109,6 +2120,8 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           const key = user.getAttribute('data-chat-flow-key') || user.getAttribute('data-chat-turn');
           if (!state || state.key !== key) {
             state = { ...blank(), key, turn: user.getAttribute('data-chat-turn'), column };
+            // A new anchor means the next write defines the baseline again.
+            lastWriteTop = null;
           }
           state.column = column;
           state.user = user;
@@ -2287,9 +2300,11 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           if (!scroller) return requested;
           const current = resolveTurn();
           if (smooth) {
-            // A smooth request is "back to latest" — a reader command, never the
-            // growth path, which is always immediate.
-            if (current && current.engaged && !current.released) {
+            // A smooth request is "back to latest" — either the reader's own
+            // command or the app restoring the tail after a submission. Both are
+            // explicit tail intent, so this turn stops freezing; the growth path
+            // itself is always immediate and never reaches here.
+            if (current && !current.released) {
               current.released = true;
               current.requested = Math.round(requested);
               current.allowed = Math.round(requested);
@@ -2333,7 +2348,12 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           if (isThinking(current)) return requested;
           const phase = livePhaseNow(Number(current.turn));
           if (phase === false) return requested;
-          if (phase === null && answer.getBoundingClientRect().height < SCROLL_PIN.minAnswerHeight) return requested;
+          // The row exists before its text does, and the reasoning row goes quiet
+          // between paragraphs, so neither the phase gate nor the DOM veto is
+          // enough on its own. Height is the one signal that always means "the
+          // answer has started writing", so it is required unconditionally here:
+          // an empty answer row is not the answer starting.
+          if (answer.getBoundingClientRect().height < SCROLL_PIN.minAnswerHeight) return requested;
           const offset = offsetOf(current);
           const row = current.user.getBoundingClientRect();
           // A message taller than the viewport has no reachable pin line; the
@@ -2398,11 +2418,17 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
             return next;
           }
           // The pin line is above the current position: this turn's message is
-          // already out of view (a long process phase pushed it away), or the app
-          // wants to move up. Upward requests go through; otherwise freeze where
-          // the view is instead of jumping.
+          // already out of view (a long process phase pushed it away, or the app
+          // just scrolled past a steering message). Upward requests go through;
+          // otherwise the row is pulled back to the line once, which is what
+          // "pinned" means — freezing where the view happens to be would leave
+          // the answer starting somewhere in the middle of the viewport.
           if (requested < start) return requested;
-          return first ? freeze(start) : requested;
+          if (first) {
+            current.pulled = Math.round(Math.max(0, start - ceiling));
+            return freeze(ceiling);
+          }
+          return requested;
         };
 
         /**
@@ -2430,17 +2456,26 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
             configurable: true,
             enumerable: false,
             get() { return read.call(element); },
-            set(value) { write.call(element, plan(value, false)); },
+            set(value) {
+              write.call(element, plan(value, false));
+              lastWriteTop = read.call(element);
+            },
           });
           element.scrollTo = function scrollTo(options, y) {
             if (typeof options === 'number') {
-              return nativeScrollTo.call(element, options, plan(y, false));
+              const result = nativeScrollTo.call(element, options, plan(y, false));
+              lastWriteTop = read.call(element);
+              return result;
             }
             if (!options || options.top === undefined || options.top === null) {
               return nativeScrollTo.call(element, options);
             }
             const top = plan(options.top, options.behavior === 'smooth');
-            return nativeScrollTo.call(element, { ...options, top });
+            const result = nativeScrollTo.call(element, { ...options, top });
+            // A smooth request interpolates afterwards; those intermediate frames
+            // are not reader input, so the baseline stays at the request instead.
+            if (options.behavior !== 'smooth') lastWriteTop = read.call(element);
+            return result;
           };
           element.scrollTo.vtScrollPin = true;
           return () => {
@@ -2449,16 +2484,21 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           };
         };
 
-        /** Following resumed after the freeze released the tail: the reader asked for it. */
-        const onFlag = (records) => {
+        /**
+         * The reader took the tail back by scrolling.
+         *
+         * Deliberately not `data-chat-following-tail`: the app writes that back to
+         * `true` on its own when a submission or a steering message lands, and
+         * reading that as reader intent released the freeze for the rest of the
+         * turn — the reported "answer goes straight to the bottom". Only a move
+         * that bypassed the patched write is the reader's.
+         */
+        const onScroll = () => {
           if (!state || !state.engaged || state.released) return;
-          for (const record of records) {
-            if (record.attributeName !== 'data-chat-following-tail') continue;
-            if (!record.target.hasAttribute('data-chat-following-tail')) continue;
-            state.released = true;
-            publish();
-            return;
-          }
+          if (lastWriteTop === null || !scroller) return;
+          if (Math.abs(scroller.scrollTop - lastWriteTop) <= SCROLL_PIN.readerEpsilon) return;
+          state.released = true;
+          publish();
         };
 
         const snapshot = () => {
@@ -2486,7 +2526,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         };
 
         const unbind = () => {
-          if (flagObserver) { flagObserver.disconnect(); flagObserver = null; }
+          if (scroller) scroller.removeEventListener('scroll', onScroll);
           liveSource = null;
           if (restoreWrites) { restoreWrites(); restoreWrites = null; }
           nativeWrite = null;
@@ -2501,11 +2541,9 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
 
         const mount = (next) => {
           scroller = next;
+          lastWriteTop = null;
           restoreWrites = patchWrites(next);
-          flagObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(onFlag);
-          if (flagObserver) {
-            flagObserver.observe(next, { attributes: true, attributeFilter: ['data-chat-following-tail'], subtree: true });
-          }
+          next.addEventListener('scroll', onScroll, { passive: true });
           attachLive();
           return unbind;
         };
