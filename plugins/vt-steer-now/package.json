@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-steer-now",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "description": "Make a pending steering message take effect immediately: a Send now action under the queued bubble interrupts the running tool and delivers the message at the next step.",
   "license": "MIT",

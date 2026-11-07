@@ -31,7 +31,7 @@ window.__ModuleLoader__.load({
     /** 插件标识（与 package.json 的 name 一致）。 */
     const PLUGIN_ID = 'dsh-vt-steer-now';
     /** 与 package.json 的 version 保持一致。 */
-    const VERSION = '1.0.2';
+    const VERSION = '1.0.3';
     /** 文案命名空间。 */
     const NS = 'vt-steer-now';
     /** Host 路由前缀，与 index.js 的 ROUTE_PREFIX 必须一致。 */

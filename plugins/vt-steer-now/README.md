@@ -32,18 +32,18 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 ### npm
 
 ```bash
-dsh plugin --profile <profile> add dsh-vt-steer-now@1.0.2
+dsh plugin --profile <profile> add dsh-vt-steer-now@1.0.3
 ```
 
-npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view dsh-vt-steer-now@1.0.2` 能查到即可）。
+npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view dsh-vt-steer-now@1.0.3` 能查到即可）。
 
 ### Release tarball
 
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载
-`dsh-vt-steer-now-1.0.2.tgz`，然后：
+`dsh-vt-steer-now-1.0.3.tgz`，然后：
 
 ```bash
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-steer-now-1.0.0.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-steer-now-1.0.3.tgz
 ```
 
 ## 支持的 DSH 版本
