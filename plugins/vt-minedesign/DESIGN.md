@@ -25,7 +25,7 @@ MineDesign 按 Codex 的形态分发：一个 stdio MCP 服务 + 两个技能 + 
 | `src/projection.js` | `enrichMineDesignResult({name, result})` | 每种工具的投影规则、4 KiB 上限、码点截断、不动 `design_check` 一类 |
 | `src/routing.js` | `routingText(resolved, candidates)` | 提示词正文与就绪行（每请求都发，所以短） |
 | `src/sessions.js` | `createSessions({limit})` → `{remember, list, activeUrl}` | `documents`/`document` 两种形状、去重、最近序、20 条上限 |
-| `src/panel.js` | `PANEL_ROUTE`、`createSessionRoute`、`createPanelSnapshot` | 状态码矩阵、Host/Origin 校验、body 上限、快照的「纯读 + 一次懒启动」 |
+| `src/panel.js` | `PANEL_ROUTE`、`createSessionRoute`、`createPanelSnapshot` | 状态码矩阵、Host/Origin 校验 + 可选的宿主准入探针、body 上限、快照的「纯读 + 一次懒启动」 |
 | `src/companion.js` | `createCompanion({launch, cli, workspace})` → `{appUrl, ensureUrl, open, api, dispose}` | 进程生命周期、URL 正则、30 s 预算、token/origin 解析、失败吞掉 |
 | `src/bridge.js` | `createAppBridge({companion, documents})` | MCP 工具名 → 伴生 HTTP 动作的翻译表、结果与错误的形状、未映射即拒绝 |
 | `src/delivery.js` | `createDelivery({resolveController})` → `{deliver, state}` | `sessionController.prompt` 的窄契约、超时、失败记录 |
@@ -124,7 +124,7 @@ MineDesign 按 Codex 的形态分发：一个 stdio MCP 服务 + 两个技能 + 
 |---|---|
 | 单元测试 | `node --test test/*.test.mjs` → **112 全绿** |
 | client bundle | `check-client-bundles.mjs` → **7 个 client 模块**，包名与 VERSION 一致 |
-| 面板通道 | 4 种核心响应：`200` 快照 / `403` 不可信 Host·Origin / `405` 非 GET·HEAD / `500` 坏快照；`POST` 另有 `400` 坏体、`502` 投递被拒、`503` 无桥·无投递能力 |
+| 面板通道 | 4 种核心响应：`200` 快照 / `403` 不可信 Host·Origin 或未通过宿主准入 / `405` 非 GET·HEAD / `500` 坏快照；`POST` 另有 `400` 坏体、`502` 投递被拒、`503` 无桥·无投递能力 |
 | 真机工具面 | 15 个 `mcp__minedesign__*`；2 个技能 |
 | 伴生应用 | 真机拉起、`open` 200、外壳 200 且带 `api` 配置、重复打开幂等 |
 | MCP Apps 链路 | DSH 之外完整复现：外壳渲染出 MineDesign 完整界面，界面语言随 `hostContext.locale` |
@@ -158,3 +158,10 @@ MineDesign 品牌行。连带删除自绘的标注入口与宿主侧 `annotation
 **v7 · 两个失败原因。** 一是槽位 `inject` 丢了 `sessionId`（第一参数就是会话 id），二是失败只进
 浏览器控制台、宿主看不见。修法是补上会话 id，并把 `delivery: {attempts, lastError, lastSessionId}`
 放进面板快照——`attempts` 为 0 即面板侧问题，非 0 有错误即宿主拒绝。
+
+**v8 · 准入交给宿主，不再只靠 Host/Origin 围栏。** `isTrusted` 只判断请求来自回环且 Origin 自洽，
+本机任何进程都能通过——`GET` 能读到当前打开的是哪份文档，`POST` 还能往会话里投一条消息。
+所以面板通道接入宿主 `connection.requestRejection`：它在同一条围栏之外还要求一个已认证的活 Peer，
+也是其余插件路由使用的同一道门。服务缺失时（headless、旧宿主、测试）退回围栏本身，
+保证不会因为拿不到服务而整条通道失效。`createSessionRoute` 的 `admit` 是可选注入，
+测试因此仍按围栏矩阵断言。

@@ -58,6 +58,15 @@ function isTrusted(request) {
   }
 }
 
+/** Run an optional admission probe; an unexpected failure rejects rather than admits. */
+function admits(admit, request) {
+  try {
+    return admit(request) === true
+  } catch {
+    return false
+  }
+}
+
 /**
  * Read a small request body as UTF-8 text.
  *
@@ -115,14 +124,19 @@ function sendJson(response, status, body, headOnly = false) {
  *   MCP Apps tool bridge; POST bodies are forwarded to it.
  * @param {(input: { sessionId: string, text: string }) => Promise<{ ok: boolean, reason?: string }>} [options.deliver]
  *   delivers a message the app sends with `ui/message` ("Send to chat") into a session.
+ * @param {(req: import('node:http').IncomingMessage) => boolean} [options.admit]
+ *   authoritative admission from the Host `connection` service. `isTrusted` only fences
+ *   Host/Origin, so any local process reaches this route; the Host check additionally
+ *   requires an authenticated live Peer. Omitted (tests, older hosts) keeps the fence only.
  * @returns {{ kind: 'exact', path: string, handler: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => Promise<void> }} route.
  */
-export function createSessionRoute({ snapshot, bridge, deliver }) {
+export function createSessionRoute({ snapshot, bridge, deliver, admit }) {
+  const admitted = typeof admit === 'function' ? admit : () => true
   return {
     kind: 'exact',
     path: PANEL_ROUTE,
     async handler(request, response) {
-      if (!isTrusted(request)) {
+      if (!isTrusted(request) || !admits(admitted, request)) {
         sendJson(response, 403, { ok: false, reason: 'untrusted request' })
         return
       }

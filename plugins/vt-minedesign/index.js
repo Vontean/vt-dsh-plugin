@@ -169,8 +169,21 @@ export function apply(ctx, config) {
     // `webServer` is absent in a headless deployment: the panel never appears
     // there, and every other registration keeps working.
     ctx.inject(['webServer'], (webCtx) => {
+      // The route's own `isTrusted` only fences Host/Origin, so any local process could
+      // read the snapshot and POST a message into a session. Prefer the Host's
+      // authoritative admission (`connection`), which also requires an authenticated
+      // live Peer — the same check the sibling plugin routes use. Absent service (older
+      // host, headless) keeps the fence only, so this never regresses to "nothing works".
+      const admit = (request) => {
+        const connection = webCtx.get('connection')
+        if (connection === undefined || connection === null) return true
+        return connection.requestRejection(request) === undefined
+      }
       webCtx.effect(
-        () => webCtx.webServer.register(createSessionRoute({ snapshot, bridge, deliver: delivery.deliver })),
+        () =>
+          webCtx.webServer.register(
+            createSessionRoute({ snapshot, bridge, deliver: delivery.deliver, admit }),
+          ),
         `dsh-vt-minedesign: ${PANEL_ROUTE}`,
       )
     })
