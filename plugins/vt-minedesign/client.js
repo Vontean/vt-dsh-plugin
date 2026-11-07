@@ -585,6 +585,9 @@ window.__ModuleLoader__.load({
             title: () => 'MineDesign',
             guide: [
               {
+                // 引导项的身份是 `kind:id`（见 dsh-client-ui-sidebar-right 的 guideEntryId）。
+                // 缺 id 时同一 tab 类型的所有引导项会塌成同一个 pin 身份，加第二条就会互相干扰。
+                id: KIND,
                 order: GUIDE_ORDER,
                 title: () => 'MineDesign',
                 description: () => t('guide.description'),
