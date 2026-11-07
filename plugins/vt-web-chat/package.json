@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-web-chat",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "description": "Adds a Web Chat entry under New Session that opens chat.deepseek.com as a full main-area panel in the desktop embedded browser, remembers the last conversation, starts with the site sidebar collapsed and keeps the site's environment warning dismissed.",
   "license": "MIT",
