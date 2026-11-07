@@ -358,6 +358,16 @@
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
       }
+    },
+    {
+      "version": "1.0.3",
+      "publishTimestamp": 1794039986,
+      "source": {
+        "type": "npm"
+      },
+      "engines": {
+        "dsh": ">=0.2.1-rc.5 <0.3.0"
+      }
     }
   ],
   "dsh-mcx-prompt-preset": [
