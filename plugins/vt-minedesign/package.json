@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-minedesign",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Connects DeepSeek Harness to the local MineDesign install: its stdio MCP tools, its design skills, and the editor link that MCP Apps cannot deliver here.",
   "license": "MIT",

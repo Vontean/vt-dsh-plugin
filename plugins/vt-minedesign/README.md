@@ -48,7 +48,7 @@
 **市场索引。** 在「插件 → 发现 → 添加索引源」填 `https://vontean.github.io/vt-dsh-plugin/index.json`，
 在「工作流与提示词」分类里找到「MineDesign 设计稿」点安装。
 
-**npm。** 该版本发布到 npm 之后：`dsh plugin --profile <profile> add dsh-vt-minedesign@1.0.0`
+**npm。** 该版本发布到 npm 之后：`dsh plugin --profile <profile> add dsh-vt-minedesign@1.0.1`
 
 **本地 link。** profile 的 `dependencies` 写 `"dsh-vt-minedesign": "link:<workspace>/plugins/vt-minedesign"`，
 再把包名加进 `dsh.profile.bundles`；`pnpm install` 后重启 DSH。

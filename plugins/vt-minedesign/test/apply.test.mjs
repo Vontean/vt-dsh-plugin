@@ -1,10 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply, inject, name as pluginName } from '../index.js'
 import { PANEL_ROUTE } from '../src/panel.js'
+
+/** The panel reports the package version; read it instead of pinning a literal that breaks every release. */
+const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
+
 
 /** Environment variables this suite manipulates. */
 const TOUCHED = ['MINEDESIGN_HOME', 'MINEDESIGN_CLI', 'MINEDESIGN_WORKSPACE', 'PATH']
@@ -369,7 +373,7 @@ test('registers the panel route and serves the sessions it remembers', async () 
   assert.equal(panel.editors[0].title, '演示稿')
   assert.equal(panel.editors[0].editorPath, '/design/grant-9/')
   assert.equal(panel.active, 'http://127.0.0.1:5555/design/grant-9/')
-  assert.equal(panel.version, '1.0.0')
+  assert.equal(panel.version, PLUGIN_VERSION)
 })
 
 test('panel:false leaves the host route unregistered', () => {

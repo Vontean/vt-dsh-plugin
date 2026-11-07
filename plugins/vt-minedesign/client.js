@@ -26,7 +26,7 @@ window.__ModuleLoader__.load({
     const React = require('react');
 
     const PLUGIN_ID = 'dsh-vt-minedesign';
-    const VERSION = '1.0.0';
+    const VERSION = '1.0.1';
 
     /** Tab kind the registry routes `openTab('minedesign')` to. */
     const KIND = 'minedesign';
