@@ -156,3 +156,23 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:53724/vt-quote-bar/api
 - 工作区里有一个真实 git worktree `.agents/worktrees/vt-better-sidebar`，含一份插件旧副本。**全仓 grep 会把它扫进来**，核查时须显式排除，否则会把旧代码的结论算到当前插件上。
 - 条件性风险已显式标注：例如「两个全局指令根都会生效」这条，写在 DSH 源码里成立（`dsh-agent-instructions` 定义了两个根），但本机当前只有 `~/.dsh/AGENTS.md`，所以属于**尚未显现**而不是正在发生。汇总时不要把它当成当前故障。
 - 相邻但不属于本工作区的一项：profile 里 `@vontean/dsh-oauth-mcp-client/web-manager` 处于 `failed`，诊断信息 `cannot get property "webServer" without inject`。它与 `vt-use-figma` 依赖同一个 OAuth 客户端，影响面写在该分册里。
+
+## 八、修复进展
+
+核查之后按分册结论做的处理，以及**明确不修**的部分和理由。
+
+| 项 | 处理 | 提交 |
+| --- | --- | --- |
+| ST1 `vt-steer-now` 按钮定位 | 已修：可见性按整行判断，定位取第一个真有盒子的后代；观察器补 `characterData` | `abebc7f` |
+| W5 `vt-web-chat` 协议闸门 | 已修：与内置浏览器同款 `protocolVersion === 1` 判断，文案区分两种原因 | `400a39f` |
+| MD-04 `vt-minedesign` 引导项缺 id | 已修：补 `id: KIND` | `55b0145` |
+| MD-05 `vt-minedesign` 准入 | 已修：接入 `connection.requestRejection`，服务缺失时退回原围栏；DESIGN.md 记为 v8 | `1f58bb5` |
+| FG-05 Figma 重新授权 | **不修**：按用户判断，令牌过期时重新授权即可，不为此改动外部 OAuth 客户端 | — |
+| S1 `vt-sidebar-sort` 与官方 pin 并行 | **不修**：用户判定不影响使用。补充说明：官方的 pin/unpin 在面板行的「更多」菜单里（`PanelMoreMenu`，菜单项来自 `sidebar.panellist.actions`），不是常驻图标，所以平时看不到；它操作的是 `unpinned` 列表（`dsh-client-ui-sidebar:510`），与本插件的 hidden 列表是同一结果的两种实现 | — |
+| `vt-system-prompt` 两根叠加 / 生效时机 | **不修**：用户判定不影响使用 | — |
+| U5/U7 `vt-uiux-enhancer` 诊断可信度 | **不修**：用户判定不影响使用 | — |
+| Q8 `vt-quote-bar` 硬编码客户端版本 | **不修**：账号接口的 `version` 是打包时内联的**客户端构建版本**（官方产物里就是字面量 `0.2.2-rc.1`），插件不随 DSH 重编译，换任何字面量都会继续漂移；且不清楚服务端是否校验该字段，盲改可能改变行为。留作已知记录 | — |
+| 其余脆弱项（S2/S3 光纤取行、M9 材质层覆写、mcx 全文档选择器、system-prompt 1MiB、ST3 等） | 未处理：需要重做定位策略或产品决策，不属于「一处小改」 | — |
+
+`vt-quote-bar` 之外的三处代码修复都只动客户端半边，保存即热更新；**`vt-minedesign` 的准入改动在宿主半边，需要重启 DSH 才生效**，重启后请确认右侧栏面板与 `Send to chat` 仍正常。
+
