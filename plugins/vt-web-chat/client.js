@@ -86,7 +86,7 @@ window.__ModuleLoader__.load({
         crashed: '内嵌页面已退出',
         retry: '重试',
         unsupportedTitle: '需要桌面版 App',
-        unsupportedBody: '网页对话依赖桌面端的内嵌浏览器。当前环境请在浏览器新标签中打开。',
+        unsupportedBody: '网页对话依赖桌面端的内嵌浏览器（桥接协议 v1）。当前环境要么不是桌面版，要么桌面壳的协议版本与插件不一致。请在浏览器新标签中打开，或把 DSH 升级到与插件匹配的版本。',
         openExternal: '在浏览器打开',
         signInHint: '登录状态只在本次运行中保留；重启 DSH 后需要重新登录。',
         signInAction: '在系统浏览器登录',
@@ -101,7 +101,7 @@ window.__ModuleLoader__.load({
         retry: 'Retry',
         unsupportedTitle: 'Desktop app required',
         unsupportedBody:
-          'Web Chat uses the desktop embedded browser. Open it in a browser tab instead.',
+          'Web Chat needs the desktop embedded browser (bridge protocol v1). This environment is either not the desktop app, or its shell speaks a different protocol version. Open it in a browser tab instead, or update DSH to match this plugin.',
         openExternal: 'Open in browser',
         signInHint:
           'Your sign-in lasts only for this app run; restarting DSH requires signing in again.',
@@ -553,7 +553,11 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => {
         const host = hostRef.current;
-        const bridge = globalThis.dshDesktop?.browser;
+        // 桌面壳用 protocolVersion 声明这套桥接契约的版本。内置侧边栏浏览器也做同样的
+        // 判断（dsh-client-ui-sidebar-browser 的 carrier?.protocolVersion === 1）。不校验的话，
+        // 一旦壳升版，这里会拿到形状不对的对象，表现为「打不开、重试」而看不出原因。
+        const carrier = globalThis.dshDesktop;
+        const bridge = carrier?.protocolVersion === 1 ? carrier.browser : undefined;
         if (host === null) return undefined;
         if (bridge === undefined) {
           try {
