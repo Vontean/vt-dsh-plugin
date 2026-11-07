@@ -46,7 +46,7 @@ cordis_inspect_query(platform="client", provider="Theme", method="listTokens")
 ```
 --vt-report-behaviors-<installed>-of-<total>   行为是否都装上了；失败时会多一条
 --vt-report-behaviour-errors-<原因>            同 `__vtInterface.behaviors().errors`
---vt-report-messages-rows-<n>-bubbles-<n>-clamped-<n>-expanded-<n>   长消息折叠的读数
+--vt-report-messages-rows-<n>-bubbles-<n>-clamped-<n>-expanded-<n>   长消息折叠的读数（rows = 用户行数，bubbles = 按 data-message-bubble 找到的气泡数；bubbles 为 0 就是定位失效，不是"没有长消息"）
 --vt-report-scroll-pin-turn-<n>-pin-<user|answer>-armed-<0|1>-engaged-<0|1>-released-<0|1>-pull-<n>px-row-<n>px-ceil-<n>-req-<n>-ok-<n>   阅读位置冻结的读数（req = 应用想滚到的位置，ok = 实际被允许的位置，pull = 首次冻结时向上拉回的距离；`engaged-1` 而 `ok == req` 且 `pull-0px` 表示停在原地、没有顶格）
 --vt-report-scroll-pin-hook-<installed|no-accessor>   写入接管是否真的挂上了（拿不到 Element 的 scrollTop 访问器时是 no-accessor）
 --vt-report-to-bottom-below-<0|1>   「回到底部」按钮是否该显示（1 = 下方确实还有内容）
@@ -72,7 +72,7 @@ cordis_inspect_query(platform="client", provider="Theme", method="listTokens")
 |---|---|---|
 | `--vt-report-user-bubble-discovered-1` | 有 | 气泡类名解析到了（签名是 `--dsw-specific-bubble` 填充，全仓唯一） |
 | `--vt-report-user-bubble-box-content-box-22px` | 有 | 两个前提：`content-box`（Harness 没有全局 `border-box`）+ 行高 22px |
-| `--vt-report-messages-rows-<n>-…-clamped-1` | `clamped` ≥ 1 | 长消息已折叠；`bubbles` 应与 `rows` 同量级 |
+| `--vt-report-messages-rows-<n>-bubbles-<m>-clamped-<k>` | `bubbles` > 0 且 `clamped` ≥ 1 | 长消息已折叠；`bubbles` 应与 `rows` 同量级，为 0 说明气泡定位失效 |
 | `--vt-report-messages-first-lines-<n>-max-418px-h-428-scroll-<n>-pb-0px-lh-22px-box-content-box` | 见左 | 14px 字号下：19 行 ≈ 418px 内容盒，气泡实测 428px（+10 上内距），`pb-0px` 是折叠态（内距归零，裁切边缘才对得上第 19 行的底边） |
 
 `clamped-0` 而屏幕上确实有一条长消息时，先看 `--vt-report-messages-scan-<n>L/<高>h/<滚动高>s/<状态>`：

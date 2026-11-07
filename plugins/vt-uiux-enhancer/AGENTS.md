@@ -32,7 +32,7 @@ DeepSeek Harness 的 UI/UX 改善插件（Cordis bundle + client 半边）。
 ## 硬约束
 
 1. **只改本仓库**。Harness 本体一行不动 —— 撤销是产品需求，不是礼貌。
-2. **样式作用面只来自 discovery 结果或补丁声明的 `fallback`**。影响面必须能用一句话说清是哪个类。
+2. **样式作用面只来自 discovery 结果、补丁声明的 `fallback`,或 `fixedSelector` 声明的语义属性**。影响面必须能用一句话说清是哪个类或哪个属性。
    行为补丁定位自己的素材时可以用 `data-*` 语义属性；探针是只读的，不受这条约束，但新写的查询
    优先复用已解析出来的选择器，而不是新造子串选择器。
 3. **要正圆就同时给 `corner-shape`**。只写 `border-radius` 得到的是 squircle。

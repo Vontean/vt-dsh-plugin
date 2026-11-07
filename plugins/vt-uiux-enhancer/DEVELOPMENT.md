@@ -247,10 +247,17 @@ CSS 锚点定位用 `anchor-name` 认元素。同一个名字同时挂在两个�
   `.bubble`（全仓唯一用 `--dsw-specific-bubble` 上色的盒子）→ 工厂 `conversation.user.text`
   （行内文本节点）。**气泡里没有可插入的 slot**：那个工厂只能有一个定义、子槽只有图片位，
   `conversation.user.text.node` 只出行内 chip。想在气泡里加控件只能改 DOM。
-- **用户气泡的六个几何事实**（折叠补丁全靠它们）：`padding: 10px 16px`、
-  `border-radius: var(--dsw-radius-xl)`、`font-size: var(--dsh-content-font-size,14px)`、
-  `line-height: calc(22px + var(--dsh-content-font-delta))`、`white-space: pre-wrap`、
-  `box-sizing` 是默认的 `content-box`。
+- **用户气泡靠 `data-message-bubble` 定位，不要找类名**：气泡由 primitives 的
+  `UserMessageBubble` 渲染，`_bubble` 类与 `--dsw-specific-bubble` 在 0.2.1-rc.5 都已经不存在。
+  `user-bubble` 补丁因此用 `fixedSelector` 直接声明这个属性，跳过 CSS 签名发现（签名还在时会
+  匹配到别的规则，插件于是"发现成功"却指向一个不存在的类名）。
+- **气泡不在 `[data-chat-flow-kind]` 行的子树里**：行优先的 `row.querySelectorAll(气泡选择器)`
+  返回 0，而 `document.querySelectorAll('[data-message-bubble]')` 能数到全部气泡。折叠的扫描
+  以气泡为目标，不以行为目标。
+- **用户气泡的几何事实**（折叠补丁全靠它们，实测值）：`padding: 10px 16px`、
+  `border-radius: 20px`、`line-height` 最终为 `22px`、`white-space: pre-wrap`、
+  `box-sizing` 是默认的 `content-box`。折叠高度改由实测行高驱动（`--vt-clamp-line`），
+  22px 只作兜底，字号档位变化时不会差一行。
 - **聊天行的语义钩子**：flowItem 上有 `data-chat-flow-kind`（ChatNodeKind：`user`/`steering`/…）、
   `data-chat-flow-key`、`data-chat-node-key`、`data-chat-turn`。用户消息就用
   `[data-chat-flow-kind="user"],[data-chat-flow-kind="steering"]` 定位 —— 不用类名，不受构建哈希影响。

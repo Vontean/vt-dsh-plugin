@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     'use strict';
 
     const PLUGIN_ID = 'dsh-vt-uiux-enhancer';
-    const VERSION = '1.2.8';
+    const VERSION = '1.2.9';
 
     /**
      * DSH ships `:root { --dsw-corner-shape: superellipse(1.5) }` and applies it
@@ -1209,14 +1209,16 @@ ${collapsed} ${selector} {
          * exactly on the 19th line's bottom edge, and the block below carries the
          * same fill plus squared top corners, so both boxes read as one bubble.
          */
-        signature: ['background:var(--dsw-specific-bubble)'],
-        selectorFilter: '_bubble$',
-        fallback: '.AkCqbG_bubble',
+        // The bubble carries a semantic attribute of its own; a class name cannot be
+        // trusted here (the shipped fill token moved, and discovery then matched a
+        // different rule while the real bubble sat unfound).
+        fixedSelector: '[data-message-bubble]',
+        fallback: '[data-message-bubble]',
         rules: (selector) => {
           const { rows, rowGap, padding, stackGap, textGap, glyph, iconGap } = MESSAGE_CLAMP;
           return `
 ${selector}[data-vt-clamp="clamped"] {
-  max-height: calc(${rows - 1} * (22px + var(--dsh-content-font-delta, 0px))) !important;
+  max-height: calc(${rows - 1} * var(--vt-clamp-line, calc(22px + var(--dsh-content-font-delta, 0px)))) !important;
   overflow: hidden !important;
   padding-bottom: 0 !important;
   border-bottom-left-radius: 0 !important;
@@ -1242,8 +1244,8 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail {
   padding-top: ${textGap}px;
 }
 .vt-msg-clamp-more {
-  height: calc(22px + var(--dsh-content-font-delta, 0px));
-  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
+  height: var(--vt-clamp-line, calc(22px + var(--dsh-content-font-delta, 0px)));
+  line-height: var(--vt-clamp-line, calc(22px + var(--dsh-content-font-delta, 0px)));
   color: var(--dsw-alias-label-primary);
   user-select: none;
 }
@@ -1254,7 +1256,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
   display: flex;
   align-items: center;
   gap: ${iconGap}px;
-  height: calc(22px + var(--dsh-content-font-delta, 0px));
+  height: var(--vt-clamp-line, calc(22px + var(--dsh-content-font-delta, 0px)));
   margin: 0;
   padding: 0;
   border: 0;
@@ -1508,6 +1510,9 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
        * of once per patch.
        */
       function resolveTarget(patch, sheets) {
+        // A semantic attribute is the target itself: no sheet can hash it away and
+        // no sibling rule can win the match, so it skips discovery entirely.
+        if (patch.fixedSelector) return [patch.fixedSelector];
         if (typeof document === 'undefined') return null;
         const found = [];
         walkRules(sheets || collectStyleSheets(), (rule) => {
@@ -2852,6 +2857,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
         /** The bubble class resolved by the `user-bubble` patch, else its own fallback. */
         const bubblePatch = patches.components.find((patch) => patch.id === 'user-bubble');
         const bubbleSelector = () => {
+          if (bubblePatch && bubblePatch.fixedSelector) return bubblePatch.fixedSelector;
           const map = (typeof readSelectors === 'function' && readSelectors()) || {};
           const list = map['user-bubble'];
           if (list && list.length) return list.join(',');
@@ -2928,6 +2934,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           wired.delete(bubble);
           try { entry.icon.dispose(); } catch (err) { /* already gone */ }
           entry.tail.remove();
+          bubble.style.removeProperty('--vt-clamp-line');
           bubble.removeAttribute(STATE);
           bubble.removeAttribute('data-vt-clamp-lines');
         };
@@ -2979,6 +2986,14 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           });
 
           bubble.after(tail);
+          // The line box is measured here rather than assumed: the clamp height
+          // and the marker row both derive from it, so a font-size change cannot
+          // leave the fold one line off.
+          const lineHeight = parseFloat(getComputedStyle(bubble).lineHeight);
+          if (isFinite(lineHeight) && lineHeight > 0) {
+            bubble.style.setProperty('--vt-clamp-line', `${lineHeight}px`);
+            tail.style.setProperty('--vt-clamp-line', `${lineHeight}px`);
+          }
           entries.add(entry);
           wired.set(bubble, entry);
           paint();
@@ -2997,12 +3012,14 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           }
 
           const rows = document.querySelectorAll(ROW_SELECTOR);
-          const bubbles = [];
-          for (const row of rows) {
-            let found;
-            try { found = row.querySelectorAll(bubbleSelector()); } catch (err) { found = []; }
-            for (const bubble of found) bubbles.push(bubble);
-          }
+          // Scan the bubbles themselves rather than walking the rows that should
+          // contain them: in the shipped tree the bubble is rendered by a primitive
+          // that does not sit inside the row's own subtree, so a row-first walk
+          // finds nothing while the attribute is plainly present.
+          let bubbles = [];
+          try {
+            bubbles = [...document.querySelectorAll(bubbleSelector())];
+          } catch (err) { bubbles = []; }
 
           let clamped = 0;
           let expandedCount = 0;
@@ -3077,6 +3094,7 @@ ${selector}[data-vt-clamp="expanded"] + .vt-msg-clamp-tail .vt-msg-clamp-more {
           for (const bubble of document.querySelectorAll(`[${STATE}]`)) bubble.removeAttribute(STATE);
           for (const bubble of document.querySelectorAll('[data-vt-clamp-lines]')) {
             bubble.removeAttribute('data-vt-clamp-lines');
+            bubble.style.removeProperty('--vt-clamp-line');
           }
           if (typeof revoke === 'function') safeCall(revoke);
         };
