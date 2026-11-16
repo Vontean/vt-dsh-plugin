@@ -1,0 +1,256 @@
+# 快捷提问 · 设计说明
+
+> 包名 `dsh-vt-quick-chat`，目录 `plugins/vt-quick-chat/`。
+> 目标：agent 执行任务中按快捷键弹出临时小窗解释概念；不创建 Session、不写 session log、
+> 不调用工具、不进侧栏。第一版范围：Desktop `⌘⌥K` / Web（macOS/Windows）`⌘⇧K`、`shell.overlay` 非模态浮层、
+> 紧凑/展开两态、`ctx.llm.stream()` 流式、本地历史、只用 DSH token 与 `ICON_SYMBOLS`。
+
+## 1. 问题与边界
+
+### 1.1 用户问题
+
+DSH 正在跑 agent 任务时，用户经常遇到一个不懂的词。写进主对话会打断任务；新开 Session
+会进入侧栏、生成标题、写 session log；用外部浏览器又要重新解释背景。用户需要的是一次
+**临时、只读、可丢弃**的解释。
+
+### 1.2 目标
+
+| 目标 | 可观察的验收 |
+|---|---|
+| 随时可开 | 快捷键打开，输入框自动聚焦 |
+| 不打断主任务 | 主对话/主输入框/侧栏不被替换；浮层非模态 |
+| 不产生会话 | 侧栏不新增 session；session log 不新增；不生成标题 |
+| 能解释概念 | 多轮、流式、停止、复制、重试 |
+| 带一点上下文 | 默认带当前选中文本；可移除 |
+| 和 DSH 一致 | 只用 `--dsw-*` / `--dsh-*` token 与 DSH 图标；浅色/深色/大字号都对 |
+| 安全 | 凭证只在 Host；路由鉴权；请求体上限；不传 tools / sessionId |
+
+### 1.3 非目标（第一版）
+
+不创建 Session、不进入侧栏/最近会话、不写 session log；不调用工具、不读写工作区文件、
+不执行命令；不做联网搜索、文件/图片输入、语音、深度思考；不接管主输入框；不做云同步。
+
+## 2. 架构
+
+```
+┌──────────────────────────────────────────────┐
+│ Client（client.js）                           │
+│  • shell.overlay 浮层（list 槽位，root 作用域）│
+│  • quickChat.toggle 快捷键                    │
+│  • 紧凑/展开状态机、草稿、本地历史             │
+│  • 选中文本 chip                              │
+│  • SSE 解析 / 停止 / 重试 / 复制               │
+└──────────────────┬───────────────────────────┘
+                   │ POST /vt-quick-chat/api/chat (SSE)
+┌──────────────────▼───────────────────────────┐
+│ Host（index.js）                              │
+│  • webServer 前缀路由 + connection 鉴权        │
+│  • 请求体校验 / 截断                          │
+│  • provider/model 解析                        │
+│  • ctx.llm.stream() → SSE 帧                  │
+│  • 不传 sessionId / tools                     │
+└──────────────────────────────────────────────┘
+```
+
+### 2.1 为什么需要 Host 半边
+
+模型调用必须走 DSH 的 provider 路由、凭证、取消与失败码。浏览器侧只拿同源 SSE 文本，
+看不到 API Key。Host 只做「把一段临时对话翻译成一次模型调用」，不接触 Session。
+
+### 2.2 为什么不是 Session
+
+- 不传 `sessionId`、不调用 `ctx.sessions`、不经过 agent loop；
+- 不传 `tools`，模型只能回答，不能行动；
+- 小窗自己的状态（紧凑/展开、草稿、历史）只属于浮层，不进入 layout store；
+- 因此侧栏、session log、「最近会话」都没有可写入的入口。
+
+`ctx.llm.stream()` 的 `purpose: "quick-chat"` 把这次调用标记为辅助请求，与标题生成、
+compaction 同类；不进入普通对话链路。
+
+## 3. 数据流
+
+1. 用户选中一段文字，按快捷键。
+2. Client `controller.open()`：
+   - 读取 `window.getSelection()`（忽略浮层内部的选择）；
+   - 进入 `compact`，输入框聚焦。
+3. 用户输入并按 Enter：
+   - 消息进入本地状态，切到 `expanded`；
+   - `POST /vt-quick-chat/api/chat`，body 为 `{ messages, selection }`。
+4. Host：
+   - 鉴权 → 路径/方法 → 请求体上限 → 消息校验（只允许 user/assistant，截断到最近 40 条）；
+   - 解析模型：默认模型 → 第一个有模型的 provider；
+   - `ctx.llm.stream({ provider, model, system, messages, maxTokens: 2048, purpose, signal })`。
+5. Host 把 chunk 转成 SSE：
+   - `{"type":"start","provider","model"}`
+   - `{"type":"delta","text"}`
+   - `{"type":"done","usage","truncated"?}` / `{"type":"error","code","message"}` / `{"type":"aborted"}`
+6. Client 增量渲染；`done` 定稿并写本地历史；`error` 保留已生成文本并显示重试。
+7. 关闭：abort 请求、丢弃未发送草稿、已发送内容留在历史。
+
+## 4. 状态机
+
+```
+closed ──toggle/open──▶ compact ──send──▶ expanded
+  ▲                        │  ▲              │
+  │                        │  └── minimize ──┘
+  └──────── close ─────────┴──── close
+```
+
+| 状态 | 行为 |
+|---|---|
+| `closed` | 不渲染；历史保留；下次打开是新的临时对话 |
+| `compact` | 48px 输入条；Enter 发送；有消息时显示「展开」 |
+| `expanded` | 44px header + 消息区 + composer + 提示行；可停止/复制/重试/历史 |
+| `history` | expanded 内的子视图；不改变主状态 |
+
+关闭语义：
+
+- `Esc` / `×`：关闭；丢弃未发送草稿与选中引用；abort 正在生成的请求；
+  已生成的部分作为 assistant 消息留在本地历史。
+- 关闭不取消历史；下次打开从空对话开始，可从历史恢复。
+- 焦点：打开前记录 `document.activeElement`，关闭后归还（元素仍存在时）。
+
+## 5. 模型解析与失败
+
+### 5.1 解析顺序
+
+1. `ctx.get('agentDefaultModel')?.currentSelection()`，且 provider 仍在 `ctx.llm.listProviders()` 中；
+2. 遍历 provider，`listModels()` 取第一个非空模型；
+3. 都没有 → `NO_MODEL`（503），UI 显示「请先在设置里选择模型」。
+
+不跟随当前 session 的模型：quick chat 不是该 session 的一部分，跟随默认模型更可预测。
+第二版可在设置里加「quick chat 模型」。
+
+### 5.2 失败码映射
+
+| Host 错误码 | UI |
+|---|---|
+| `NO_MODEL` / `NO_LLM` | 当前没有可用模型 |
+| `MISSING_CREDENTIAL` / `INVALID_CREDENTIAL` / `AUTH` / `HTTP_401` / `HTTP_403` | 未登录或凭证缺失 |
+| `RATE_LIMIT` / `HTTP_429` | 请求太频繁 |
+| `CONTEXT_WINDOW_EXCEEDED` | 对话太长，请新开话题 |
+| `QUOTA` / `ACCOUNT_QUOTA` | 额度不足 |
+| `NETWORK` / `STREAM_FAILED` | 网络中断 |
+| 其他 | 通用失败 + 重试 |
+
+## 6. 上下文
+
+第一版只带**当前选中文字**：
+
+- 打开时读取一次，显示为可移除 chip；按键可能折叠选区，因此回退到 5 秒内的最近选区；
+- 展开态可点链接按钮重新读取（选中浮层内部文字时忽略，避免自我引用）；
+- 选区记忆只记录浮层外的非空选区，不跨页面、不上传；
+- Host 把它包装成一条引用行（`> ...`）放在最前面，避免选中文本里的围栏代码破坏格式；
+- 上限 8k 字符。
+
+不带当前对话的最后几轮：那需要读 conversation projection，属于第二版；先把「用户可见、
+可关闭」的上下文做对。
+
+## 7. 视觉与可访问性
+
+### 7.1 Token
+
+- 表面：`--dsw-alias-bg-layer-2` + `--dsw-elevation-prominent`；
+  把 `--dsw-elevation-stroke-color` 设为 `--dsw-alias-border-l2`，`border: 0`，
+  避免 elevation 的 0.5px 描边叠加成粗线。
+- 圆角：`--dsw-radius-lg`（16px）；按钮/chip `--dsw-radius-sm`；气泡 `--dsw-radius-md`。
+- 文字：`--dsw-alias-label-primary/secondary/tertiary`；
+  字号跟随 `--dsh-content-font-size` 与 `--dsh-content-font-size-secondary`。
+- 强调：链接与激活态用 `--dsw-alias-state-business-primary`；发送按钮用
+  `--dsw-alias-button-primary-fill`，不额外引入品牌蓝。
+- 代码块：`--dsw-alias-markdown-code-block` + `--dsw-font-markdown-code-block`。
+
+### 7.2 图标
+
+全部来自 `@deepseek-ai/dsh-client-ui-primitives` 的具名图标组件：
+
+| 场景 | 组件 |
+|---|---|
+| 标题/空态/紧凑条前缀 | `IconLightOutlineRegular` |
+| 关闭 | `IconCloseOutlineRegular` |
+| 收起 / 展开 | `IconCompactOutlineRegular` / `IconFullscreenOutlineRegular` |
+| 历史 | `IconClockOutlineRegular` |
+| 新话题 | `IconNewChatOutlineRegular` |
+| 发送 / 停止 | `IconSendOutlineRegular` / `IconStopFillRegular` |
+| 复制 / 已复制 | `IconCopyOutlineRegular` / `IconCheckOutlineRegular` |
+| 引用 / 移除引用 | `IconLinkOutlineRegular` / `IconCloseOutlineRegular` |
+| 清空历史 | `IconTrashOutlineRegular` |
+| 错误 | `IconWarningOutlineRegular` |
+
+模块缺失时退化为同尺寸空占位，界面仍可用（不手绘 SVG 替代）。
+
+### 7.3 无障碍
+
+- `role="dialog"` + `aria-modal="false"` + `aria-label="快捷提问"`；
+- 非模态：不 trap focus；`Esc` 只在浮层内关闭；
+- 输入框、发送/停止/历史等按钮都有 `aria-label` 与 `title`；
+- `Enter` 发送、`Shift+Enter` 换行；`isComposing` 时不抢键；
+- 流式回答不逐 token 播报；用隐藏的 `role="status" aria-live="polite"` 报「正在回答/错误」；
+- `prefers-reduced-motion: reduce` 关闭打开动画与光标闪烁。
+
+### 7.4 位置与响应式
+
+- 默认锚定主内容区右下角、主输入框上方 24px（`bottom: 96px`），避免压住主输入框；
+- 宽度 `min(560px, calc(100vw - 32px))`；展开高度 `min(520px, calc(100dvh - 120px))`；
+- 窄窗口下自动收窄，正文区滚动，不产生横向溢出；
+- 不做拖拽（第二版再评估）。
+
+## 8. 本地历史
+
+- key：`dsh-vt-quick-chat:history:v1`；
+- 最多 20 个对话，每个最多 40 条消息；
+- 序列化后超过 1.5MB 时从最旧对话开始丢弃，避免撑爆 `localStorage`；
+- 只存文本；不存附件、图片、选中文本；
+- 读取时白名单重建，坏条目/坏 JSON 直接丢弃；
+- 清空需要二次确认（3 秒内再点一次）。
+
+## 9. 安全与限额
+
+| 项 | 值 |
+|---|---|
+| 请求体上限 | 256 KiB |
+| 消息条数 | 40 |
+| 单条消息 | 16,000 字符 |
+| 选中文本 | 8,000 字符 |
+| 输出上限 | 2,048 tokens |
+| 鉴权 | `connection.requestRejection`，与 `/api` 同一套 |
+| 白名单字段 | `messages` / `selection` |
+| 不传 | `sessionId`、`tools`、任意 URL / 路径 / provider / model |
+
+关闭浮层或点「停止」会 abort 请求；Host 监听 `res` 的 `close` 并把取消透传给 adapter。
+（不能监听 `req` 的 `close`：请求体读完就会触发，会立刻误取消。）
+
+## 10. 验证
+
+### 10.1 自动化
+
+- `node --test test/*.test.mjs`：
+  - Host 纯函数：消息校验/截断、选中文本包装、失败帧、模型解析回退；
+  - Host 路由端到端：SSE 帧顺序、`sessionId`/`tools` 为空、鉴权、405/404/400/503、
+    模型失败帧、客户端断开触发 abort；
+  - Client：SSE 分帧（跨 chunk/CRLF/坏帧）、Markdown 分块、历史清洗、
+    控制器发送/流式/停止/重试/错误/关闭与恢复。
+- `node scripts/check-client-bundles.mjs`：拼接后无顶层重名，`load({id})` 与包名一致，
+  `VERSION` 与 `package.json` 一致。
+- `pnpm market`：`market.json` 通过官方解析器校验。
+
+### 10.2 手工验收清单
+
+- [ ] Desktop `⌘⌥K` / Web（macOS/Windows）`⌘⇧K` 打开；输入框聚焦；关闭后焦点归还。
+- [ ] Linux Web 默认无绑定；在快捷键设置里指定后可用。
+- [ ] 侧栏不新增 session；session log 不新增；不生成标题。
+- [ ] 紧凑条 ↔ 展开；收起保留消息。
+- [ ] 流式可见；停止保留部分；重试替换上一条回答。
+- [ ] 选中文字 → chip；按键折叠选区时 5 秒内仍能带上；可移除；Host 收到引用块。
+- [ ] 本地历史恢复、单条删除、二次确认清空。
+- [ ] 浅色/深色、放大字号不破版。
+- [ ] 主界面在浮层打开时仍可操作；`Esc` 不抢主界面。
+- [ ] 关闭浮层后请求被 abort（Network 面板显示 canceled）。
+
+## 11. 后续版本
+
+1. 当前对话最后两轮上下文（conversation projection 桥），带可见开关；
+2. quick chat 模型选择（设置项，校验 catalog 成员）；
+3. 联网搜索（优先独立 Search API，把结果拼进 messages；不走 DeepSeek 服务端工具）；
+4. 拖拽位置、插入到主输入框、导出；
+5. 历史加密/按会话隔离（如果产品需要）。

@@ -1,0 +1,12 @@
+# dsh-vt-quick-chat — 把插件挂进 DSH 配置树。
+#
+# 本插件由两部分组成：
+#   · Host 半侧（index.js）：注册 /vt-quick-chat/api/chat 路由，把临时对话翻译成
+#     一次 ctx.llm.stream() 调用，以 SSE 流式返回；不创建 Session、不写 session log；
+#   · Client 半侧（client.js）：注册 shell.overlay 浮层与 quickChat.toggle 快捷键。
+#
+# 通过 plugin_manager 的 install_bundle 安装时，工具会自己写 profile 的
+# package.json 与 bundle 列表，不需要手工编辑本文件之外的任何配置。
+- insert:
+    - id: vt-quick-chat
+      name: 'dsh-vt-quick-chat'

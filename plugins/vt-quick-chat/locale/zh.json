@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "快捷提问",
+    "description": "agent 执行任务时按快捷键弹出临时小窗，借用选中的文字解释概念；不创建 Session、不写 session log、不调用工具，关掉即走。"
+  }
+}

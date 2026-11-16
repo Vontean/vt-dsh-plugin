@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Quick chat",
+    "description": "Press a shortcut during an agent task to open a temporary overlay that explains concepts using the selected text; no session, no session log, no tools."
+  }
+}

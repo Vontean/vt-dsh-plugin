@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "快捷提问",
+    "en": "Quick chat"
+  },
+  "description": {
+    "zh": "agent 执行任务时按快捷键弹出临时小窗，借用选中的文字解释概念；不创建 Session、不写 session log、不调用工具，关掉即走。",
+    "en": "A shortcut opens a temporary overlay during an agent task and explains concepts with streaming answers, using the selected text; no session, no session log, and no tools."
+  },
+  "icon": "icon.svg",
+  "category": "ui",
+  "keywords": ["quick-chat", "overlay", "shortcut", "explain", "ephemeral"]
+}
