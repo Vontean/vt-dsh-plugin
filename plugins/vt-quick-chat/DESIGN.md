@@ -45,27 +45,41 @@ DSH 正在跑 agent 任务时，用户经常遇到一个不懂的词。写进主
 ┌──────────────────▼───────────────────────────┐
 │ Host（index.js）                              │
 │  • webServer 前缀路由 + connection 鉴权        │
-│  • 请求体校验 / 截断                          │
-│  • provider/model 解析                        │
-│  • ctx.llm.stream() → SSE 帧                  │
-│  • 不传 sessionId / tools                     │
+│  • 请求体校验 / 截断 / 服务端块白名单          │
+│  • 凭证：账号授权 → DEEPSEEK_API_KEY          │
+│  • 直连 api.deepseek.com Messages → SSE 帧    │
+│  • 联网：deepseek_web_search / read_url       │
+│  • 无凭证时降级到 ctx.llm.stream()            │
+│  • 不传 sessionId / 不注册 agent 工具          │
 └──────────────────────────────────────────────┘
 ```
 
 ### 2.1 为什么需要 Host 半边
 
-模型调用必须走 DSH 的 provider 路由、凭证、取消与失败码。浏览器侧只拿同源 SSE 文本，
-看不到 API Key。Host 只做「把一段临时对话翻译成一次模型调用」，不接触 Session。
+模型调用要碰凭证、取消与失败码，这些只能留在 Host 进程。浏览器侧只拿同源 SSE 文本，
+看不到 account token 或 API Key。Host 只做「把一段临时对话翻译成一次模型调用」，不接触 Session。
+
+### 2.1.1 为什么直连 DeepSeek 而不只用 ctx.llm.stream()
+
+DSH 内置的 DeepSeek adapter 不透传 `deepseek_web_search` / `deepseek_read_url` 这两个
+**服务端工具**（在 app.asar 里搜不到这两个名字），所以 `ctx.llm.stream()` 拿不到网页端
+的搜索与读链接能力。要在小窗里复现网页端行为，只能由 Host 直接调
+`POST https://api.deepseek.com/anthropic/v1/messages`，并在 `tools` 里声明它们。
+
+代价是这条通道要自己解析 SSE、自己保存服务端块。收益是：联网、引用、读链接与网页端一致。
+
+`ctx.llm.stream()` 保留为降级通道：没有 DeepSeek 凭证时，小窗仍然可用，只是没有联网。
 
 ### 2.2 为什么不是 Session
 
 - 不传 `sessionId`、不调用 `ctx.sessions`、不经过 agent loop；
-- 不传 `tools`，模型只能回答，不能行动；
+- 不注册任何 DSH agent 工具；联网时声明的是 DeepSeek 的**服务端工具**，由 DeepSeek
+  执行，不触碰工作区；
 - 小窗自己的状态（紧凑/展开、草稿、历史）只属于浮层，不进入 layout store；
 - 因此侧栏、session log、「最近会话」都没有可写入的入口。
 
-`ctx.llm.stream()` 的 `purpose: "quick-chat"` 把这次调用标记为辅助请求，与标题生成、
-compaction 同类；不进入普通对话链路。
+降级通道里 `ctx.llm.stream()` 的 `purpose: "quick-chat"` 把调用标记为辅助请求，与标题
+生成、compaction 同类；不进入普通对话链路。主通道是直连 DeepSeek，天然不在任何 session 里。
 
 ## 3. 数据流
 
@@ -75,16 +89,21 @@ compaction 同类；不进入普通对话链路。
    - 进入 `compact`，输入框聚焦。
 3. 用户输入并按 Enter：
    - 消息进入本地状态，切到 `expanded`；
-   - `POST /vt-quick-chat/api/chat`，body 为 `{ messages, selection }`。
+   - `POST /vt-quick-chat/api/chat`，body 为 `{ messages, selection, web }`。
 4. Host：
    - 鉴权 → 路径/方法 → 请求体上限 → 消息校验（只允许 user/assistant，截断到最近 40 条）；
-   - 解析模型：默认模型 → 第一个有模型的 provider；
-   - `ctx.llm.stream({ provider, model, system, messages, maxTokens: 2048, purpose, signal })`。
-5. Host 把 chunk 转成 SSE：
-   - `{"type":"start","provider","model"}`
+   - assistant 消息的 `blocks` 过白名单与 96 KiB 上限；
+   - 解析凭证：`deepseekAccount.resolveToken()` → `credentials.resolve('DEEPSEEK_API_KEY')`；
+   - 有凭证：`POST api.deepseek.com/anthropic/v1/messages`，`web` 为真时带两个服务端工具；
+   - 无凭证：降级到 `ctx.llm.stream()`。
+5. Host 把上游事件转成 SSE：
+   - `{"type":"start","via","provider","model","web"}`
    - `{"type":"delta","text"}`
-   - `{"type":"done","usage","truncated"?}` / `{"type":"error","code","message"}` / `{"type":"aborted"}`
-6. Client 增量渲染；`done` 定稿并写本地历史；`error` 保留已生成文本并显示重试。
+   - `{"type":"tool","action","queries","url"}`（搜索 / 打开网页 / 读链接）
+   - `{"type":"citation","url","title"}`
+   - `{"type":"blocks","blocks"}`（assistant 完整内容块，下一轮原样回传）
+   - `{"type":"done","usage","tools","truncated"?}` / `{"type":"error","code","message"}` / `{"type":"aborted"}`
+6. Client 增量渲染；`blocks` 暂存，`done` 时连同引用一起写进本地历史。
 7. 关闭：abort 请求、丢弃未发送草稿、已发送内容留在历史。
 
 ## 4. 状态机
@@ -114,12 +133,14 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 
 ### 5.1 解析顺序
 
-1. `ctx.get('agentDefaultModel')?.currentSelection()`，且 provider 仍在 `ctx.llm.listProviders()` 中；
-2. 遍历 provider，`listModels()` 取第一个非空模型；
-3. 都没有 → `NO_MODEL`（503），UI 显示「请先在设置里选择模型」。
+主通道固定用 DeepSeek `deepseek-flash`（官方要求联网工具用这个模型）。凭证顺序：
 
-不跟随当前 session 的模型：quick chat 不是该 session 的一部分，跟随默认模型更可预测。
-第二版可在设置里加「quick chat 模型」。
+1. `ctx.get('deepseekAccount')?.resolveToken('https://api.deepseek.com')` → 请求头 `x-dsh-auth-token`；
+2. `ctx.get('credentials')?.resolve('DEEPSEEK_API_KEY')` → 请求头 `x-api-key`；
+3. 都没有 → 降级到默认模型：`agentDefaultModel.currentSelection()` → 第一个有模型的 provider，
+   此时没有联网能力，`start` 帧的 `via` 为 `default`。
+
+不跟随当前 session 的模型：quick chat 不是该 session 的一部分，跟随固定通道更可预测。
 
 ### 5.2 失败码映射
 
@@ -130,6 +151,8 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 | `RATE_LIMIT` / `HTTP_429` | 请求太频繁 |
 | `CONTEXT_WINDOW_EXCEEDED` | 对话太长，请新开话题 |
 | `QUOTA` / `ACCOUNT_QUOTA` | 额度不足 |
+| `CONTENT_RISK` | 内容安全拒答 |
+| `UPSTREAM` | 上游生成失败，可重试 |
 | `NETWORK` / `STREAM_FAILED` | 网络中断 |
 | 其他 | 通用失败 + 重试 |
 
@@ -214,8 +237,9 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 | 选中文本 | 8,000 字符 |
 | 输出上限 | 2,048 tokens |
 | 鉴权 | `connection.requestRejection`，与 `/api` 同一套 |
-| 白名单字段 | `messages` / `selection` |
-| 不传 | `sessionId`、`tools`、任意 URL / 路径 / provider / model |
+| 白名单字段 | `messages` / `selection` / `web` |
+| 服务端块 | 只放行 `text` / `server_tool_use` / `web_search_tool_result` / `web_fetch_tool_result`，单条 96 KiB |
+| 不传 | `sessionId`、DSH agent 工具、任意 URL / 路径 / provider / model |
 
 关闭浮层或点「停止」会 abort 请求；Host 监听 `res` 的 `close` 并把取消透传给 adapter。
 （不能监听 `req` 的 `close`：请求体读完就会触发，会立刻误取消。）
@@ -224,12 +248,14 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 
 ### 10.1 自动化
 
-- `node --test test/*.test.mjs`：
-  - Host 纯函数：消息校验/截断、选中文本包装、失败帧、模型解析回退；
-  - Host 路由端到端：SSE 帧顺序、`sessionId`/`tools` 为空、鉴权、405/404/400/503、
+- `node --test test/*.test.mjs`（57 个用例）：
+  - Host 纯函数：消息校验/截断、服务端块白名单与上限、选中文本包装、失败帧、模型解析回退；
+  - DeepSeek 通道：凭证顺序（账号 → API Key → 降级）、SSE 分帧、上游错误映射、
+    联网时声明两个工具、`tool`/`citation`/`blocks`/`done` 帧顺序；
+  - Host 路由端到端：SSE 帧顺序、`sessionId` 为空、鉴权、405/404/400、
     模型失败帧、客户端断开触发 abort；
-  - Client：SSE 分帧（跨 chunk/CRLF/坏帧）、Markdown 分块、历史清洗、
-    控制器发送/流式/停止/重试/错误/关闭与恢复。
+  - Client：SSE 分帧（跨 chunk/CRLF/坏帧）、Markdown 分块、历史清洗（含服务端块与引用）、
+    控制器发送/流式/停止/重试/错误/关闭与恢复、联网开关与引用渲染。
 - `node scripts/check-client-bundles.mjs`：拼接后无顶层重名，`load({id})` 与包名一致，
   `VERSION` 与 `package.json` 一致。
 - `pnpm market`：`market.json` 通过官方解析器校验。
@@ -246,11 +272,17 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 - [ ] 浅色/深色、放大字号不破版。
 - [ ] 主界面在浮层打开时仍可操作；`Esc` 不抢主界面。
 - [ ] 关闭浮层后请求被 abort（Network 面板显示 canceled）。
+- [ ] 关闭联网提问：不出现搜索与来源；回答来自 `deepseek-flash`。
+- [ ] 打开联网后问「今天有什么新闻」：出现「正在搜索」chip 与来源列表。
+- [ ] 读链接：粘贴一个 URL 并要求总结，回答下方有该链接的来源。
+- [ ] 停止后重试：上一轮服务端块随历史回传，不报 400。
+- [ ] 退出 DeepSeek 账号后提问：自动落到 `DEEPSEEK_API_KEY`；两者都没有时提示未联网。
 
 ## 11. 后续版本
 
 1. 当前对话最后两轮上下文（conversation projection 桥），带可见开关；
-2. quick chat 模型选择（设置项，校验 catalog 成员）；
-3. 联网搜索（优先独立 Search API，把结果拼进 messages；不走 DeepSeek 服务端工具）；
-4. 拖拽位置、插入到主输入框、导出；
-5. 历史加密/按会话隔离（如果产品需要）。
+2. quick chat 模型选择（设置项，校验 catalog 成员；联网时仍固定 `deepseek-flash`）；
+3. 深度思考搜索（`thinking: enabled` + `deepseek_web_search`），以及 thinking 折叠展示；
+4. 文件/图片输入（DeepSeek 文件接口）、语音；
+5. 拖拽位置、插入到主输入框、导出；
+6. 历史加密/按会话隔离（如果产品需要）。

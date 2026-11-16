@@ -25,7 +25,7 @@ window.__ModuleLoader__.load({
     /** 插件标识（与 package.json 的 name 一致）。 */
     const PLUGIN_ID = 'dsh-vt-quick-chat';
     /** 与 package.json 的 version 保持一致。 */
-    const VERSION = '1.0.0';
+    const VERSION = '1.1.0';
     /** 文案命名空间。 */
     const NS = 'vtQuickChat';
     /** Host 路由前缀，与 index.js 的 ROUTE_PREFIX 必须一致。 */
@@ -114,6 +114,17 @@ window.__ModuleLoader__.load({
       'action.removeQuote': '移除引用',
       'action.retryHint': '重新生成上一条回答',
       'context.chip': '引用选中文字',
+      'action.web': '联网',
+      'action.webOn': '联网已开',
+      'action.webHint': '开启后可用搜索与阅读链接；搜索 5 元/千次、抓取 5 元/千次',
+      'tool.search': '正在搜索',
+      'tool.open': '正在打开网页',
+      'tool.find': '正在页内查找',
+      'tool.read': '正在读取链接',
+      'tool.usage': '本次：搜索 {search} 次 · 抓取 {fetch} 次',
+      'citations.title': '来源',
+      'error.contentRisk': '这个问题被内容安全策略拒绝了。',
+      'web.unavailable': '当前没有可用的 DeepSeek 凭证，本次回答没有联网。',
       'stream.thinking': '正在回答…',
       'stream.stopped': '已停止',
       'stream.truncated': '回答达到长度上限',
@@ -167,6 +178,17 @@ window.__ModuleLoader__.load({
       'action.removeQuote': 'Remove quote',
       'action.retryHint': 'Regenerate the previous answer',
       'context.chip': 'Quoted selection',
+      'action.web': 'Web',
+      'action.webOn': 'Web on',
+      'action.webHint': 'Turns on search and link reading; search ¥5/1k, fetch ¥5/1k',
+      'tool.search': 'Searching',
+      'tool.open': 'Opening page',
+      'tool.find': 'Finding in page',
+      'tool.read': 'Reading link',
+      'tool.usage': 'This turn: {search} searches · {fetch} fetches',
+      'citations.title': 'Sources',
+      'error.contentRisk': 'This question was rejected by the content safety policy.',
+      'web.unavailable': 'No DeepSeek credential is available, so this answer did not use the web.',
       'stream.thinking': 'Answering…',
       'stream.stopped': 'Stopped',
       'stream.truncated': 'The answer hit its length limit',
@@ -223,9 +245,14 @@ window.__ModuleLoader__.load({
      * @returns 可安全发送的消息数组。
      */
     function trimForRequest(messages) {
-      const list = messages
-        .slice(-40)
-        .map((message) => ({ role: message.role, content: String(message.content).slice(0, MAX_MESSAGE_CHARS) }));
+      const list = messages.slice(-40).map((message) => {
+        const out = { role: message.role, content: String(message.content).slice(0, MAX_MESSAGE_CHARS) };
+        // 服务端工具块必须随 assistant 消息回传，否则上一轮读过的网页会丢失。
+        if (message.role === 'assistant' && Array.isArray(message.blocks) && message.blocks.length > 0) {
+          out.blocks = message.blocks;
+        }
+        return out;
+      });
       while (list.length > 1 && JSON.stringify(list).length > MAX_REQUEST_CHARS) list.shift();
       return list;
     }
@@ -247,7 +274,15 @@ window.__ModuleLoader__.load({
           if (message === null || typeof message !== 'object') continue;
           if (message.role !== 'user' && message.role !== 'assistant') continue;
           if (typeof message.content !== 'string' || message.content.trim().length === 0) continue;
-          messages.push({ role: message.role, content: message.content.slice(0, MAX_MESSAGE_CHARS) });
+          const kept = { role: message.role, content: message.content.slice(0, MAX_MESSAGE_CHARS) };
+          // 历史里的服务端块要一起恢复，否则继续追问时读过的网页会丢。
+          if (message.role === 'assistant' && Array.isArray(message.blocks) && message.blocks.length > 0) {
+            kept.blocks = message.blocks;
+          }
+          if (message.role === 'assistant' && Array.isArray(message.citations) && message.citations.length > 0) {
+            kept.citations = message.citations;
+          }
+          messages.push(kept);
         }
         if (messages.length === 0) continue;
         out.push({
@@ -558,6 +593,16 @@ window.__ModuleLoader__.load({
         copiedId: null,
         confirmClear: false,
         model: undefined,
+        /** 本次回答走的通道：deepseek 直连，或 default 默认模型兜底。 */
+        via: undefined,
+        /** 是否开启联网工具；每次打开小窗重置为关闭。 */
+        web: false,
+        /** 本轮已发生的服务端工具调用，用于显示「正在搜索 / 正在读取链接」。 */
+        tools: [],
+        /** 本轮回答引用到的来源。 */
+        citations: [],
+        /** 本轮工具计费次数，回答结束后显示一次。 */
+        toolUsage: null,
       };
 
       const listeners = new Set();
@@ -571,6 +616,8 @@ window.__ModuleLoader__.load({
       /** 最近一次浮层外的非空选区；按键可能折叠选区，用它兜底。 */
       let lastSelection = '';
       let lastSelectionAt = 0;
+      /** 本轮上游返回的 assistant 服务端块，收尾时挂到消息上。 */
+      let pendingBlocks = null;
       /** 选区记忆的有效窗口。 */
       const SELECTION_MEMORY_MS = 5_000;
 
@@ -659,8 +706,18 @@ window.__ModuleLoader__.load({
         if (!state.streaming) return;
         flushStream();
         const text = state.streamText;
-        const messages =
-          text.trim().length > 0 ? [...state.messages, { role: 'assistant', content: text }] : state.messages;
+        // 服务端块与引用要跟着这条回答一起落盘，下一轮才能原样回传。
+        const assistant =
+          text.trim().length > 0
+            ? {
+                role: 'assistant',
+                content: text,
+                ...(pendingBlocks === null ? {} : { blocks: pendingBlocks }),
+                ...(state.citations.length === 0 ? {} : { citations: state.citations }),
+              }
+            : undefined;
+        const messages = assistant === undefined ? state.messages : [...state.messages, assistant];
+        pendingBlocks = null;
         set({
           messages,
           streamText: '',
@@ -682,7 +739,11 @@ window.__ModuleLoader__.load({
           const response = await fetch(`${API_PREFIX}/chat`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ messages: trimForRequest(messages), selection: state.selection }),
+            body: JSON.stringify({
+              messages: trimForRequest(messages),
+              selection: state.selection,
+              web: state.web === true,
+            }),
             signal,
           });
           if (!response.ok) {
@@ -701,12 +762,55 @@ window.__ModuleLoader__.load({
           const parser = createSseParser((frame) => {
             switch (frame.type) {
               case 'start':
+                set({
+                  model: typeof frame.model === 'string' ? frame.model : undefined,
+                  via: typeof frame.via === 'string' ? frame.via : undefined,
+                });
+                break;
+              case 'model':
                 set({ model: typeof frame.model === 'string' ? frame.model : undefined });
                 break;
               case 'delta':
                 appendStream(frame.text);
                 break;
+              case 'tool':
+                set({
+                  tools: [
+                    ...state.tools,
+                    {
+                      action: typeof frame.action === 'string' ? frame.action : 'search',
+                      queries: Array.isArray(frame.queries) ? frame.queries : [],
+                      url: typeof frame.url === 'string' ? frame.url : '',
+                    },
+                  ],
+                });
+                break;
+              case 'citation':
+                if (typeof frame.url === 'string' && frame.url.length > 0) {
+                  const seen = state.citations.some((item) => item.url === frame.url);
+                  if (!seen) {
+                    set({
+                      citations: [
+                        ...state.citations,
+                        { url: frame.url, title: typeof frame.title === 'string' ? frame.title : '' },
+                      ],
+                    });
+                  }
+                }
+                break;
+              case 'blocks':
+                if (Array.isArray(frame.blocks) && frame.blocks.length > 0) pendingBlocks = frame.blocks;
+                break;
               case 'done':
+                set({
+                  toolUsage:
+                    frame.tools === undefined || frame.tools === null
+                      ? null
+                      : {
+                          search: Number(frame.tools.search) || 0,
+                          fetch: Number(frame.tools.fetch) || 0,
+                        },
+                });
                 finishStream({ truncated: frame.truncated === true });
                 break;
               case 'aborted':
@@ -758,6 +862,7 @@ window.__ModuleLoader__.load({
           createdAt = Date.now();
         }
         const messages = [...state.messages, { role: 'user', content: text }];
+        pendingBlocks = null;
         set({
           messages,
           draft: '',
@@ -769,6 +874,9 @@ window.__ModuleLoader__.load({
           truncated: false,
           historyOpen: false,
           confirmClear: false,
+          tools: [],
+          citations: [],
+          toolUsage: null,
         });
         void run(messages);
       }
@@ -807,7 +915,11 @@ window.__ModuleLoader__.load({
           streaming: true,
           stopped: false,
           truncated: false,
+          tools: [],
+          citations: [],
+          toolUsage: null,
         });
+        pendingBlocks = null;
         void run(messages);
       }
 
@@ -856,7 +968,18 @@ window.__ModuleLoader__.load({
       /** 打开浮层：默认紧凑态，并带上当前选中文字。 */
       function open() {
         if (state.open) return;
-        set({ open: true, mode: 'compact', selection: readSelection(), historyOpen: false, confirmClear: false });
+        set({
+          open: true,
+          mode: 'compact',
+          selection: readSelection(),
+          historyOpen: false,
+          confirmClear: false,
+          // 联网每次重新打开都回到关闭：不让上一轮的计费状态静默延续。
+          web: false,
+          tools: [],
+          citations: [],
+          toolUsage: null,
+        });
       }
 
       /** 关闭浮层：丢弃草稿与选中引用，把已发送内容留在本地历史。 */
@@ -891,6 +1014,11 @@ window.__ModuleLoader__.load({
           copiedId: null,
           confirmClear: false,
           model: undefined,
+          via: undefined,
+          web: false,
+          tools: [],
+          citations: [],
+          toolUsage: null,
         });
       }
 
@@ -898,6 +1026,11 @@ window.__ModuleLoader__.load({
       function toggle() {
         if (state.open) close();
         else open();
+      }
+
+      /** 切换联网工具；下一次发送生效。 */
+      function toggleWeb() {
+        set({ web: !state.web });
       }
 
       /** 收到紧凑态，保留消息与草稿。 */
@@ -950,6 +1083,10 @@ window.__ModuleLoader__.load({
           historyOpen: false,
           confirmClear: false,
           model: undefined,
+          via: undefined,
+          tools: [],
+          citations: [],
+          toolUsage: null,
         });
       }
 
@@ -992,6 +1129,9 @@ window.__ModuleLoader__.load({
           historyOpen: false,
           confirmClear: false,
           mode: 'expanded',
+          tools: [],
+          citations: [],
+          toolUsage: null,
         });
       }
 
@@ -1091,6 +1231,7 @@ window.__ModuleLoader__.load({
         setDraft,
         captureSelection,
         clearSelection,
+        toggleWeb,
         newChat,
         openHistory,
         closeHistory,
@@ -1166,6 +1307,13 @@ window.__ModuleLoader__.load({
 .vqc-inlineAction{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary,#81858c);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
 .vqc-inlineAction:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-note{margin-top:4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-tools{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 4px}
+.vqc-toolChip{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:2px 8px;border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-1,#fff);border:.5px solid var(--dsw-alias-border-l1,#0000000a);color:var(--dsw-alias-label-secondary,#61666b);font-size:11px;line-height:16px}
+.vqc-toolDetail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-citations{display:flex;flex-direction:column;gap:2px;margin-top:6px;padding-top:6px;border-top:.5px solid var(--dsw-alias-border-l1,#0000000a)}
+.vqc-citationsTitle{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-citation{font-size:12px;line-height:18px;color:var(--dsw-alias-brand-primary,#4d6bfe);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vqc-citation:hover{text-decoration:underline}
 .vqc-error{display:flex;align-items:flex-start;gap:8px;margin-top:12px;padding:10px 12px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#61666b);font-size:13px;line-height:20px}
 .vqc-errorIcon{flex:none;margin-top:2px;color:var(--dsw-alias-state-error-primary,#d92d20)}
 .vqc-errorBody{flex:1;min-width:0}
@@ -1342,6 +1490,72 @@ window.__ModuleLoader__.load({
                 copied ? labels.copied : labels.copy,
               ),
             ),
+        isUser || !Array.isArray(message.citations) || message.citations.length === 0
+          ? null
+          : h(CitationList, { citations: message.citations, labels }),
+      );
+    }
+
+    /**
+     * 本轮发生的服务端工具调用，回答过程中提示「正在搜索 / 正在读取链接」。
+     * @param props - tools/labels。
+     */
+    function ToolActivity({ tools, labels }) {
+      const labelFor = (action) => {
+        switch (action) {
+          case 'open_page':
+            return labels.toolOpen;
+          case 'find_in_page':
+            return labels.toolFind;
+          case 'read_link':
+            return labels.toolRead;
+          default:
+            return labels.toolSearch;
+        }
+      };
+      return h(
+        'div',
+        { className: 'vqc-tools' },
+        tools.map((tool, index) => {
+          const detail =
+            tool.queries.length > 0 ? tool.queries.slice(0, 2).join(' / ') : tool.url.length > 0 ? tool.url : '';
+          return h(
+            'span',
+            { key: `tool${index}`, className: 'vqc-toolChip', title: detail },
+            h(DshIcon, {
+              name: tool.action === 'read_link' ? 'IconLinkOutlineRegular' : 'IconSearchOutlineRegular',
+              size: 12,
+            }),
+            labelFor(tool.action),
+            detail.length > 0 ? h('span', { className: 'vqc-toolDetail' }, detail) : null,
+          );
+        }),
+      );
+    }
+
+    /**
+     * 引用来源列表：模型给出 citations 时才出现。
+     * @param props - citations/labels。
+     */
+    function CitationList({ citations, labels }) {
+      return h(
+        'div',
+        { className: 'vqc-citations' },
+        h('div', { className: 'vqc-citationsTitle' }, labels.citations),
+        ...citations.map((citation, index) =>
+          h(
+            'a',
+            {
+              key: `cite${index}`,
+              className: 'vqc-citation',
+              href: citation.url,
+              target: '_blank',
+              rel: 'noreferrer noopener',
+              title: citation.url,
+            },
+            citation.title.length > 0 ? citation.title : citation.url,
+          ),
+        ),
       );
     }
 
@@ -1529,6 +1743,12 @@ window.__ModuleLoader__.load({
               'div',
               { className: 'vqc-actions' },
               h(IconButton, {
+                label: state.web ? labels.webOn : labels.web,
+                icon: 'IconGlobeOutlineRegular',
+                active: state.web,
+                onClick: controller.toggleWeb,
+              }),
+              h(IconButton, {
                 label: labels.history,
                 icon: 'IconClockOutlineRegular',
                 active: state.historyOpen,
@@ -1579,6 +1799,7 @@ window.__ModuleLoader__.load({
             'div',
             { key: 'stream', className: 'vqc-msg' },
             h('div', { className: 'vqc-role' }, labels.assistant),
+            state.tools.length > 0 ? h(ToolActivity, { tools: state.tools, labels }) : null,
             state.streamText.length === 0
               ? h('div', { className: 'vqc-thinking' }, labels.thinking)
               : h(
@@ -1587,8 +1808,25 @@ window.__ModuleLoader__.load({
                   renderMarkdown(state.streamText),
                   h('span', { className: 'vqc-caret', 'aria-hidden': 'true' }),
                 ),
+            state.citations.length > 0 ? h(CitationList, { citations: state.citations, labels }) : null,
           ),
         );
+      }
+
+      if (state.toolUsage !== null && !showStreaming) {
+        messages.push(
+          h(
+            'div',
+            { key: 'toolUsage', className: 'vqc-note' },
+            labels.toolUsage
+              .replace('{search}', String(state.toolUsage.search))
+              .replace('{fetch}', String(state.toolUsage.fetch)),
+          ),
+        );
+      }
+
+      if (state.web && state.via === 'default' && state.messages.length > 0) {
+        messages.push(h('div', { key: 'webFallback', className: 'vqc-note' }, labels.webUnavailable));
       }
 
       if (!showStreaming && state.messages.length === 0) {
@@ -1812,6 +2050,16 @@ window.__ModuleLoader__.load({
         truncated: t('stream.truncated'),
         retryHint: t('action.retryHint'),
         panelLabel: t('panel.label'),
+        web: t('action.web'),
+        webOn: t('action.webOn'),
+        webHint: t('action.webHint'),
+        webUnavailable: t('web.unavailable'),
+        toolSearch: t('tool.search'),
+        toolOpen: t('tool.open'),
+        toolFind: t('tool.find'),
+        toolRead: t('tool.read'),
+        toolUsage: t('tool.usage'),
+        citations: t('citations.title'),
         emptyLabels: {
           title: t('empty.title'),
           body: t('empty.body'),

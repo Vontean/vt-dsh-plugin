@@ -4,10 +4,18 @@
     "en": "Quick chat"
   },
   "description": {
-    "zh": "agent 执行任务时按快捷键弹出临时小窗，借用选中的文字解释概念；不创建 Session、不写 session log、不调用工具，关掉即走。",
-    "en": "A shortcut opens a temporary overlay during an agent task and explains concepts with streaming answers, using the selected text; no session, no session log, and no tools."
+    "zh": "agent 执行任务时按快捷键弹出临时小窗，用 DeepSeek 流式解释概念，可按需开启联网搜索与读链接；不创建 Session、不写 session log、不调用 agent 工具，关掉即走。",
+    "en": "A shortcut opens a temporary overlay during an agent task and streams explanations from DeepSeek, with optional web search and link reading; no session, no session log, and no agent tools."
   },
   "icon": "icon.svg",
   "category": "ui",
-  "keywords": ["quick-chat", "overlay", "shortcut", "explain", "ephemeral"]
+  "keywords": [
+    "quick-chat",
+    "overlay",
+    "shortcut",
+    "explain",
+    "ephemeral",
+    "deepseek",
+    "web-search"
+  ]
 }

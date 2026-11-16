@@ -1,8 +1,8 @@
 {
   "name": "dsh-vt-quick-chat",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
-  "description": "Press a shortcut during an agent task to open a temporary quick-chat overlay that explains concepts with streaming answers, without creating a session, writing the session log, or calling tools.",
+  "description": "Press a shortcut during an agent task to open a temporary quick-chat overlay that streams answers from DeepSeek, with an optional web-search switch, without creating a session, writing the session log, or calling agent tools.",
   "license": "MIT",
   "author": "Vontean",
   "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-quick-chat#readme",

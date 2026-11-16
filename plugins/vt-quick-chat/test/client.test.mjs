@@ -426,6 +426,15 @@ const SSR_LABELS = {
   truncated: '达到上限',
   retryHint: '重新生成',
   panelLabel: '快捷提问',
+  web: '联网',
+  webOn: '联网已开',
+  webHint: '开启后可用搜索与阅读链接',
+  toolSearch: '正在搜索',
+  toolOpen: '正在打开网页',
+  toolFind: '正在页内查找',
+  toolRead: '正在读取链接',
+  toolUsage: '本次：搜索 {search} 次 · 抓取 {fetch} 次',
+  citations: '来源',
   emptyLabels: { title: '临时提问，不会进入侧栏', body: '选中一段文字', hint: '只做解释' },
   historyLabels: {
     title: '本地历史',
@@ -454,6 +463,11 @@ const SSR_BASE = {
   copiedId: null,
   confirmClear: false,
   model: undefined,
+  via: undefined,
+  web: false,
+  tools: [],
+  citations: [],
+  toolUsage: null,
 };
 
 /**
@@ -519,6 +533,46 @@ test('SSR：展开态渲染消息、引用 chip 与 Markdown 代码块', () => {
   assert.match(html, /aria-label="历史"/u);
   assert.match(html, /aria-label="收起"/u);
   assert.match(html, /aria-label="关闭"/u);
+});
+
+test('SSR：展开态渲染联网开关，默认关闭', () => {
+  const off = renderPanel({ mode: 'expanded' });
+  assert.match(off, /aria-label="联网"/u);
+  assert.doesNotMatch(off, /aria-label="联网已开"/u);
+
+  const on = renderPanel({ mode: 'expanded', web: true });
+  assert.match(on, /aria-label="联网已开"/u);
+});
+
+test('SSR：工具活动与引用来源都渲染出来', () => {
+  const html = renderPanel({
+    mode: 'expanded',
+    streaming: true,
+    streamText: '冰岛人口约 40 万。',
+    tools: [{ action: 'search', queries: ['Iceland population'], url: '' }],
+    citations: [{ url: 'https://example.com/a', title: '统计' }],
+  });
+  assert.match(html, /vqc-tools/u);
+  assert.match(html, /正在搜索/u);
+  assert.match(html, /vqc-citations/u);
+  assert.match(html, /来源/u);
+  assert.match(html, /href="https:\/\/example\.com\/a"/u);
+});
+
+test('SSR：历史回答保留引用来源', () => {
+  const html = renderPanel({
+    mode: 'expanded',
+    messages: [
+      { role: 'user', content: '冰岛人口？' },
+      {
+        role: 'assistant',
+        content: '约 40 万。',
+        citations: [{ url: 'https://example.com/b', title: '来源 B' }],
+      },
+    ],
+  });
+  assert.match(html, /来源 B/u);
+  assert.match(html, /href="https:\/\/example\.com\/b"/u);
 });
 
 test('SSR：空态使用独立文案，不复用标题', () => {

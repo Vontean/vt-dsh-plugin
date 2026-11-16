@@ -170,7 +170,7 @@ test('模型失败帧保留稳定错误码', async () => {
   route.dispose();
 });
 
-test('没有可用模型时返回 503 与 NO_MODEL', async () => {
+test('没有可用模型时在流内返回 NO_MODEL 错误帧', async () => {
   const empty = {
     listProviders: () => [],
     listModels: async () => [],
@@ -178,16 +178,19 @@ test('没有可用模型时返回 503 与 NO_MODEL', async () => {
   };
   const route = createContext({ llm: empty, agentDefaultModel: undefined });
   const res = await run(route, createRequest({ messages: [{ role: 'user', content: 'q' }] }));
-  assert.equal(res.status, 503);
-  assert.equal(JSON.parse(res.text).error.code, 'NO_MODEL');
+  // 兜底通道也要先开流再报错：客户端只处理一种响应形态。
+  assert.equal(res.status, 200);
+  assert.equal(res.frames.at(-1).type, 'error');
+  assert.equal(res.frames.at(-1).code, 'NO_MODEL');
   route.dispose();
 });
 
-test('没有 llm 服务时返回 503 与 NO_LLM', async () => {
+test('没有 llm 服务时在流内返回 NO_LLM 错误帧', async () => {
   const route = createContext({ llm: undefined, agentDefaultModel: undefined });
   const res = await run(route, createRequest({ messages: [{ role: 'user', content: 'q' }] }));
-  assert.equal(res.status, 503);
-  assert.equal(JSON.parse(res.text).error.code, 'NO_LLM');
+  assert.equal(res.status, 200);
+  assert.equal(res.frames.at(-1).type, 'error');
+  assert.equal(res.frames.at(-1).code, 'NO_LLM');
   route.dispose();
 });
 

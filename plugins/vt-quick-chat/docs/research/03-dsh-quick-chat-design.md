@@ -610,7 +610,7 @@ Phase 0 要向 DSH 源码/维护者确认：
 
 - [ ] 快捷键打开/关闭；输入框自动聚焦；关闭后焦点归还。
 - [ ] 侧栏不新增 session；session log 不新增；不生成标题。
-- [ ] 不调用任何工具；不读写工作区文件。
+- [ ] 不注册 agent 工具、不读写工作区文件；联网时只声明 DeepSeek 服务端工具。
 - [ ] 流式输出可见；停止可用；重试可用；错误可读。
 - [ ] 浅色/深色都只用 `--dsw-*` token；没有硬编码 HEX（fallback 除外）。
 - [ ] 图标全部来自 DSH `ICON_SYMBOLS`；没有手绘 SVG。
@@ -626,13 +626,15 @@ Phase 0 要向 DSH 源码/维护者确认：
    建议第一版用默认模型，设置页可改。
 2. **上下文范围**：只带选中文本，还是也带最后两轮？
    建议第一版只带选中文本；第二版加「引用当前对话」开关。
-3. **联网**：第一版是否完全不显示「联网」按钮？
-   建议先隐藏，避免用户以为可用；第二版再出现。
+3. **联网**：已决定——按钮常驻，默认关闭；开启后声明 `deepseek_web_search` +
+   `deepseek_read_url`，回答带引用，底部显示本轮搜索/抓取次数。
 4. **历史**：默认保留还是默认不保留？
    建议默认保留（最多 20 条），但关闭时丢弃未发送草稿；设置里可关。
 5. **浮层层级**：`shell.overlay` 的容器是否有 stacking context？
    需要 spike 确认；不要用 `z-index: 2147483000` 这种硬编码。
 6. **DSH 版本**：当前插件约定 `engines.dsh: ">=0.2.1-rc.5 <0.3.0"`；
    `shell.overlay` / `ctx.shortcuts` / `ctx.llm.stream` 在这些版本里的稳定性需要回归。
-7. **DeepSeek 服务端工具**：`dsh-llm-deepseek` 是否透传 `deepseek_web_search`？
-   这是第二版联网路线的关键前提。
+7. **DeepSeek 服务端工具**：已确认 `dsh-llm-deepseek` **不透传** —— 在 app.asar 里搜
+   `deepseek_web_search` / `deepseek_read_url` 得到 0 处引用。因此 v1.1.0 改为 Host 直连
+   `api.deepseek.com/anthropic/v1/messages`，凭证用 `deepseekAccount.resolveToken()`
+   （请求头 `x-dsh-auth-token`），API Key 兜底（`x-api-key`）。这条路线已实现并通过测试。
