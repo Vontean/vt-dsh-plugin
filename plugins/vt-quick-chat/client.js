@@ -97,7 +97,6 @@ window.__ModuleLoader__.load({
       'input.aria': '快捷提问输入',
       'input.placeholder': '问点什么…',
       'input.placeholderExpanded': '继续追问…',
-      'composer.hint': 'Enter 发送 · Shift+Enter 换行 · Esc 关闭',
       'empty.title': '临时提问，不会进入侧栏',
       'empty.body': '选中一段看不懂的文字再按快捷键，它会被当作解释对象。关掉小窗，主任务不受影响。',
       'empty.hint': '这里只做解释：不读写工作区文件、不创建会话；需要最新资料可打开「联网」。',
@@ -116,7 +115,6 @@ window.__ModuleLoader__.load({
       'action.clearHistory': '清空全部',
       'action.confirmClear': '再点一次清空',
       'action.removeHistory': '删除这条',
-      'action.quoteSelection': '引用当前选中的文字',
       'action.removeQuote': '移除引用',
       'action.retryHint': '重新生成上一条回答',
       'context.chip': '引用选中文字',
@@ -170,7 +168,6 @@ window.__ModuleLoader__.load({
       'input.aria': 'Quick chat input',
       'input.placeholder': 'Ask something…',
       'input.placeholderExpanded': 'Ask a follow-up…',
-      'composer.hint': 'Enter to send · Shift+Enter for a new line · Esc to close',
       'empty.title': 'A temporary question, outside the sidebar',
       'empty.body': 'Select a phrase you do not understand, then press the shortcut. Close this window and the main task continues untouched.',
       'empty.hint': 'Explanations only: no file access, no new session. Turn on Web for fresh sources.',
@@ -189,7 +186,6 @@ window.__ModuleLoader__.load({
       'action.clearHistory': 'Clear all',
       'action.confirmClear': 'Click again to clear',
       'action.removeHistory': 'Delete this item',
-      'action.quoteSelection': 'Quote the current selection',
       'action.removeQuote': 'Remove quote',
       'action.retryHint': 'Regenerate the previous answer',
       'context.chip': 'Quoted selection',
@@ -1178,12 +1174,6 @@ window.__ModuleLoader__.load({
         set({ draft: String(value) });
       }
 
-      /** 重新读取当前选中文字。 */
-      function captureSelection() {
-        const selection = readSelection();
-        set({ selection });
-      }
-
       /** 移除选中引用。 */
       function clearSelection() {
         set({ selection: '' });
@@ -1358,7 +1348,6 @@ window.__ModuleLoader__.load({
         stop,
         retry,
         setDraft,
-        captureSelection,
         clearSelection,
         toggleWeb,
         toggleDeepThink,
@@ -1382,7 +1371,7 @@ window.__ModuleLoader__.load({
     const CSS = `
 .vqc-root{position:absolute;inset:0;pointer-events:none;z-index:0}
 .vqc-panel{position:absolute;right:24px;bottom:96px;display:flex;flex-direction:column;box-sizing:border-box;width:min(420px,calc(100vw - 32px));background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);border:0;border-radius:var(--dsw-radius-lg,16px);box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);--dsw-elevation-stroke-color:var(--dsw-alias-border-l2,#0000001a);pointer-events:auto;overflow:hidden;font-size:var(--dsh-content-font-size,14px);line-height:1.55;animation:vqc-rise 160ms ease-out}
-.vqc-panel--compact{min-height:48px;max-height:200px}
+.vqc-panel--compact{min-height:48px;max-height:240px}
 .vqc-panel--compact .vqc-files{flex:none}
 .vqc-panel--expanded{height:min(520px,calc(100dvh - 120px))}
 @keyframes vqc-rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
@@ -1395,9 +1384,9 @@ window.__ModuleLoader__.load({
 .vqc-iconbtn:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:1px}
 .vqc-iconbtn:disabled{opacity:.4;cursor:default}
 .vqc-iconbtn--active{color:var(--dsw-alias-state-business-primary,#4176e6)}
-.vqc-compact{display:flex;align-items:center;gap:8px;box-sizing:border-box;height:48px;padding:10px}
+.vqc-compact{display:flex;align-items:flex-end;gap:8px;box-sizing:border-box;min-height:48px;padding:10px}
 .vqc-brand{flex:none;color:var(--dsw-alias-label-tertiary,#81858c)}
-.vqc-input{flex:1;min-width:0;margin:0;padding:0;border:0;outline:0;background:transparent;color:inherit;font:inherit;line-height:22px;resize:none}
+.vqc-input{flex:1;min-width:0;box-sizing:border-box;margin:0;min-height:28px;padding:3px 0;border:0;outline:0;background:transparent;color:inherit;font:inherit;line-height:22px;resize:none;overflow-y:auto;scrollbar-width:thin}
 .vqc-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-add{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--dsw-alias-label-tertiary,#81858c);cursor:pointer}
 .vqc-add:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
@@ -1480,8 +1469,7 @@ window.__ModuleLoader__.load({
 .vqc-historyMeta{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-historyEmpty{padding:16px 4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-composer{display:flex;align-items:flex-end;gap:8px;flex:none;padding:8px 8px 8px 16px;border-top:.5px solid var(--dsw-alias-border-l1,#0000000a)}
-.vqc-composerInput{min-height:22px;max-height:120px;padding:6px 0;overflow-y:auto;scrollbar-width:thin}
-.vqc-hint{flex:none;padding:0 16px 8px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-composerInput{min-height:28px;max-height:120px;padding:3px 0}
 .vqc-crash{position:absolute;right:24px;bottom:96px;display:flex;align-items:center;gap:10px;max-width:420px;padding:12px 14px;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-bg-layer-2,#fff);box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);color:var(--dsw-alias-label-secondary,#61666b);font-size:13px;line-height:20px;pointer-events:auto}
 .vqc-srOnly{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 `;
@@ -1532,18 +1520,19 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'vqc-convActions' },
-          h(IconButton, {
-            label: expanded ? labels.minimize : labels.expand,
-            icon: expanded ? 'IconCompactOutlineRegular' : 'IconFullscreenOutlineRegular',
-            onClick: onToggleMode,
-          }),
+          h(IconButton, { label: labels.newChat, icon: 'IconNewChatOutlineRegular', onClick: onNewChat }),
           h(IconButton, {
             label: labels.history,
             icon: 'IconClockOutlineRegular',
             active: historyOpen,
             onClick: onHistory,
           }),
-          h(IconButton, { label: labels.newChat, icon: 'IconNewChatOutlineRegular', onClick: onNewChat }),
+          // 展开/收起只用同一支雪佛龙翻转方向，不再用「四角」那套全屏语言。
+          h(IconButton, {
+            label: expanded ? labels.minimize : labels.expand,
+            icon: expanded ? 'IconChevronDownOutlineRegular' : 'IconChevronUpOutlineRegular',
+            onClick: onToggleMode,
+          }),
           h(IconButton, { label: labels.close, icon: 'IconCloseOutlineRegular', onClick: onClose }),
         ),
       );
@@ -1654,7 +1643,7 @@ window.__ModuleLoader__.load({
           height: size,
           fill: 'none',
           stroke: 'currentColor',
-          strokeWidth: 1.5,
+          strokeWidth: 1,
           'aria-hidden': 'true',
         },
         h('ellipse', { cx: 8, cy: 8, rx: 6.2, ry: 2.9, transform: 'rotate(45 8 8)' }),
@@ -1664,24 +1653,10 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 联网图标：DeepSeek 网页端的实心地球——圆、竖椭圆经线、一条赤道。
+     * 联网图标直接用 DSH 的 globe：形状与网页端一致，描边也自动跟随图标体系。
      */
-    function GlobeIcon({ size = 16 }) {
-      return h(
-        'svg',
-        {
-          viewBox: '0 0 16 16',
-          width: size,
-          height: size,
-          fill: 'none',
-          stroke: 'currentColor',
-          strokeWidth: 1.5,
-          'aria-hidden': 'true',
-        },
-        h('circle', { cx: 8, cy: 8, r: 6.2 }),
-        h('ellipse', { cx: 8, cy: 8, rx: 2.9, ry: 6.2 }),
-        h('path', { d: 'M1.8 8h12.4' }),
-      );
+    function WebGlyph({ size = 16 }) {
+      return h(DshIcon, { name: 'IconGlobeOutlineRegular', size });
     }
 
     /**
@@ -2181,15 +2156,9 @@ window.__ModuleLoader__.load({
             }),
             h(PillButton, {
               label: state.web ? labels.webOn : labels.web,
-              glyph: GlobeIcon,
+              glyph: WebGlyph,
               active: state.web,
               onClick: controller.toggleWeb,
-            }),
-            h(IconButton, {
-              label: labels.quote,
-              icon: 'IconLinkOutlineRegular',
-              active: state.selection.length > 0,
-              onClick: state.selection.length > 0 ? controller.clearSelection : controller.captureSelection,
             }),
             state.streaming
               ? h(
@@ -2218,8 +2187,6 @@ window.__ModuleLoader__.load({
           )
         : null;
 
-      const hint = expanded ? h('div', { className: 'vqc-hint' }, labels.hint) : null;
-
       const compact = expanded
         ? null
         : h(
@@ -2232,14 +2199,13 @@ window.__ModuleLoader__.load({
               className: 'vqc-add',
               onClick: pickFiles,
             }),
-            h('input', {
-              ref: inputRef,
-              className: 'vqc-input',
+            h(AutoTextarea, {
               value: state.draft,
-              placeholder: labels.placeholder,
-              'aria-label': labels.inputAria,
-              onChange: (event) => controller.setDraft(event.target.value),
+              onChange: controller.setDraft,
               onKeyDown,
+              placeholder: labels.placeholder,
+              ariaLabel: labels.inputAria,
+              inputRef,
             }),
             h(PillButton, {
               label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
@@ -2249,7 +2215,7 @@ window.__ModuleLoader__.load({
             }),
             h(PillButton, {
               label: state.web ? labels.webOn : labels.web,
-              glyph: GlobeIcon,
+              glyph: WebGlyph,
               active: state.web,
               onClick: controller.toggleWeb,
             }),
@@ -2309,7 +2275,6 @@ window.__ModuleLoader__.load({
           body,
           expanded ? h(FileChips, { files: state.files, labels, onRemove: controller.removeFile }) : null,
           composer,
-          hint,
           compact,
         ),
         h(
@@ -2353,7 +2318,6 @@ window.__ModuleLoader__.load({
         inputAria: t('input.aria'),
         placeholder: t('input.placeholder'),
         placeholderExpanded: t('input.placeholderExpanded'),
-        hint: t('composer.hint'),
         user: t('role.user'),
         assistant: t('role.assistant'),
         send: t('action.send'),
@@ -2366,7 +2330,6 @@ window.__ModuleLoader__.load({
         expand: t('action.expand'),
         newChat: t('action.newChat'),
         history: t('action.history'),
-        quote: t('action.quoteSelection'),
         quoteChip: t('context.chip'),
         removeQuote: t('action.removeQuote'),
         thinking: t('stream.thinking'),

@@ -128,7 +128,8 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 
 - 左：当前对话标题，取第一条用户消息压成一行，与本地历史里存的标题同源，两处不会漂移；
   超过一行用 `…` 截断。
-- 右：展开/收起、历史、新话题、关闭。紧凑态只多这一行，不再往输入条里塞展开图标。
+- 右：新话题、历史、展开/收起、关闭。展开与收起用同一支雪佛龙翻转方向，不混用全屏图标。
+  紧凑态只多这一行，不再往输入条里塞展开图标。
 - 没有对话时整行不渲染——空态就是一条干净的输入条。
 
 关闭语义：
@@ -170,7 +171,8 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 第一版只带**当前选中文字**：
 
 - 打开时读取一次，显示为可移除 chip；按键可能折叠选区，因此回退到 5 秒内的最近选区；
-- 展开态可点链接按钮重新读取（选中浮层内部文字时忽略，避免自我引用）；
+- 只在打开时读一次：输入区不放「重新读取」按钮，少一个说不清的图标；要换引用就关掉重开；
+  选中浮层内部文字时忽略，避免自我引用；
 - 选区记忆只记录浮层外的非空选区，不跨页面、不上传；
 - Host 把它包装成一条引用行（`> ...`）放在最前面，避免选中文本里的围栏代码破坏格式；
 - 上限 8k 字符。
@@ -209,13 +211,17 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 一处例外：附件的「+」用 16px 而不是 13px。enhancer 缩到 13px 是为了让「+」和权限 chip、
 麦克风并排时不抢眼；这个浮层里它左边没有别的控件，13px 撑不住左侧，所以放大到与其它图标同尺寸。
 
-**两个开关是唯一的例外，按 DeepSeek 网页端自绘。** 用户要求「深度思考和联网要和
-chat.deepseek.com 一致」，而 DSH 图标库里没有这两个形状，所以直接用 SVG 描：
+**只有「深度思考」是自绘的例外。** 用户要求它和 chat.deepseek.com 一致，而 DSH 图标库里
+没有原子形，所以直接用 SVG 描：
 
-| 开关 | 形状 | 尺寸 |
+| 开关 | 来源 | 形状 |
 |---|---|---|
-| 深度思考 | 两个交叉椭圆 + 中心实心点（原子形） | 16×16，描边 1.5 |
-| 联网 | 圆 + 竖椭圆经线 + 一条赤道 | 16×16，描边 1.5 |
+| 深度思考 | 自绘（DSH 无此形状） | 两个交叉椭圆 + 中心实心点（原子形） |
+| 联网 | `IconGlobeOutlineRegular` | DSH 原生地球，圆 + 一条赤道 + 两段经线弧，与网页端形状一致 |
+
+自绘图标必须按 DSH 的规格画：**16×16 viewBox + 描边 1**。DSH 图标的 sprite 就是
+16 viewBox，regular 描边取 1、medium 取 1.5。按 16 viewBox 画却用 1.5，视觉上会粗 50%，
+和旁边的图标明显不在一个重量级——这正是第一版被指出的问题。
 
 其余图标全部来自 `@deepseek-ai/dsh-client-ui-primitives` 的具名图标组件：
 
@@ -223,12 +229,13 @@ chat.deepseek.com 一致」，而 DSH 图标库里没有这两个形状，所以
 |---|---|
 | 空态图标 | `IconLightOutlineRegular` |
 | 关闭 | `IconCloseOutlineRegular` |
-| 收起 / 展开 | `IconCompactOutlineRegular` / `IconFullscreenOutlineRegular` |
+| 收起 / 展开 | `IconChevronDownOutlineRegular` / `IconChevronUpOutlineRegular`（同一支雪佛龙翻转方向） |
 | 历史 | `IconClockOutlineRegular` |
 | 新话题 | `IconNewChatOutlineRegular` |
 | 发送 / 停止 | `IconSendOutlineRegular` / `IconStopFillRegular` |
 | 复制 / 已复制 | `IconCopyOutlineRegular` / `IconCheckOutlineRegular` |
-| 引用 / 移除引用 | `IconLinkOutlineRegular` / `IconCloseOutlineRegular` |
+| 引用 chip 的移除 | `IconCloseOutlineRegular` |
+| 工具活动里的「读链接」 | `IconLinkOutlineRegular` |
 | 清空历史 | `IconTrashOutlineRegular` |
 | 错误 | `IconWarningOutlineRegular` |
 

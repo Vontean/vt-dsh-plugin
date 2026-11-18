@@ -518,12 +518,14 @@ test('SSR：关闭态不渲染', () => {
   assert.equal(renderPanel({ open: false }), '');
 });
 
-test('SSR：紧凑态渲染输入框与发送按钮', () => {
+test('SSR：紧凑态渲染多行输入框与发送按钮', () => {
   const html = renderPanel({ draft: '什么是 MCP？' });
   assert.match(html, /vqc-panel--compact/u);
   assert.match(html, /placeholder="问点什么…"/u);
   assert.match(html, /aria-label="快捷提问输入"/u);
-  assert.match(html, /value="什么是 MCP？"/u);
+  // 输入超过一行要能自己长高，所以紧凑态也是 textarea，不是单行 input。
+  assert.match(html, /<textarea class="vqc-input" rows="1"/u);
+  assert.match(html, /什么是 MCP？<\/textarea>/u);
   assert.match(html, /aria-label="发送"/u);
 });
 
