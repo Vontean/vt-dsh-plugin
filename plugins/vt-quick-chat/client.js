@@ -97,9 +97,9 @@ window.__ModuleLoader__.load({
       'input.aria': '快捷提问输入',
       'input.placeholder': '问点什么…',
       'input.placeholderExpanded': '继续追问…',
-      'empty.title': '临时提问，不会进入侧栏',
-      'empty.body': '选中一段看不懂的文字再按快捷键，它会被当作解释对象。关掉小窗，主任务不受影响。',
-      'empty.hint': '这里只做解释：不读写工作区文件、不创建会话；需要最新资料可打开「联网」。',
+      'empty.title': '随手问，不打断当前任务',
+      'empty.body': '一个临时小窗：随手追问、解释概念、看一段资料。可以带上附件，也可以打开联网查最新资料。',
+      'empty.hint': '不创建会话、不进侧栏；关掉小窗，主任务原样继续。',
       'action.send': '发送',
       'action.stop': '停止',
       'action.retry': '重试',
@@ -111,7 +111,7 @@ window.__ModuleLoader__.load({
       'action.newChat': '新话题',
       'action.history': '历史',
       'action.clearHistory': '清空',
-      'action.confirmClear': '再点一次清空',
+      'action.confirmClear': '确认清空？',
       'action.removeHistory': '删除这条',
       'action.removeQuote': '移除引用',
       'action.retryHint': '重新生成上一条回答',
@@ -134,7 +134,7 @@ window.__ModuleLoader__.load({
       'tool.open': '正在打开网页',
       'tool.find': '正在页内查找',
       'tool.read': '正在读取链接',
-      'tool.usage': '本次：搜索 {search} 次 · 抓取 {fetch} 次',
+      'tool.usage': '搜索 {search} 次 · 抓取 {fetch} 次',
       'citations.title': '来源',
       'error.contentRisk': '这个问题被内容安全策略拒绝了。',
       'web.unavailable': '当前没有可用的 DeepSeek 凭证，本次回答没有联网。',
@@ -164,9 +164,9 @@ window.__ModuleLoader__.load({
       'input.aria': 'Quick chat input',
       'input.placeholder': 'Ask something…',
       'input.placeholderExpanded': 'Ask a follow-up…',
-      'empty.title': 'A temporary question, outside the sidebar',
-      'empty.body': 'Select a phrase you do not understand, then press the shortcut. Close this window and the main task continues untouched.',
-      'empty.hint': 'Explanations only: no file access, no new session. Turn on Web for fresh sources.',
+      'empty.title': 'Ask anything, without interrupting the task',
+      'empty.body': 'A temporary window for follow-up questions, explanations, or a quick read. Bring files, or turn on Web for fresh sources.',
+      'empty.hint': 'No session, no sidebar entry; close it and the main task continues.',
       'action.send': 'Send',
       'action.stop': 'Stop',
       'action.retry': 'Retry',
@@ -178,7 +178,7 @@ window.__ModuleLoader__.load({
       'action.newChat': 'New topic',
       'action.history': 'History',
       'action.clearHistory': 'Clear',
-      'action.confirmClear': 'Click again to clear',
+      'action.confirmClear': 'Clear?',
       'action.removeHistory': 'Delete this item',
       'action.removeQuote': 'Remove quote',
       'action.retryHint': 'Regenerate the previous answer',
@@ -201,7 +201,7 @@ window.__ModuleLoader__.load({
       'tool.open': 'Opening page',
       'tool.find': 'Finding in page',
       'tool.read': 'Reading link',
-      'tool.usage': 'This turn: {search} searches · {fetch} fetches',
+      'tool.usage': '{search} searches · {fetch} fetches',
       'citations.title': 'Sources',
       'error.contentRisk': 'This question was rejected by the content safety policy.',
       'web.unavailable': 'No DeepSeek credential is available, so this answer did not use the web.',
@@ -1378,6 +1378,7 @@ window.__ModuleLoader__.load({
 .vqc-compact{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;box-sizing:border-box;min-height:48px;padding:10px}
 .vqc-brand{flex:none;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-input{flex:1;min-width:0;box-sizing:border-box;margin:0;min-height:28px;padding:3px 0;border:0;outline:0;background:transparent;color:inherit;font:inherit;line-height:22px;resize:none;overflow-y:auto;scrollbar-width:thin}
+.vqc-input[data-overflow="true"]{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 18px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 18px),transparent)}
 .vqc-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-add{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--dsw-alias-label-tertiary,#81858c);cursor:pointer}
 .vqc-add:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
@@ -1389,7 +1390,11 @@ window.__ModuleLoader__.load({
 .vqc-pill:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:1px}
 .vqc-pill--on{border-color:#4176e633;background:#4176e614;color:var(--dsw-alias-state-business-primary,#4176e6)}
 .vqc-pill--on:hover{background:#4176e620;color:var(--dsw-alias-state-business-primary,#4176e6)}
-.vqc-files{display:flex;flex-wrap:wrap;gap:6px;order:-2;flex:1 1 100%;padding:0 0 6px}
+.vqc-files{display:flex;flex-wrap:nowrap;gap:6px;order:-2;flex:1 1 100%;padding:0 0 6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 20px),transparent)}
+.vqc-files::-webkit-scrollbar{height:0}
+.vqc-win .vqc-files:hover{scrollbar-width:thin;scrollbar-color:var(--dsw-alias-scrollbar-bg-l1,#0000001a) transparent}
+.vqc-win .vqc-files:hover::-webkit-scrollbar{height:3px}
+.vqc-win .vqc-files:hover::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l1,#0000001a);border-radius:2px}
 .vqc-fileChip{display:inline-flex;align-items:center;gap:6px;max-width:200px;padding:3px 4px 3px 8px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#61666b);font-size:12px;line-height:18px}
 .vqc-fileChip--error{border-color:#d92d2055;color:var(--dsw-alias-state-error-primary,#d92d20)}
 .vqc-fileChip--quote{max-width:280px}
@@ -1398,8 +1403,8 @@ window.__ModuleLoader__.load({
 .vqc-send{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:999px;background:var(--dsw-alias-button-info-fill,#4d6bfe);color:#fff;cursor:pointer;transition:background-color .1s}
 .vqc-send:hover:not(:disabled){background:var(--dsw-alias-button-info-hover,#3f5af0)}
 .vqc-send:disabled{opacity:.4;cursor:default}
-.vqc-send--stop{background:var(--dsw-alias-bg-layer-3,#353638);color:var(--dsw-alias-label-primary,#0f1115);transform:none}
-.vqc-send--stop:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,#2631480f)}
+.vqc-send--stop{background:var(--dsw-alias-button-ghost-active-fill,#ebeef2);color:var(--dsw-alias-label-primary,#0f1115);transform:none}
+.vqc-send--stop:hover:not(:disabled){background:var(--dsw-alias-button-ghost-active-hover,#e9ecf2)}
 .vqc-body{flex:1;min-height:0;overflow-y:auto;padding:12px 16px;scrollbar-width:thin;scrollbar-color:var(--dsw-alias-scrollbar-bg-l1,#0000001a) transparent}
 .vqc-body::-webkit-scrollbar{width:8px;height:8px}
 .vqc-body::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l1,#0000001a);border-radius:999px}
@@ -1433,20 +1438,23 @@ window.__ModuleLoader__.load({
 @media (hover:none){.vqc-msgActions{opacity:1}}
 .vqc-inlineAction{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary,#81858c);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
 .vqc-inlineAction:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
-.vqc-note{margin-top:4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-note{margin-top:4px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-tools{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 4px}
 .vqc-toolChip{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:2px 8px;border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-1,#fff);border:.5px solid var(--dsw-alias-border-l1,#0000000a);color:var(--dsw-alias-label-secondary,#61666b);font-size:11px;line-height:16px}
 .vqc-toolDetail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;color:var(--dsw-alias-label-tertiary,#81858c)}
-.vqc-citations{display:flex;flex-direction:column;gap:2px;margin-top:6px;padding-top:6px;border-top:.5px solid var(--dsw-alias-border-l1,#0000000a)}
-.vqc-citationsTitle{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#81858c)}
-.vqc-citation{font-size:12px;line-height:18px;color:var(--dsw-alias-brand-primary,#4d6bfe);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.vqc-citation:hover{text-decoration:underline}
+.vqc-citations{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:.5px solid var(--dsw-alias-border-l1,#0000000a)}
+.vqc-citationsTitle{flex:none;margin-right:2px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-citation{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:3px 8px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#61666b);font-size:12px;line-height:18px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vqc-citation:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
+.vqc-citation svg{flex:none}
 .vqc-error{display:flex;align-items:flex-start;gap:8px;margin-top:12px;padding:10px 12px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#61666b);font-size:13px;line-height:20px}
 .vqc-errorIcon{flex:none;margin-top:2px;color:var(--dsw-alias-state-error-primary,#d92d20)}
 .vqc-errorBody{flex:1;min-width:0}
 .vqc-errorActions{display:flex;gap:6px;margin-top:6px}
 .vqc-textbtn{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
 .vqc-textbtn:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f)}
+.vqc-linkbtn{padding:0;border:0;background:transparent;color:var(--dsw-alias-brand-primary,#4d6bfe);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
+.vqc-linkbtn:hover{color:var(--dsw-alias-button-info-hover,#3f5af0);text-decoration:underline}
 .vqc-empty{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px 4px}
 .vqc-emptyIcon{color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-emptyTitle{font-size:13px;font-weight:500;line-height:20px;color:var(--dsw-alias-label-primary,#0f1115)}
@@ -1466,7 +1474,7 @@ window.__ModuleLoader__.load({
 .vqc-historyItem:hover .vqc-historyRemove{display:inline-flex}
 .vqc-historyRemove:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-historyEmpty{padding:16px 4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
-.vqc-composer{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;flex:none;padding:8px 8px 8px 16px;border-top:.5px solid var(--dsw-alias-border-l1,#0000000a)}
+.vqc-composer{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;flex:none;padding:10px;border-top:.5px solid var(--dsw-alias-border-l1,#0000000a)}
 .vqc-composerInput{min-height:28px;max-height:120px;padding:3px 0}
 .vqc-rowActions{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
 /* 输入折行后改纵向：文本独占上面整行，按钮全部沉到最底下那行。 */
@@ -1494,7 +1502,7 @@ window.__ModuleLoader__.load({
      * 图标按钮。
      * @param props - label/icon/size/onClick/disabled/active。
      */
-    function IconButton({ label, icon, size = 16, onClick, disabled = false, active = false, className }) {
+    function IconButton({ label, icon, glyph, size = 16, onClick, disabled = false, active = false, className }) {
       return h(
         'button',
         {
@@ -1505,7 +1513,29 @@ window.__ModuleLoader__.load({
           onClick,
           disabled,
         },
-        h(DshIcon, { name: icon, size }),
+        glyph ? h(glyph, { size }) : h(DshIcon, { name: icon, size }),
+      );
+    }
+
+    /**
+     * 关闭图标：DSH 的 X 是平头描边，和同一行的圆形图标放一起偏硬，
+     * 这里自绘成圆头、并把墨迹收到比圆形略小（对角线在大脑里会被放大）。
+     */
+    function CloseGlyph({ size = 15 }) {
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 16 16',
+          width: size,
+          height: size,
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1,
+          strokeLinecap: 'round',
+          'aria-hidden': 'true',
+        },
+        h('path', { d: 'M3 3l10 10' }),
+        h('path', { d: 'M13 3L3 13' }),
       );
     }
 
@@ -1538,7 +1568,7 @@ window.__ModuleLoader__.load({
             onClick: onToggleMode,
           }),
           // 同样外框下 X 比圆形更「满」，保持 16 才和其它按钮同重量。
-          h(IconButton, { label: labels.close, icon: 'IconCloseOutlineRegular', onClick: onClose }),
+          h(IconButton, { label: labels.close, glyph: CloseGlyph, size: 15, onClick: onClose }),
         ),
       );
     }
@@ -1558,13 +1588,15 @@ window.__ModuleLoader__.load({
         if (node === null) return;
         node.style.height = 'auto';
         const full = node.scrollHeight;
-        node.style.height = `${Math.min(full, 120)}px`;
-        if (onMultilineChange === undefined) return;
-        // 一行的高度 = 行高 + 上下内边距；超过它就是多行，输入区要改成上下结构。
         const style = window.getComputedStyle(node);
         const line = Number.parseFloat(style.lineHeight) || 22;
         const pad = (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0);
-        onMultilineChange(full > line + pad + 1);
+        // 最高 4 行半：再长就在框内滚动，并给底部加渐隐。
+        const max = Math.round(line * 4.5 + pad);
+        node.style.height = `${Math.min(full, max)}px`;
+        node.dataset.overflow = full > max + 1 ? 'true' : 'false';
+        // 一行的高度 = 行高 + 上下内边距；超过它就是多行，输入区要改成上下结构。
+        if (onMultilineChange !== undefined) onMultilineChange(full > line + pad + 1);
       }, [value]);
       return h('textarea', {
         ref: assignRef,
@@ -1610,7 +1642,7 @@ window.__ModuleLoader__.load({
             { className: 'vqc-crash', role: 'alert' },
             h(DshIcon, { name: 'IconWarningOutlineRegular', size: 16 }),
             h('span', { className: 'vqc-errorBody' }, tRef('error.crash')),
-            h('button', { type: 'button', className: 'vqc-textbtn', onClick: this.reset }, tRef('action.retry')),
+            h('button', { type: 'button', className: 'vqc-linkbtn', onClick: this.reset }, tRef('action.retry')),
           );
         }
         return this.props.children;
@@ -1881,7 +1913,8 @@ window.__ModuleLoader__.load({
               rel: 'noreferrer noopener',
               title: citation.url,
             },
-            citation.title.length > 0 ? citation.title : citation.url,
+            h(DshIcon, { name: 'IconLinkOutlineRegular', size: 16 }),
+            h('span', null, citation.title.length > 0 ? citation.title : citation.url),
           ),
         ),
       );
@@ -2311,7 +2344,10 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { className: 'vqc-root', 'data-vt-quick-chat': '' },
+        {
+          className: `vqc-root${typeof navigator !== 'undefined' && /Win/i.test(navigator.userAgent) ? ' vqc-win' : ''}`,
+          'data-vt-quick-chat': '',
+        },
         h('input', {
           ref: fileInputRef,
           type: 'file',
