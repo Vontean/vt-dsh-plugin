@@ -25,15 +25,15 @@ window.__ModuleLoader__.load({
     /** 插件标识（与 package.json 的 name 一致）。 */
     const PLUGIN_ID = 'dsh-vt-quick-chat';
     /** 与 package.json 的 version 保持一致。 */
-    const VERSION = '1.2.0';
+    const VERSION = '1.3.0';
     /** 文案命名空间。 */
     const NS = 'vtQuickChat';
     /** Host 路由前缀，与 index.js 的 ROUTE_PREFIX 必须一致。 */
     const API_PREFIX = '/vt-quick-chat/api';
     /** 本地历史存储键。 */
     const STORAGE_KEY = `${PLUGIN_ID}:history:v1`;
-    /** 历史最多保留的对话数。 */
-    const MAX_HISTORY = 20;
+    /** 历史最多保留的对话数；超出时从最旧的一条开始删除。 */
+    const MAX_HISTORY = 30;
     /** 单条历史对话最多保留的消息数。 */
     const MAX_HISTORY_MESSAGES = 40;
     /** 历史序列化后的总字符上限，避免把 localStorage 撑爆。 */
@@ -94,8 +94,6 @@ window.__ModuleLoader__.load({
 
     const zh = {
       'panel.label': '快捷提问',
-      'panel.title': '快捷提问',
-      'panel.badge': '临时',
       'input.aria': '快捷提问输入',
       'input.placeholder': '问点什么…',
       'input.placeholderExpanded': '继续追问…',
@@ -169,8 +167,6 @@ window.__ModuleLoader__.load({
 
     const en = {
       'panel.label': 'Quick chat',
-      'panel.title': 'Quick chat',
-      'panel.badge': 'Temporary',
       'input.aria': 'Quick chat input',
       'input.placeholder': 'Ask something…',
       'input.placeholderExpanded': 'Ask a follow-up…',
@@ -1386,22 +1382,20 @@ window.__ModuleLoader__.load({
     const CSS = `
 .vqc-root{position:absolute;inset:0;pointer-events:none;z-index:0}
 .vqc-panel{position:absolute;right:24px;bottom:96px;display:flex;flex-direction:column;box-sizing:border-box;width:min(420px,calc(100vw - 32px));background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);border:0;border-radius:var(--dsw-radius-lg,16px);box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);--dsw-elevation-stroke-color:var(--dsw-alias-border-l2,#0000001a);pointer-events:auto;overflow:hidden;font-size:var(--dsh-content-font-size,14px);line-height:1.55;animation:vqc-rise 160ms ease-out}
-.vqc-panel--compact{min-height:48px;max-height:120px}
+.vqc-panel--compact{min-height:48px;max-height:200px}
 .vqc-panel--compact .vqc-files{flex:none}
 .vqc-panel--expanded{height:min(520px,calc(100dvh - 120px))}
 @keyframes vqc-rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.vqc-panel{animation:none}.vqc-caret{animation:none}}
-.vqc-header{display:flex;align-items:center;gap:8px;flex:none;height:44px;padding:0 8px 0 12px;border-bottom:.5px solid var(--dsw-alias-border-l1,#0000000a)}
-.vqc-title{display:flex;align-items:center;gap:6px;min-width:0;font-size:var(--dsh-content-font-size-secondary,13px);font-weight:500;line-height:20px;color:var(--dsw-alias-label-primary,#0f1115)}
-.vqc-titleText{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.vqc-badge{flex:none;padding:0 6px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-xs,4px);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-tertiary,#81858c);font-size:11px;font-weight:400;line-height:16px}
-.vqc-actions{display:flex;align-items:center;gap:4px;margin-left:auto}
+.vqc-convbar{display:flex;align-items:center;gap:8px;flex:none;height:36px;padding:0 8px 0 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#0000000a)}
+.vqc-convTitle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--dsh-content-font-size-secondary,13px);font-weight:500;line-height:20px;color:var(--dsw-alias-label-primary,#0f1115)}
+.vqc-convActions{display:flex;align-items:center;gap:2px;flex:none;margin-left:auto}
 .vqc-iconbtn{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:var(--dsw-radius-sm,8px);background:transparent;color:var(--dsw-alias-label-tertiary,#81858c);cursor:pointer}
 .vqc-iconbtn:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-iconbtn:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:1px}
 .vqc-iconbtn:disabled{opacity:.4;cursor:default}
 .vqc-iconbtn--active{color:var(--dsw-alias-state-business-primary,#4176e6)}
-.vqc-compact{display:flex;align-items:center;gap:8px;box-sizing:border-box;height:48px;padding:6px 8px 6px 12px}
+.vqc-compact{display:flex;align-items:center;gap:8px;box-sizing:border-box;height:48px;padding:10px}
 .vqc-brand{flex:none;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-input{flex:1;min-width:0;margin:0;padding:0;border:0;outline:0;background:transparent;color:inherit;font:inherit;line-height:22px;resize:none}
 .vqc-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858c)}
@@ -1526,6 +1520,36 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 对话状态行：标题 + 展开/收起、历史、新话题、关闭。
+     * 紧凑态有对话时压在输入行上方，展开态就是它的 header——两处同一块，不重复实现。
+     * @param props - title/expanded/historyOpen/labels/各按钮回调。
+     */
+    function ConversationBar({ title, expanded, historyOpen, labels, onToggleMode, onHistory, onNewChat, onClose }) {
+      return h(
+        'div',
+        { className: 'vqc-convbar' },
+        h('span', { className: 'vqc-convTitle', title: title }, title),
+        h(
+          'div',
+          { className: 'vqc-convActions' },
+          h(IconButton, {
+            label: expanded ? labels.minimize : labels.expand,
+            icon: expanded ? 'IconCompactOutlineRegular' : 'IconFullscreenOutlineRegular',
+            onClick: onToggleMode,
+          }),
+          h(IconButton, {
+            label: labels.history,
+            icon: 'IconClockOutlineRegular',
+            active: historyOpen,
+            onClick: onHistory,
+          }),
+          h(IconButton, { label: labels.newChat, icon: 'IconNewChatOutlineRegular', onClick: onNewChat }),
+          h(IconButton, { label: labels.close, icon: 'IconCloseOutlineRegular', onClick: onClose }),
+        ),
+      );
+    }
+
+    /**
      * 自动增高的多行输入框。
      * @param props - value/onChange/onKeyDown/placeholder/ariaLabel/className/inputRef。
      */
@@ -1618,10 +1642,54 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 深度思考图标：DeepSeek 网页端的原子形——两个交叉椭圆加中心点。
+     * DSH 图标库没有这个形状，所以直接描；16×16、1.5 描边与其他图标对齐。
+     */
+    function AtomIcon({ size = 16 }) {
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 16 16',
+          width: size,
+          height: size,
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.5,
+          'aria-hidden': 'true',
+        },
+        h('ellipse', { cx: 8, cy: 8, rx: 6.2, ry: 2.9, transform: 'rotate(45 8 8)' }),
+        h('ellipse', { cx: 8, cy: 8, rx: 6.2, ry: 2.9, transform: 'rotate(-45 8 8)' }),
+        h('circle', { cx: 8, cy: 8, r: 1.1, fill: 'currentColor', stroke: 'none' }),
+      );
+    }
+
+    /**
+     * 联网图标：DeepSeek 网页端的实心地球——圆、竖椭圆经线、一条赤道。
+     */
+    function GlobeIcon({ size = 16 }) {
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 16 16',
+          width: size,
+          height: size,
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.5,
+          'aria-hidden': 'true',
+        },
+        h('circle', { cx: 8, cy: 8, r: 6.2 }),
+        h('ellipse', { cx: 8, cy: 8, rx: 2.9, ry: 6.2 }),
+        h('path', { d: 'M1.8 8h12.4' }),
+      );
+    }
+
+    /**
      * 胶囊开关：深度思考、联网这类「开/关」状态用。
      * 只有图标，开启时用品牌色底；`aria-pressed` 让读屏能听出状态。
+     * @param props - label/glyph/active/onClick；`glyph` 是图标组件。
      */
-    function PillButton({ label, icon, active = false, onClick }) {
+    function PillButton({ label, glyph, active = false, onClick }) {
       return h(
         'button',
         {
@@ -1632,7 +1700,7 @@ window.__ModuleLoader__.load({
           title: label,
           onClick,
         },
-        h(DshIcon, { name: icon, size: 16 }),
+        h(glyph, { size: 16 }),
       );
     }
 
@@ -1966,49 +2034,26 @@ window.__ModuleLoader__.load({
       const expanded = state.mode === 'expanded';
       const canSend = state.draft.trim().length > 0 && !state.streaming;
       const canRetry = state.messages.some((message) => message.role === 'user');
-      const hasAssistant = state.messages.some((message) => message.role === 'assistant');
       const showStreaming = state.streaming || state.streamText.length > 0;
 
-      const header = expanded
-        ? h(
-            'header',
-            { className: 'vqc-header' },
-            h(
-              'div',
-              { className: 'vqc-title' },
-              h(DshIcon, { name: 'IconLightOutlineRegular', size: 16 }),
-              h('span', { className: 'vqc-titleText' }, labels.title),
-              h('span', { className: 'vqc-badge', title: state.model }, labels.badge),
-            ),
-            h(
-              'div',
-              { className: 'vqc-actions' },
-              h(IconButton, {
-                label: state.web ? labels.webOn : labels.web,
-                icon: 'IconGlobeOutlineRegular',
-                active: state.web,
-                onClick: controller.toggleWeb,
-              }),
-              h(IconButton, {
-                label: labels.history,
-                icon: 'IconClockOutlineRegular',
-                active: state.historyOpen,
-                onClick: controller.toggleHistory,
-              }),
-              h(IconButton, {
-                label: labels.newChat,
-                icon: 'IconNewChatOutlineRegular',
-                onClick: controller.newChat,
-              }),
-              h(IconButton, {
-                label: labels.minimize,
-                icon: 'IconCompactOutlineRegular',
-                onClick: controller.minimize,
-              }),
-              h(IconButton, { label: labels.close, icon: 'IconCloseOutlineRegular', onClick: controller.close }),
-            ),
-          )
-        : null;
+      // 标题取第一条用户消息，与本地历史里存的标题同源，所以两处永远一致。
+      const conversationTitle = state.messages.length > 0 ? titleFrom(state.messages, '') : '';
+      const hasConversation = conversationTitle.length > 0 || state.streaming;
+
+      // 紧凑态只有「有对话」时才多这一行；展开态始终有，它就是 header。
+      const convBar =
+        expanded || hasConversation
+          ? h(ConversationBar, {
+              title: conversationTitle,
+              expanded,
+              historyOpen: state.historyOpen,
+              labels,
+              onToggleMode: expanded ? controller.minimize : controller.expand,
+              onHistory: controller.toggleHistory,
+              onNewChat: controller.newChat,
+              onClose: controller.close,
+            })
+          : null;
 
       const chip =
         expanded && state.selection.length > 0 && !state.historyOpen
@@ -2130,13 +2175,13 @@ window.__ModuleLoader__.load({
             }),
             h(PillButton, {
               label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
-              icon: 'IconThinkOutlineRegular',
+              glyph: AtomIcon,
               active: state.deepThink,
               onClick: controller.toggleDeepThink,
             }),
             h(PillButton, {
               label: state.web ? labels.webOn : labels.web,
-              icon: 'IconGlobeOutlineRegular',
+              glyph: GlobeIcon,
               active: state.web,
               onClick: controller.toggleWeb,
             }),
@@ -2196,18 +2241,15 @@ window.__ModuleLoader__.load({
               onChange: (event) => controller.setDraft(event.target.value),
               onKeyDown,
             }),
-            hasAssistant || state.messages.length > 0
-              ? h(IconButton, { label: labels.expand, icon: 'IconFullscreenOutlineRegular', onClick: controller.expand })
-              : null,
             h(PillButton, {
               label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
-              icon: 'IconThinkOutlineRegular',
+              glyph: AtomIcon,
               active: state.deepThink,
               onClick: controller.toggleDeepThink,
             }),
             h(PillButton, {
               label: state.web ? labels.webOn : labels.web,
-              icon: 'IconGlobeOutlineRegular',
+              glyph: GlobeIcon,
               active: state.web,
               onClick: controller.toggleWeb,
             }),
@@ -2261,7 +2303,7 @@ window.__ModuleLoader__.load({
             'aria-label': labels.panelLabel,
             onKeyDown,
           },
-          header,
+          convBar,
           chip,
           expanded ? null : h(FileChips, { files: state.files, labels, onRemove: controller.removeFile }),
           body,
@@ -2308,8 +2350,6 @@ window.__ModuleLoader__.load({
       const controller = createController({ t });
 
       const buildLabels = () => ({
-        title: t('panel.title'),
-        badge: t('panel.badge'),
         inputAria: t('input.aria'),
         placeholder: t('input.placeholder'),
         placeholderExpanded: t('input.placeholderExpanded'),

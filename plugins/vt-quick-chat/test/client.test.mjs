@@ -188,22 +188,24 @@ test('tokenizeMarkdown 对未闭合代码块也保持稳定', () => {
   assert.equal(blocks[0].text, '未闭合');
 });
 
-test('sanitizeHistory 过滤坏条目、截断消息并限制 20 条', () => {
+test('sanitizeHistory 过滤坏条目、截断消息并限制 30 条', () => {
   const input = [
     { id: 'a', messages: [{ role: 'user', content: 'hi' }, { role: 'system', content: 'x' }] },
     { id: '', messages: [{ role: 'user', content: 'x' }] },
     { id: 'b', messages: [] },
     { id: 'c', messages: [{ role: 'assistant', content: '   ' }] },
-    ...Array.from({ length: 25 }, (_, index) => ({
+    ...Array.from({ length: 35 }, (_, index) => ({
       id: `h${index}`,
       messages: [{ role: 'user', content: `q${index}` }],
     })),
   ];
   const result = sanitizeHistory(input, '未命名');
-  assert.equal(result.length, 20);
+  assert.equal(result.length, 30);
   assert.equal(result[0].id, 'a');
   assert.equal(result[0].messages.length, 1);
   assert.equal(result[0].title, 'hi');
+  // 超限时丢最旧的：最后一条仍在，尾部条目被切掉。
+  assert.equal(result[result.length - 1].id, 'h28');
 });
 
 test('titleFrom 压缩空白并截断', () => {

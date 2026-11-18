@@ -120,9 +120,16 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 | 状态 | 行为 |
 |---|---|
 | `closed` | 不渲染；历史保留；下次打开是新的临时对话 |
-| `compact` | 48px 输入条；Enter 发送；有消息时显示「展开」 |
-| `expanded` | 44px header + 消息区 + composer + 提示行；可停止/复制/重试/历史 |
+| `compact` | 48px 输入条；Enter 发送；有对话时上方多一条 36px 状态行 |
+| `expanded` | 36px 状态行 + 消息区 + composer + 提示行；可停止/复制/重试/历史 |
 | `history` | expanded 内的子视图；不改变主状态 |
+
+状态行（`ConversationBar`）是两态共用的一块，展开态里它直接充当 header：
+
+- 左：当前对话标题，取第一条用户消息压成一行，与本地历史里存的标题同源，两处不会漂移；
+  超过一行用 `…` 截断。
+- 右：展开/收起、历史、新话题、关闭。紧凑态只多这一行，不再往输入条里塞展开图标。
+- 没有对话时整行不渲染——空态就是一条干净的输入条。
 
 关闭语义：
 
@@ -202,15 +209,19 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 一处例外：附件的「+」用 16px 而不是 13px。enhancer 缩到 13px 是为了让「+」和权限 chip、
 麦克风并排时不抢眼；这个浮层里它左边没有别的控件，13px 撑不住左侧，所以放大到与其它图标同尺寸。
 
-深度思考与联网用 DSH 的 `IconThinkOutlineRegular` / `IconGlobeOutlineRegular`，
-与网页端的胶囊语义一致；所有图标都来自 `@deepseek-ai/dsh-client-ui-primitives`。
+**两个开关是唯一的例外，按 DeepSeek 网页端自绘。** 用户要求「深度思考和联网要和
+chat.deepseek.com 一致」，而 DSH 图标库里没有这两个形状，所以直接用 SVG 描：
 
+| 开关 | 形状 | 尺寸 |
+|---|---|---|
+| 深度思考 | 两个交叉椭圆 + 中心实心点（原子形） | 16×16，描边 1.5 |
+| 联网 | 圆 + 竖椭圆经线 + 一条赤道 | 16×16，描边 1.5 |
 
-全部来自 `@deepseek-ai/dsh-client-ui-primitives` 的具名图标组件：
+其余图标全部来自 `@deepseek-ai/dsh-client-ui-primitives` 的具名图标组件：
 
 | 场景 | 组件 |
 |---|---|
-| 标题/空态/紧凑条前缀 | `IconLightOutlineRegular` |
+| 空态图标 | `IconLightOutlineRegular` |
 | 关闭 | `IconCloseOutlineRegular` |
 | 收起 / 展开 | `IconCompactOutlineRegular` / `IconFullscreenOutlineRegular` |
 | 历史 | `IconClockOutlineRegular` |
