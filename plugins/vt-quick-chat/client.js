@@ -1521,7 +1521,7 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'vqc-convActions' },
-          h(IconButton, { label: labels.newChat, icon: 'IconNewChatOutlineRegular', onClick: onNewChat }),
+          h(IconButton, { label: labels.newChat, icon: 'IconNewChatOutlineRegular', size: 15, onClick: onNewChat }),
           h(IconButton, {
             label: labels.history,
             icon: 'IconClockOutlineRegular',
@@ -1532,8 +1532,11 @@ window.__ModuleLoader__.load({
           h(IconButton, {
             label: expanded ? labels.minimize : labels.expand,
             icon: expanded ? 'IconChevronDownOutlineRegular' : 'IconChevronUpOutlineRegular',
+            // 雪佛龙的墨迹只有 9×4.6，按 16px 画会显得比邻居小一圈，单独放大一档。
+            size: 19,
             onClick: onToggleMode,
           }),
+          // 同样外框下 X 比圆形更「满」，保持 16 才和其它按钮同重量。
           h(IconButton, { label: labels.close, icon: 'IconCloseOutlineRegular', onClick: onClose }),
         ),
       );
@@ -1642,7 +1645,7 @@ window.__ModuleLoader__.load({
      * 深度思考图标：DeepSeek 网页端的原子形——两个交叉椭圆加中心点。
      * DSH 图标库没有这个形状，所以直接描；16×16、1.5 描边与其他图标对齐。
      */
-    function AtomIcon({ size = 16 }) {
+    function AtomIcon({ size = 15 }) {
       return h(
         'svg',
         {
@@ -1670,9 +1673,10 @@ window.__ModuleLoader__.load({
     /**
      * 胶囊开关：深度思考、联网这类「开/关」状态用。
      * 只有图标，开启时用品牌色底；`aria-pressed` 让读屏能听出状态。
-     * @param props - label/glyph/active/onClick；`glyph` 是图标组件。
+     * @param props - label/glyph/glyphSize/active/onClick；`glyph` 是图标组件。
+     *   `glyphSize` 按各图标的墨迹大小单独调，好让同一行的图标视觉重量一致。
      */
-    function PillButton({ label, glyph, active = false, onClick }) {
+    function PillButton({ label, glyph, glyphSize = 16, active = false, onClick }) {
       return h(
         'button',
         {
@@ -1683,7 +1687,7 @@ window.__ModuleLoader__.load({
           title: label,
           onClick,
         },
-        h(glyph, { size: 16 }),
+        h(glyph, { size: glyphSize }),
       );
     }
 
@@ -2201,6 +2205,7 @@ window.__ModuleLoader__.load({
               h(PillButton, {
                 label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
                 glyph: AtomIcon,
+              glyphSize: 15,
                 active: state.deepThink,
                 onClick: controller.toggleDeepThink,
               }),
@@ -2266,6 +2271,7 @@ window.__ModuleLoader__.load({
               h(PillButton, {
                 label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
                 glyph: AtomIcon,
+              glyphSize: 15,
                 active: state.deepThink,
                 onClick: controller.toggleDeepThink,
               }),
