@@ -122,7 +122,7 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 | `closed` | 不渲染；历史保留；下次打开是新的临时对话 |
 | `compact` | 48px 输入条；Enter 发送；有对话时上方多一条 36px 状态行 |
 | `expanded` | 36px 状态行 + 消息区 + composer + 提示行；可停止/复制/重试/历史 |
-| `history` | expanded 内的子视图；不改变主状态 |
+| `history` | expanded 内的子视图；不改变主状态。列表是 DSH 会话列表那种单行结构：标题 + 右侧相对时间，hover 时时间换成删除 |
 
 状态行（`ConversationBar`）是两态共用的一块，展开态里它直接充当 header：
 
@@ -283,7 +283,7 @@ DSH 图标的 sprite 就是
 ## 8. 本地历史
 
 - key：`dsh-vt-quick-chat:history:v1`；
-- 最多 20 个对话，每个最多 40 条消息；
+- 最多 30 个对话（超出丢最旧），每个最多 40 条消息；
 - 序列化后超过 1.5MB 时从最旧对话开始丢弃，避免撑爆 `localStorage`；
 - 只存文本；不存附件、图片、选中文本；
 - 读取时白名单重建，坏条目/坏 JSON 直接丢弃；

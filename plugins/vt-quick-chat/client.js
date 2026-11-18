@@ -112,7 +112,7 @@ window.__ModuleLoader__.load({
       'action.expand': '展开',
       'action.newChat': '新话题',
       'action.history': '历史',
-      'action.clearHistory': '清空全部',
+      'action.clearHistory': '清空',
       'action.confirmClear': '再点一次清空',
       'action.removeHistory': '删除这条',
       'action.removeQuote': '移除引用',
@@ -145,8 +145,6 @@ window.__ModuleLoader__.load({
       'stream.truncated': '回答达到长度上限',
       'history.title': '本地历史',
       'history.empty': '还没有历史。发送第一条问题后，它会出现在这里。',
-      'history.localOnly': '只保存在本机浏览器',
-      'history.messages': '{count} 条消息',
       'history.untitled': '未命名提问',
       'history.justNow': '刚刚',
       'history.minutesAgo': '{count} 分钟前',
@@ -183,7 +181,7 @@ window.__ModuleLoader__.load({
       'action.expand': 'Expand',
       'action.newChat': 'New topic',
       'action.history': 'History',
-      'action.clearHistory': 'Clear all',
+      'action.clearHistory': 'Clear',
       'action.confirmClear': 'Click again to clear',
       'action.removeHistory': 'Delete this item',
       'action.removeQuote': 'Remove quote',
@@ -216,8 +214,6 @@ window.__ModuleLoader__.load({
       'stream.truncated': 'The answer hit its length limit',
       'history.title': 'Local history',
       'history.empty': 'No history yet. Your first question will appear here.',
-      'history.localOnly': 'Stored only in this browser',
-      'history.messages': '{count} messages',
       'history.untitled': 'Untitled question',
       'history.justNow': 'just now',
       'history.minutesAgo': '{count} min ago',
@@ -1450,7 +1446,7 @@ window.__ModuleLoader__.load({
 .vqc-errorIcon{flex:none;margin-top:2px;color:var(--dsw-alias-state-error-primary,#d92d20)}
 .vqc-errorBody{flex:1;min-width:0}
 .vqc-errorActions{display:flex;gap:6px;margin-top:6px}
-.vqc-textbtn{padding:3px 8px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
+.vqc-textbtn{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
 .vqc-textbtn:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f)}
 .vqc-empty{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px 4px}
 .vqc-emptyIcon{color:var(--dsw-alias-label-tertiary,#81858c)}
@@ -1458,12 +1454,18 @@ window.__ModuleLoader__.load({
 .vqc-emptyBody{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary,#61666b)}
 .vqc-emptyHint{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-history{display:flex;flex-direction:column;gap:2px}
-.vqc-historyHead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
-.vqc-historyItem{display:flex;align-items:center;gap:8px;width:100%;padding:8px;border:0;border-radius:var(--dsw-radius-sm,8px);background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
+.vqc-historyHead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 -8px 4px;padding:0 8px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-historyHeadTitle{font-size:12px;line-height:18px}
+.vqc-historyItem{display:flex;align-items:center;gap:8px;box-sizing:border-box;width:100%;padding:6px 8px;border-radius:var(--dsw-radius-sm,8px)}
 .vqc-historyItem:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f)}
-.vqc-historyMain{flex:1;min-width:0;text-align:left}
-.vqc-historyTitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:20px;color:var(--dsw-alias-label-primary,#0f1115)}
-.vqc-historyMeta{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-historyMain{flex:1;min-width:0;padding:0;border:0;background:transparent;text-align:left;font:inherit;cursor:pointer}
+.vqc-historyTitle{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:20px;color:var(--dsw-alias-label-primary,#0f1115)}
+.vqc-historySlot{display:flex;align-items:center;justify-content:flex-end;flex:none;width:52px;height:20px}
+.vqc-historyTime{font-size:12px;line-height:20px;color:var(--dsw-alias-label-tertiary,#81858c);white-space:nowrap}
+.vqc-historyRemove{display:none;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary,#81858c);cursor:pointer}
+.vqc-historyItem:hover .vqc-historyTime{display:none}
+.vqc-historyItem:hover .vqc-historyRemove{display:inline-flex}
+.vqc-historyRemove:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-historyEmpty{padding:16px 4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-composer{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;flex:none;padding:8px 8px 8px 16px;border-top:.5px solid var(--dsw-alias-border-l1,#0000000a)}
 .vqc-composerInput{min-height:28px;max-height:120px;padding:3px 0}
@@ -1941,12 +1943,13 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'vqc-historyHead' },
-          h('span', null, `${labels.title} · ${labels.localOnly}`),
+          h('span', { className: 'vqc-historyHeadTitle' }, labels.title),
           history.length > 0
             ? h(
                 'button',
                 { type: 'button', className: 'vqc-textbtn', onClick: onClear },
-                confirmClear ? labels.confirmClear : labels.clear,
+                h(DshIcon, { name: 'IconTrashOutlineRegular', size: 14 }),
+                h('span', null, confirmClear ? labels.confirmClear : labels.clear),
               )
             : null,
         ),
@@ -1959,23 +1962,24 @@ window.__ModuleLoader__.load({
                 h(
                   'button',
                   { type: 'button', className: 'vqc-historyMain', onClick: () => onRestore(entry.id) },
-                  h('div', { className: 'vqc-historyTitle' }, entry.title),
-                  h(
-                    'div',
-                    { className: 'vqc-historyMeta' },
-                    `${formatTime(entry.updatedAt)} · ${labels.messages.replace('{count}', String(entry.messages.length))}`,
-                  ),
+                  h('span', { className: 'vqc-historyTitle' }, entry.title),
                 ),
+                // 时间和删除共用一个固定宽度的槽：hover 时只换内容，标题宽度不跳。
                 h(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'vqc-iconbtn',
-                    'aria-label': labels.remove,
-                    title: labels.remove,
-                    onClick: () => onRemove(entry.id),
-                  },
-                  h(DshIcon, { name: 'IconTrashOutlineRegular', size: 14 }),
+                  'span',
+                  { className: 'vqc-historySlot' },
+                  h('span', { className: 'vqc-historyTime' }, formatTime(entry.updatedAt)),
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'vqc-historyRemove',
+                      'aria-label': labels.remove,
+                      title: labels.remove,
+                      onClick: () => onRemove(entry.id),
+                    },
+                    h(DshIcon, { name: 'IconTrashOutlineRegular', size: 14 }),
+                  ),
                 ),
               ),
             ),
@@ -2423,12 +2427,10 @@ window.__ModuleLoader__.load({
         },
         historyLabels: {
           title: t('history.title'),
-          localOnly: t('history.localOnly'),
           empty: t('history.empty'),
           clear: t('action.clearHistory'),
           confirmClear: t('action.confirmClear'),
           remove: t('action.removeHistory'),
-          messages: t('history.messages'),
         },
       });
 

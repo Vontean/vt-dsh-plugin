@@ -447,12 +447,10 @@ const SSR_LABELS = {
   emptyLabels: { title: '临时提问，不会进入侧栏', body: '选中一段文字', hint: '只做解释' },
   historyLabels: {
     title: '本地历史',
-    localOnly: '只保存在本机浏览器',
     empty: '还没有历史',
-    clear: '清空全部',
+    clear: '清空',
     confirmClear: '再点一次清空',
     remove: '删除这条',
-    messages: '{count} 条消息',
   },
 };
 
@@ -658,6 +656,12 @@ test('SSR：历史态渲染条目与二次确认文案', () => {
   assert.match(html, /什么是 MCP？/u);
   assert.match(html, /再点一次清空/u);
   assert.match(html, /删除这条/u);
+  // 单行结构：标题 + 时间/删除共用同一个槽；不再有「N 条消息」和存储位置说明。
+  assert.match(html, /vqc-historyTitle/u);
+  assert.match(html, /vqc-historySlot/u);
+  assert.match(html, /vqc-historyRemove/u);
+  assert.doesNotMatch(html, /条消息/u);
+  assert.doesNotMatch(html, /只保存在本机浏览器/u);
 });
 
 
