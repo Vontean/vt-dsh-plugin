@@ -191,6 +191,17 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
   把 `--dsw-elevation-stroke-color` 设为 `--dsw-alias-border-l2`，`border: 0`，
   避免 elevation 的 0.5px 描边叠加成粗线。
 - 圆角：`--dsw-radius-lg`（16px）；按钮/chip `--dsw-radius-sm`；气泡 `--dsw-radius-md`。
+
+消息区的排版照 DSH 来，不用「你 / 助手」这类角色标签：
+
+| 角色 | 布局 | 样式 |
+|---|---|---|
+| 用户 | 右对齐 | 气泡：`--dsw-radius-md`（12px）、`padding: 10px 14px`、底色是业务蓝 8% 叠在 `bg-layer-2` 上（等价于 DSH 的 #EFF3FF，深色主题自动跟随） |
+| 助手 | 整宽 | 无气泡，直接 Markdown 正文 |
+
+宽度约束来自 DSH 的 `MessageItem.module.css`：
+`max-width: min(calc(var(--dsh-chat-content-width,748px) * .702), 82%)`——左侧留白是这个
+82% 顶出来的，所以用户气泡永远不会顶到窗口左边缘。
 - 文字：`--dsw-alias-label-primary/secondary/tertiary`；
   字号跟随 `--dsh-content-font-size` 与 `--dsh-content-font-size-secondary`。
 - 强调：链接与激活态用 `--dsw-alias-state-business-primary`；发送按钮用

@@ -544,7 +544,13 @@ test('SSR：展开态渲染消息、引用 chip 与 Markdown 代码块', () => {
   assert.match(html, /aria-label="移除引用"/u);
   assert.match(html, /vqc-prose/u);
   assert.match(html, /vqc-code/u);
-  assert.match(html, /vqc-userText/u);
+  // 用户消息：右对齐气泡，不再有「你 / 助手」标记。
+  assert.match(html, /vqc-msg vqc-msg--user/u);
+  assert.match(html, /vqc-bubble/u);
+  assert.match(html, /vqc-msg vqc-msg--assistant/u);
+  assert.doesNotMatch(html, /vqc-role/u);
+  assert.doesNotMatch(html, />你</u);
+  assert.doesNotMatch(html, />助手</u);
   assert.match(html, /aria-label="历史"/u);
   assert.match(html, /aria-label="收起"/u);
   assert.match(html, /aria-label="关闭"/u);

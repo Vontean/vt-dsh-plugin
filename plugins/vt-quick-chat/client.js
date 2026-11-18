@@ -100,8 +100,6 @@ window.__ModuleLoader__.load({
       'empty.title': '临时提问，不会进入侧栏',
       'empty.body': '选中一段看不懂的文字再按快捷键，它会被当作解释对象。关掉小窗，主任务不受影响。',
       'empty.hint': '这里只做解释：不读写工作区文件、不创建会话；需要最新资料可打开「联网」。',
-      'role.user': '你',
-      'role.assistant': '助手',
       'action.send': '发送',
       'action.stop': '停止',
       'action.retry': '重试',
@@ -169,8 +167,6 @@ window.__ModuleLoader__.load({
       'empty.title': 'A temporary question, outside the sidebar',
       'empty.body': 'Select a phrase you do not understand, then press the shortcut. Close this window and the main task continues untouched.',
       'empty.hint': 'Explanations only: no file access, no new session. Turn on Web for fresh sources.',
-      'role.user': 'You',
-      'role.assistant': 'Assistant',
       'action.send': 'Send',
       'action.stop': 'Stop',
       'action.retry': 'Retry',
@@ -1409,9 +1405,12 @@ window.__ModuleLoader__.load({
 .vqc-body::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l1,#0000001a);border-radius:999px}
 .vqc-body::-webkit-scrollbar-thumb:hover{background:var(--dsw-alias-scrollbar-hover-l1,#00000026)}
 .vqc-msg{display:flex;flex-direction:column;gap:4px;margin-bottom:16px}
+.vqc-msg--user{align-items:flex-end}
+.vqc-msg--user .vqc-msgActions{align-self:flex-end}
 .vqc-msg:last-child{margin-bottom:0}
-.vqc-role{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
-.vqc-userText{align-self:flex-start;max-width:100%;padding:8px 12px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-3,#fff);white-space:pre-wrap;overflow-wrap:anywhere}
+/* 用户气泡：右对齐，最大宽度取 DSH 的 min(内容宽×0.702, 82%)，左侧因此永远留白；
+   底色用「业务蓝 8% 叠在 bg-layer 上」复现 DSH 实测的 #EFF3FF，深色主题会自动跟着变。 */
+.vqc-bubble{box-sizing:border-box;max-width:min(calc(var(--dsh-chat-content-width,748px) * .702),82%);padding:10px 14px;border-radius:var(--dsw-radius-md,12px);background:color-mix(in srgb,var(--dsw-alias-state-business-primary,#4176e6) 8%,var(--dsw-alias-bg-layer-2,#fff));color:var(--dsw-alias-label-primary,#0f1115);line-height:22px;white-space:pre-wrap;overflow-wrap:anywhere}
 .vqc-prose{overflow-wrap:anywhere}
 .vqc-prose .vqc-paragraph{margin:0 0 8px}
 .vqc-prose .vqc-paragraph:last-child{margin-bottom:0}
@@ -1798,10 +1797,9 @@ window.__ModuleLoader__.load({
       const id = `m${index}`;
       return h(
         'div',
-        { className: 'vqc-msg' },
-        h('div', { className: 'vqc-role' }, isUser ? labels.user : labels.assistant),
+        { className: `vqc-msg${isUser ? ' vqc-msg--user' : ' vqc-msg--assistant'}` },
         isUser
-          ? h('div', { className: 'vqc-userText' }, message.content)
+          ? h('div', { className: 'vqc-bubble' }, message.content)
           : h('div', { className: 'vqc-prose' }, renderMarkdown(message.content)),
         isUser
           ? null
@@ -2102,8 +2100,7 @@ window.__ModuleLoader__.load({
         messages.push(
           h(
             'div',
-            { key: 'stream', className: 'vqc-msg' },
-            h('div', { className: 'vqc-role' }, labels.assistant),
+            { key: 'stream', className: 'vqc-msg vqc-msg--assistant' },
             state.tools.length > 0 ? h(ToolActivity, { tools: state.tools, labels }) : null,
             state.streamText.length === 0
               ? h('div', { className: 'vqc-thinking' }, state.thinking ? labels.deepThinking : labels.thinking)
@@ -2382,8 +2379,6 @@ window.__ModuleLoader__.load({
         inputAria: t('input.aria'),
         placeholder: t('input.placeholder'),
         placeholderExpanded: t('input.placeholderExpanded'),
-        user: t('role.user'),
-        assistant: t('role.assistant'),
         send: t('action.send'),
         stop: t('action.stop'),
         retry: t('action.retry'),
