@@ -1407,7 +1407,7 @@ window.__ModuleLoader__.load({
 .vqc-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-add{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--dsw-alias-label-tertiary,#81858c);cursor:pointer}
 .vqc-add:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
-.vqc-add svg{width:13px;height:13px}
+.vqc-add svg{width:16px;height:16px}
 .vqc-add svg *{stroke-width:1.5}
 .vqc-add:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:1px}
 .vqc-pill{display:inline-flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box;width:34px;height:28px;padding:0;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:999px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-tertiary,#81858c);cursor:pointer}
@@ -2115,7 +2115,7 @@ window.__ModuleLoader__.load({
             h(IconButton, {
               label: labels.attach,
               icon: 'IconPlusOutlineRegular',
-              size: 13,
+              size: 16,
               className: 'vqc-add',
               onClick: pickFiles,
             }),
@@ -2183,7 +2183,7 @@ window.__ModuleLoader__.load({
             h(IconButton, {
               label: labels.attach,
               icon: 'IconPlusOutlineRegular',
-              size: 13,
+              size: 16,
               className: 'vqc-add',
               onClick: pickFiles,
             }),

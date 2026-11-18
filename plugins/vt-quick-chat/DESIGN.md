@@ -191,13 +191,16 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 
 | 按钮 | 尺寸 | 底色 | 图标 |
 |---|---|---|---|
-| 附件 | 28×28，透明底（悬停才上底色） | 无 | `IconPlusOutlineRegular` 13px、描边 1.5 |
+| 附件 | 28×28，透明底（悬停才上底色） | 无 | `IconPlusOutlineRegular` 16px、描边 1.5 |
 | 发送 | 28×28 圆形 | `--dsw-alias-button-info-fill`，悬停 `-info-hover` | 14px 实心上箭头（与 DSH 同一条 path） |
 | 停止 | 34×34 圆形 | `--dsw-alias-bg-layer-3` | 16×16 里 10×10、圆角 3 的方块 |
 
 尺寸与字重取自 `dsh-vt-uiux-enhancer` 的 `composer-submit` / `composer-add` 两个补丁：
 它把发送键从 34px 收到 28px、图标 14px，把附件的灰色底板去掉、图标缩到 13px 描边 1.5。
-叠加 enhancer 之后的输入区才是目标外观，所以这里直接对齐它的数值，而不是 DSH 的原始值。
+叠加 enhancer 之后的输入区才是目标外观，所以这里对齐它的数值，而不是 DSH 的原始值。
+
+一处例外：附件的「+」用 16px 而不是 13px。enhancer 缩到 13px 是为了让「+」和权限 chip、
+麦克风并排时不抢眼；这个浮层里它左边没有别的控件，13px 撑不住左侧，所以放大到与其它图标同尺寸。
 
 深度思考与联网用 DSH 的 `IconThinkOutlineRegular` / `IconGlobeOutlineRegular`，
 与网页端的胶囊语义一致；所有图标都来自 `@deepseek-ai/dsh-client-ui-primitives`。
