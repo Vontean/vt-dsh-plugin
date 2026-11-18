@@ -539,8 +539,11 @@ test('SSR：展开态渲染消息、引用 chip 与 Markdown 代码块', () => {
     ],
   });
   assert.match(html, /vqc-panel--expanded/u);
-  assert.match(html, /vqc-chip/u);
-  assert.match(html, /引用选中文字/u);
+  // 选中文字与附件同一个 chip 行，样式和结构都复用附件那套。
+  assert.match(html, /vqc-files/u);
+  assert.match(html, /vqc-fileChip vqc-fileChip--quote/u);
+  assert.match(html, /<path d="M3\.5 4\.5h9"/u);
+  assert.match(html, /aria-label="移除引用"/u);
   assert.match(html, /vqc-prose/u);
   assert.match(html, /vqc-code/u);
   assert.match(html, /vqc-userText/u);

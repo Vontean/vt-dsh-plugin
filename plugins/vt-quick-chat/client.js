@@ -1398,9 +1398,10 @@ window.__ModuleLoader__.load({
 .vqc-pill:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:1px}
 .vqc-pill--on{border-color:#4176e633;background:#4176e614;color:var(--dsw-alias-state-business-primary,#4176e6)}
 .vqc-pill--on:hover{background:#4176e620;color:var(--dsw-alias-state-business-primary,#4176e6)}
-.vqc-files{display:flex;flex-wrap:wrap;gap:6px;flex:none;padding:8px 12px 0}
+.vqc-files{display:flex;flex-wrap:wrap;gap:6px;flex:none;padding:8px 10px 0}
 .vqc-fileChip{display:inline-flex;align-items:center;gap:6px;max-width:200px;padding:3px 4px 3px 8px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#61666b);font-size:12px;line-height:18px}
 .vqc-fileChip--error{border-color:#d92d2055;color:var(--dsw-alias-state-error-primary,#d92d20)}
+.vqc-fileChip--quote{max-width:280px}
 .vqc-fileName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vqc-fileChip .vqc-iconbtn{width:20px;height:20px}
 .vqc-send{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:999px;background:var(--dsw-alias-button-info-fill,#4d6bfe);color:#fff;cursor:pointer;transition:background-color .1s}
@@ -1408,9 +1409,6 @@ window.__ModuleLoader__.load({
 .vqc-send:disabled{opacity:.4;cursor:default}
 .vqc-send--stop{background:var(--dsw-alias-bg-layer-3,#353638);color:var(--dsw-alias-label-primary,#0f1115);transform:none}
 .vqc-send--stop:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,#2631480f)}
-.vqc-chip{display:flex;align-items:center;gap:6px;flex:none;margin:8px 12px 0;padding:4px 4px 4px 8px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#61666b);font-size:12px;line-height:18px}
-.vqc-chipLabel{flex:none;color:var(--dsw-alias-label-tertiary,#81858c)}
-.vqc-chipText{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vqc-body{flex:1;min-height:0;overflow-y:auto;padding:12px 16px;scrollbar-width:thin;scrollbar-color:var(--dsw-alias-scrollbar-bg-l1,#0000001a) transparent}
 .vqc-body::-webkit-scrollbar{width:8px;height:8px}
 .vqc-body::-webkit-scrollbar-thumb{background:var(--dsw-alias-scrollbar-bg-l1,#0000001a);border-radius:999px}
@@ -1682,12 +1680,22 @@ window.__ModuleLoader__.load({
     /**
      * 附件 chip 行：紧凑态与展开态共用。
      */
-    function FileChips({ files, labels, onRemove }) {
-      if (!Array.isArray(files) || files.length === 0) return null;
+    function ChipRow({ quote, files, labels, onRemoveQuote, onRemoveFile }) {
+      const hasQuote = typeof quote === 'string' && quote.length > 0;
+      const hasFiles = Array.isArray(files) && files.length > 0;
+      if (!hasQuote && !hasFiles) return null;
       return h(
         'div',
         { className: 'vqc-files' },
-        files.map((file) => {
+        hasQuote
+          ? h(SelectionChip, {
+              text: quote,
+              label: labels.quoteChip,
+              removeLabel: labels.removeQuote,
+              onRemove: onRemoveQuote,
+            })
+          : null,
+        hasFiles ? files.map((file) => {
           const failed = file.status === 'error';
           const text =
             file.status === 'uploading'
@@ -1711,12 +1719,12 @@ window.__ModuleLoader__.load({
                 className: 'vqc-iconbtn',
                 'aria-label': labels.removeFile,
                 title: labels.removeFile,
-                onClick: () => onRemove(file.key),
+                onClick: () => onRemoveFile(file.key),
               },
               h(DshIcon, { name: 'IconCloseOutlineRegular', size: 12 }),
             ),
           );
-        }),
+        }) : null,
       );
     }
 
@@ -1726,16 +1734,42 @@ window.__ModuleLoader__.load({
      */
     function SelectionChip({ text, onRemove, label, removeLabel }) {
       return h(
-        'div',
-        { className: 'vqc-chip' },
-        h(DshIcon, { name: 'IconLinkOutlineRegular', size: 14 }),
-        h('span', { className: 'vqc-chipLabel' }, label),
-        h('span', { className: 'vqc-chipText', title: text }, text),
+        'span',
+        { className: 'vqc-fileChip vqc-fileChip--quote', title: text },
+        h(TextIcon, { size: 14 }),
+        h('span', { className: 'vqc-fileName' }, text.length > 0 ? text : label),
         h(
           'button',
-          { type: 'button', className: 'vqc-iconbtn', 'aria-label': removeLabel, title: removeLabel, onClick: onRemove },
-          h(DshIcon, { name: 'IconCloseOutlineRegular', size: 14 }),
+          {
+            type: 'button',
+            className: 'vqc-iconbtn',
+            'aria-label': removeLabel,
+            title: removeLabel,
+            onClick: onRemove,
+          },
+          h(DshIcon, { name: 'IconCloseOutlineRegular', size: 12 }),
         ),
+      );
+    }
+
+    /**
+     * 文本图标：选中文字的 chip 用它。DSH 图标库里没有 T 形，
+     * 按同一套规格自绘（16 viewBox、描边 1）。
+     */
+    function TextIcon({ size = 16 }) {
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 16 16',
+          width: size,
+          height: size,
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1,
+          'aria-hidden': 'true',
+        },
+        h('path', { d: 'M3.5 4.5h9' }),
+        h('path', { d: 'M8 4.5v7' }),
       );
     }
 
@@ -2030,16 +2064,6 @@ window.__ModuleLoader__.load({
             })
           : null;
 
-      const chip =
-        expanded && state.selection.length > 0 && !state.historyOpen
-          ? h(SelectionChip, {
-              text: state.selection,
-              label: labels.quoteChip,
-              removeLabel: labels.removeQuote,
-              onRemove: controller.clearSelection,
-            })
-          : null;
-
       const messages = [];
       state.messages.forEach((message, index) => {
         messages.push(
@@ -2127,6 +2151,15 @@ window.__ModuleLoader__.load({
               : messages,
           )
         : null;
+
+      // 选中文字与附件共用一行 chip，位置固定在输入行上方（两态一致）。
+      const chips = h(ChipRow, {
+        quote: state.historyOpen ? '' : state.selection,
+        files: state.files,
+        labels,
+        onRemoveQuote: controller.clearSelection,
+        onRemoveFile: controller.removeFile,
+      });
 
       const composer = expanded
         ? h(
@@ -2270,10 +2303,8 @@ window.__ModuleLoader__.load({
             onKeyDown,
           },
           convBar,
-          chip,
-          expanded ? null : h(FileChips, { files: state.files, labels, onRemove: controller.removeFile }),
           body,
-          expanded ? h(FileChips, { files: state.files, labels, onRemove: controller.removeFile }) : null,
+          chips,
           composer,
           compact,
         ),
