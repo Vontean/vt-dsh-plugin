@@ -77,6 +77,50 @@ const ACCOUNT_TOKEN_HEADER = 'x-dsh-auth-token';
 /** Anthropic Messages 协议要求的版本头。 */
 const ANTHROPIC_VERSION = '2023-06-01';
 
+/** Files API：与 Messages 同一 root（/anthropic/v1）。 */
+const DEEPSEEK_FILES_URL = `${DEEPSEEK_BASE_URL}/anthropic/v1/files`;
+
+/** 引用 file_id 时必须带的 beta 头。 */
+const FILES_BETA = 'files-api-2025-04-14';
+
+/** 单次上传上限：官方文档文档类 100 MiB，这里收紧到 30 MiB。 */
+const MAX_UPLOAD_BYTES = 30 * 1024 * 1024;
+
+/** 一条消息最多引用的文件数。 */
+const MAX_FILES_PER_MESSAGE = 6;
+
+/** 允许上传的扩展名 → 解析用途。 */
+const UPLOAD_PURPOSES = new Map([
+  ['pdf', 'text_recognition'],
+  ['doc', 'text_recognition'],
+  ['docx', 'text_recognition'],
+  ['ppt', 'text_recognition'],
+  ['pptx', 'text_recognition'],
+  ['png', 'user_data'],
+  ['jpg', 'user_data'],
+  ['jpeg', 'user_data'],
+  ['gif', 'user_data'],
+  ['webp', 'user_data'],
+  ['txt', 'user_data'],
+  ['md', 'user_data'],
+  ['csv', 'user_data'],
+  ['json', 'user_data'],
+  ['ts', 'user_data'],
+  ['tsx', 'user_data'],
+  ['js', 'user_data'],
+  ['jsx', 'user_data'],
+  ['py', 'user_data'],
+  ['go', 'user_data'],
+  ['rs', 'user_data'],
+  ['yaml', 'user_data'],
+  ['yml', 'user_data'],
+  ['xlsx', 'user_data'],
+  ['xls', 'user_data'],
+]);
+
+/** 图片扩展名：引用时用 image 块，其余用 document 块。 */
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
+
 /**
  * 联网工具声明。
  * `deepseek_web_search` 负责搜索（含打开网页），`deepseek_read_url` 负责阅读
@@ -222,12 +266,48 @@ function sanitizeMessage(value, index) {
     throw new ApiError('bad-message', `第 ${index + 1} 条消息是空的。`, 400);
   }
   const message = { role, content: text.slice(0, MAX_MESSAGE_CHARS) };
-  // 只有 assistant 需要回传服务端块；user 消息不接受块。
   if (role === 'assistant') {
+    // assistant 回传的是服务端块；user 不接受块，只接受文件引用。
     const blocks = sanitizeBlocks(value.blocks);
     if (blocks !== undefined) message.blocks = blocks;
+  } else {
+    const files = sanitizeFiles(value.files);
+    if (files !== undefined) message.files = files;
   }
   return message;
+}
+
+/**
+ * 校验文件引用。
+ * @param value - 客户端传来的 files。
+ * @returns 归一化后的文件数组；没有可用项时返回 undefined。
+ */
+function sanitizeFiles(value) {
+  if (!Array.isArray(value)) return undefined;
+  const files = [];
+  for (const raw of value) {
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const id = raw.id;
+    if (typeof id !== 'string' || !/^file-api-[A-Za-z0-9_-]{6,}$/u.test(id)) continue;
+    const kind = raw.kind === 'image' ? 'image' : 'document';
+    const name = typeof raw.name === 'string' ? raw.name.slice(0, 120) : '';
+    files.push({ id, kind, name });
+    if (files.length >= MAX_FILES_PER_MESSAGE) break;
+  }
+  return files.length === 0 ? undefined : files;
+}
+
+/**
+ * 把文件引用转成 Messages 内容块。
+ * @param files - 归一化后的文件数组。
+ * @returns content block 数组。
+ */
+function toFileBlocks(files) {
+  return files.map((file) =>
+    file.kind === 'image'
+      ? { type: 'image', source: { type: 'file', file_id: file.id } }
+      : { type: 'document', source: { type: 'file', file_id: file.id } },
+  );
 }
 
 /**
@@ -281,6 +361,10 @@ function toDeepSeekMessages(messages) {
   return messages.map((message) => {
     if (message.role === 'assistant' && Array.isArray(message.blocks) && message.blocks.length > 0) {
       return { role: 'assistant', content: message.blocks };
+    }
+    if (message.role === 'user' && Array.isArray(message.files) && message.files.length > 0) {
+      // 文件块必须在文本之前，模型先拿到文档再读问题。
+      return { role: 'user', content: [...toFileBlocks(message.files), { type: 'text', text: message.content }] };
     }
     return { role: message.role, content: message.content };
   });
@@ -471,7 +555,7 @@ function drainSseEvents(chunk, buffer) {
  * @returns `{ usage, stopReason }`。
  */
 async function streamDeepSeek(options) {
-  const { auth, messages, web, signal, emit } = options;
+  const { auth, messages, web, deepThink, hasFiles, signal, emit } = options;
   const body = {
     model: DEEPSEEK_MODEL,
     max_tokens: MAX_OUTPUT_TOKENS,
@@ -480,6 +564,8 @@ async function streamDeepSeek(options) {
     stream: true,
   };
   if (web) body.tools = WEB_TOOLS;
+  // 开启思考后，deepseek_web_search 会升级成「深度思考搜索」。
+  if (deepThink) body.thinking = { type: 'enabled' };
 
   let response;
   try {
@@ -489,6 +575,8 @@ async function streamDeepSeek(options) {
         'content-type': 'application/json',
         'anthropic-version': ANTHROPIC_VERSION,
         accept: 'text/event-stream',
+        // 引用 file_id 时官方要求带 beta 头。
+        ...(hasFiles ? { 'anthropic-beta': FILES_BETA } : {}),
         ...auth.headers,
       },
       body: JSON.stringify(body),
@@ -524,6 +612,10 @@ async function streamDeepSeek(options) {
         const block = event.content_block;
         if (index === undefined || block === null || typeof block !== 'object') break;
         blocks.set(index, JSON.parse(JSON.stringify(block)));
+        if (block.type === 'thinking') {
+          // 思考过程不进正文，也不回传；只告诉界面「正在深度思考」。
+          emit({ type: 'thinking' });
+        }
         if (block.type === 'server_tool_use') {
           emit({
             type: 'tool',
@@ -581,7 +673,11 @@ async function streamDeepSeek(options) {
     reader.releaseLock?.();
   }
 
-  const ordered = [...blocks.entries()].sort((a, b) => a[0] - b[0]).map(([, block]) => block);
+  const ordered = [...blocks.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, block]) => block)
+    // thinking 块带 signature 但不需要回传，省掉能减小历史体积。
+    .filter((block) => block.type !== 'thinking');
   return { blocks: ordered, usage, stopReason };
 }
 
@@ -695,13 +791,16 @@ async function runDefaultChannel(res, ctx, messages, selection, controller) {
  * @param web - 是否开启联网工具。
  * @param controller - 取消控制器。
  */
-async function runDeepSeekChannel(res, auth, messages, selection, web, controller) {
+async function runDeepSeekChannel(res, auth, messages, selection, web, deepThink, controller) {
+  const hasFiles = messages.some((message) => Array.isArray(message.files) && message.files.length > 0);
   writeSse(res, {
     type: 'start',
     via: auth.via,
     provider: 'deepseek',
     model: DEEPSEEK_MODEL,
     web,
+    deepThink,
+    files: hasFiles,
   });
 
   const requestMessages = toDeepSeekMessages(messages);
@@ -712,6 +811,8 @@ async function runDeepSeekChannel(res, auth, messages, selection, web, controlle
     auth,
     messages: requestMessages,
     web,
+    deepThink,
+    hasFiles,
     signal: controller.signal,
     emit: (frame) => writeSse(res, frame),
   });
@@ -732,6 +833,149 @@ async function runDeepSeekChannel(res, auth, messages, selection, web, controlle
         }),
     ...(result.stopReason === 'max_tokens' ? { truncated: true } : {}),
   });
+}
+
+
+/**
+ * 有界读取二进制请求体。
+ * @param req - Node 请求。
+ * @returns 完整字节。
+ */
+async function readBinaryBody(req) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > MAX_UPLOAD_BYTES) throw new ApiError('file-too-large', '文件超过 30 MiB 上限。', 413);
+    chunks.push(chunk);
+  }
+  if (total === 0) throw new ApiError('empty-file', '没有收到文件内容。', 400);
+  return Buffer.concat(chunks);
+}
+
+/**
+ * 上传一个文件到 DeepSeek Files API，返回可被对话引用的 file_id。
+ *
+ * 客户端把原始字节放在请求体里，文件名走 `x-filename`（URI 编码），
+ * 这样 Host 不用解析 multipart，也不会把文件写进磁盘。
+ * @param req - Node 请求。
+ * @param res - Node 响应。
+ * @param ctx - Host 插件上下文。
+ * @param admitted - 连接鉴权判定。
+ */
+async function handleUpload(req, res, ctx, admitted) {
+  if (!admitted(req)) {
+    writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: '当前连接无权访问本机插件路由。' } });
+    return;
+  }
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'POST' });
+    res.end();
+    return;
+  }
+
+  let name = '';
+  try {
+    name = decodeURIComponent(String(req.headers['x-filename'] ?? ''));
+  } catch {
+    name = '';
+  }
+  const extension = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  const purpose = UPLOAD_PURPOSES.get(extension);
+  if (purpose === undefined) {
+    writeJson(res, 415, {
+      ok: false,
+      error: { code: 'unsupported-file', message: `不支持的文件类型：.${extension || '未知'}` },
+    });
+    return;
+  }
+
+  let bytes;
+  try {
+    bytes = await readBinaryBody(req);
+  } catch (error) {
+    writeJson(res, error instanceof ApiError ? error.status : 400, {
+      ok: false,
+      error: { code: error?.apiCode ?? 'bad-upload', message: error instanceof Error ? error.message : String(error) },
+    });
+    return;
+  }
+
+  const auth = await resolveDeepSeekAuth(ctx);
+  if (auth === undefined) {
+    writeJson(res, 503, {
+      ok: false,
+      error: { code: 'NO_CREDENTIAL', message: '没有可用的 DeepSeek 凭证，无法上传文件。' },
+    });
+    return;
+  }
+
+  const form = new FormData();
+  // 官方要求 purpose 在 file 之前。
+  form.set('purpose', purpose);
+  form.set('file', new Blob([bytes]), name);
+
+  let response;
+  try {
+    response = await fetch(DEEPSEEK_FILES_URL, {
+      method: 'POST',
+      headers: {
+        'anthropic-version': ANTHROPIC_VERSION,
+        'anthropic-beta': FILES_BETA,
+        ...auth.headers,
+      },
+      body: form,
+    });
+  } catch (error) {
+    writeJson(res, 502, {
+      ok: false,
+      error: { code: 'NETWORK', message: `无法连接 DeepSeek：${error instanceof Error ? error.message : String(error)}` },
+    });
+    return;
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    const failure = uploadFailure(response.status, text);
+    writeJson(res, response.status, { ok: false, error: failure });
+    return;
+  }
+
+  const payload = await response.json().catch(() => undefined);
+  const id = payload?.id;
+  if (typeof id !== 'string' || id.length === 0) {
+    writeJson(res, 502, { ok: false, error: { code: 'FILES_API', message: 'DeepSeek 没有返回 file_id。' } });
+    return;
+  }
+
+  writeJson(res, 200, {
+    ok: true,
+    file: { id, name: typeof payload?.filename === 'string' ? payload.filename : name, kind: IMAGE_EXTENSIONS.has(extension) ? 'image' : 'document' },
+  });
+}
+
+/**
+ * 上传失败码映射。
+ * @param status - HTTP 状态码。
+ * @param body - 响应体。
+ * @returns `{ code, message }`。
+ */
+function uploadFailure(status, body) {
+  const table = {
+    400: ['file-unreadable', '文件无法解析或格式不支持（也可能设了打开密码）。'],
+    408: ['upload-timeout', '上传超时，请换小一点的文件重试。'],
+    413: ['file-too-large', '文件超过 DeepSeek 的大小上限。'],
+    429: ['upload-busy', '同时上传的文件太多，请稍后再试。'],
+    500: ['parse-failed', '解析结果不完整，请重试。'],
+    503: ['service-busy', 'DeepSeek 服务繁忙，请稍后再试。'],
+    504: ['parse-timeout', '解析超时，请换小一点的文件重试。'],
+  };
+  if (status === 401 || status === 403) {
+    return { code: 'AUTH', message: 'DeepSeek 未登录或凭证失效，请重新登录。' };
+  }
+  const hit = table[status];
+  if (hit !== undefined) return { code: hit[0], message: hit[1] };
+  return { code: `HTTP_${status}`, message: body.slice(0, 200) || `DeepSeek 返回 ${status}。` };
 }
 
 /**
@@ -782,6 +1026,7 @@ async function handleChat(req, res, ctx, admitted) {
     return;
   }
   const web = input.web === true;
+  const deepThink = input.deepThink === true;
 
   // 客户端关闭小窗或点「停止」时，响应会被关闭；把取消透传给上游。
   // 监听 res 而不是 req：req 的 close 在请求体读完时就会触发，会立刻误取消。
@@ -796,7 +1041,7 @@ async function handleChat(req, res, ctx, admitted) {
       // 没有 DeepSeek 凭证：退回默认模型，联网诉求无法满足，由 start 帧说明。
       await runDefaultChannel(res, ctx, messages, selection, controller);
     } else {
-      await runDeepSeekChannel(res, auth, messages, selection, web, controller);
+      await runDeepSeekChannel(res, auth, messages, selection, web, deepThink, controller);
     }
   } catch (error) {
     if (controller.signal.aborted) {
@@ -829,6 +1074,8 @@ export function apply(ctx) {
             connection === undefined || connection === null
               ? true
               : connection.requestRejection(request) === undefined;
+          const pathname = new URL(req.url ?? '/', 'http://dsh.internal').pathname;
+          if (pathname === `${ROUTE_PREFIX}/upload`) return handleUpload(req, res, ctx, admitted);
           return handleChat(req, res, ctx, admitted);
         },
       }),
@@ -854,6 +1101,11 @@ export const __test = {
   sanitizeMessages,
   sanitizeSelection,
   sanitizeBlocks,
+  sanitizeFiles,
+  toFileBlocks,
+  uploadFailure,
+  UPLOAD_PURPOSES,
+  MAX_UPLOAD_BYTES,
   selectionBlock,
   toRequestMessages,
   toDeepSeekMessages,

@@ -92,9 +92,11 @@ DSH 内置的 DeepSeek adapter 不透传 `deepseek_web_search` / `deepseek_read_
    - `POST /vt-quick-chat/api/chat`，body 为 `{ messages, selection, web }`。
 4. Host：
    - 鉴权 → 路径/方法 → 请求体上限 → 消息校验（只允许 user/assistant，截断到最近 40 条）；
-   - assistant 消息的 `blocks` 过白名单与 96 KiB 上限；
+   - assistant 消息的 `blocks` 过白名单与 96 KiB 上限；user 消息的 `files` 只认 `file-api-` id；
+   - 附件先经 `/upload` 转发到 DeepSeek Files API，拿回 `file_id` 后再进对话；
    - 解析凭证：`deepseekAccount.resolveToken()` → `credentials.resolve('DEEPSEEK_API_KEY')`；
-   - 有凭证：`POST api.deepseek.com/anthropic/v1/messages`，`web` 为真时带两个服务端工具；
+   - 有凭证：`POST api.deepseek.com/anthropic/v1/messages`；`web` 为真时带两个服务端工具，
+     `deepThink` 为真时带 `thinking: {type:'enabled'}`，有附件时带 `anthropic-beta`；
    - 无凭证：降级到 `ctx.llm.stream()`。
 5. Host 把上游事件转成 SSE：
    - `{"type":"start","via","provider","model","web"}`

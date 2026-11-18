@@ -428,6 +428,13 @@ const SSR_LABELS = {
   panelLabel: '快捷提问',
   web: '联网',
   webOn: '联网已开',
+  attach: '添加附件',
+  deepThink: '深度思考',
+  deepThinkOn: '深度思考已开',
+  uploading: '上传中…',
+  fileFailed: '上传失败',
+  removeFile: '移除附件',
+  deepThinking: '正在深度思考…',
   webHint: '开启后可用搜索与阅读链接',
   toolSearch: '正在搜索',
   toolOpen: '正在打开网页',
@@ -465,6 +472,9 @@ const SSR_BASE = {
   model: undefined,
   via: undefined,
   web: false,
+  deepThink: false,
+  files: [],
+  thinking: false,
   tools: [],
   citations: [],
   toolUsage: null,
@@ -533,6 +543,34 @@ test('SSR：展开态渲染消息、引用 chip 与 Markdown 代码块', () => {
   assert.match(html, /aria-label="历史"/u);
   assert.match(html, /aria-label="收起"/u);
   assert.match(html, /aria-label="关闭"/u);
+});
+
+test('SSR：紧凑态渲染附件、深度思考与联网三个控件', () => {
+  const html = renderPanel({ draft: 'x' });
+  assert.match(html, /aria-label="添加附件"/u);
+  assert.match(html, /aria-label="深度思考"/u);
+  assert.match(html, /aria-label="联网"/u);
+  assert.match(html, /vqc-pill/u);
+  assert.doesNotMatch(html, /vqc-pill--on/u);
+});
+
+test('SSR：深度思考开启时胶囊进入选中态', () => {
+  const html = renderPanel({ deepThink: true, web: true });
+  assert.match(html, /aria-label="深度思考已开"/u);
+  assert.match(html, /aria-label="联网已开"/u);
+  assert.match(html, /aria-pressed="true"/u);
+});
+
+test('SSR：附件 chip 显示上传中与失败两种状态', () => {
+  const html = renderPanel({
+    files: [
+      { key: 'a', name: '需求.pdf', status: 'uploading' },
+      { key: 'b', name: '截图.png', status: 'error', reason: 'file.tooLarge' },
+    ],
+  });
+  assert.match(html, /vqc-files/u);
+  assert.match(html, /需求\.pdf · 上传中…/u);
+  assert.match(html, /vqc-fileChip--error/u);
 });
 
 test('SSR：展开态渲染联网开关，默认关闭', () => {

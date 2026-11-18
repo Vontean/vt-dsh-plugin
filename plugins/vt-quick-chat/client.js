@@ -25,7 +25,7 @@ window.__ModuleLoader__.load({
     /** 插件标识（与 package.json 的 name 一致）。 */
     const PLUGIN_ID = 'dsh-vt-quick-chat';
     /** 与 package.json 的 version 保持一致。 */
-    const VERSION = '1.1.3';
+    const VERSION = '1.2.0';
     /** 文案命名空间。 */
     const NS = 'vtQuickChat';
     /** Host 路由前缀，与 index.js 的 ROUTE_PREFIX 必须一致。 */
@@ -44,6 +44,14 @@ window.__ModuleLoader__.load({
     const MAX_REQUEST_CHARS = 200_000;
     /** 与 Host 对齐的选中文本上限。 */
     const MAX_SELECTION_CHARS = 8_000;
+    /** 单个附件上限，与 Host 的 MAX_UPLOAD_BYTES 一致。 */
+    const MAX_UPLOAD_BYTES = 30 * 1024 * 1024;
+    /** 允许上传的扩展名，与 Host 的 UPLOAD_PURPOSES 对齐。 */
+    const UPLOAD_EXTENSIONS = new Set([
+      'pdf', 'doc', 'docx', 'ppt', 'pptx',
+      'png', 'jpg', 'jpeg', 'gif', 'webp',
+      'txt', 'md', 'csv', 'json', 'ts', 'tsx', 'js', 'jsx', 'py', 'go', 'rs', 'yaml', 'yml', 'xlsx', 'xls',
+    ]);
     /** 流式文本的合并窗口：约 30fps，避免每个 token 触发一次 React 渲染。 */
     const STREAM_FLUSH_MS = 33;
     /** 「复制成功」与「确认清空」的提示窗口。 */
@@ -114,6 +122,17 @@ window.__ModuleLoader__.load({
       'action.removeQuote': '移除引用',
       'action.retryHint': '重新生成上一条回答',
       'context.chip': '引用选中文字',
+      'action.attach': '添加附件',
+      'action.removeAttachment': '移除附件',
+      'action.attachHint': '支持 PDF、Word、PPT、图片与文本，单个不超过 30 MiB',
+      'action.deepThink': '深度思考',
+      'action.deepThinkOn': '深度思考已开',
+      'action.deepThinkHint': '先推理再回答；更慢，也更贵',
+      'file.uploading': '上传中…',
+      'file.failed': '上传失败',
+      'file.tooLarge': '超过 30 MiB',
+      'file.unsupported': '不支持这个类型',
+      'thinking.deep': '正在深度思考…',
       'action.web': '联网',
       'action.webOn': '联网已开',
       'action.webHint': '开启后可用搜索与阅读链接；搜索 5 元/千次、抓取 5 元/千次',
@@ -178,6 +197,17 @@ window.__ModuleLoader__.load({
       'action.removeQuote': 'Remove quote',
       'action.retryHint': 'Regenerate the previous answer',
       'context.chip': 'Quoted selection',
+      'action.attach': 'Add attachment',
+      'action.removeAttachment': 'Remove attachment',
+      'action.attachHint': 'PDF, Word, PPT, images and text, up to 30 MiB each',
+      'action.deepThink': 'DeepThink',
+      'action.deepThinkOn': 'DeepThink on',
+      'action.deepThinkHint': 'Reason first, then answer; slower and costlier',
+      'file.uploading': 'Uploading…',
+      'file.failed': 'Upload failed',
+      'file.tooLarge': 'Over 30 MiB',
+      'file.unsupported': 'Unsupported type',
+      'thinking.deep': 'Thinking deeply…',
       'action.web': 'Web',
       'action.webOn': 'Web on',
       'action.webHint': 'Turns on search and link reading; search ¥5/1k, fetch ¥5/1k',
@@ -250,6 +280,9 @@ window.__ModuleLoader__.load({
         // 服务端工具块必须随 assistant 消息回传，否则上一轮读过的网页会丢失。
         if (message.role === 'assistant' && Array.isArray(message.blocks) && message.blocks.length > 0) {
           out.blocks = message.blocks;
+        }
+        if (message.role === 'user' && Array.isArray(message.files) && message.files.length > 0) {
+          out.files = message.files;
         }
         return out;
       });
@@ -597,6 +630,12 @@ window.__ModuleLoader__.load({
         via: undefined,
         /** 是否开启联网工具；每次打开小窗重置为关闭。 */
         web: false,
+        /** 是否开启深度思考；同样每次打开重置。 */
+        deepThink: false,
+        /** 已选附件：{ key, name, status, id?, kind?, reason? }。 */
+        files: [],
+        /** 上游是否已进入思考阶段。 */
+        thinking: false,
         /** 本轮已发生的服务端工具调用，用于显示「正在搜索 / 正在读取链接」。 */
         tools: [],
         /** 本轮回答引用到的来源。 */
@@ -722,6 +761,7 @@ window.__ModuleLoader__.load({
           messages,
           streamText: '',
           streaming: false,
+          thinking: false,
           stopped: options.stopped === true,
           truncated: options.truncated === true,
         });
@@ -743,6 +783,7 @@ window.__ModuleLoader__.load({
               messages: trimForRequest(messages),
               selection: state.selection,
               web: state.web === true,
+              deepThink: state.deepThink === true,
             }),
             signal,
           });
@@ -772,6 +813,9 @@ window.__ModuleLoader__.load({
                 break;
               case 'delta':
                 appendStream(frame.text);
+                break;
+              case 'thinking':
+                set({ thinking: true });
                 break;
               case 'tool':
                 set({
@@ -861,7 +905,15 @@ window.__ModuleLoader__.load({
           currentId = uid();
           createdAt = Date.now();
         }
-        const messages = [...state.messages, { role: 'user', content: text }];
+        const ready = state.files.filter((file) => file.status === 'ready');
+        const userMessage = {
+          role: 'user',
+          content: text,
+          ...(ready.length === 0
+            ? {}
+            : { files: ready.map((file) => ({ id: file.id, kind: file.kind, name: file.name })) }),
+        };
+        const messages = [...state.messages, userMessage];
         pendingBlocks = null;
         set({
           messages,
@@ -877,6 +929,8 @@ window.__ModuleLoader__.load({
           tools: [],
           citations: [],
           toolUsage: null,
+          files: [],
+          thinking: false,
         });
         void run(messages);
       }
@@ -918,6 +972,7 @@ window.__ModuleLoader__.load({
           tools: [],
           citations: [],
           toolUsage: null,
+          thinking: false,
         });
         pendingBlocks = null;
         void run(messages);
@@ -974,8 +1029,11 @@ window.__ModuleLoader__.load({
           selection: readSelection(),
           historyOpen: false,
           confirmClear: false,
-          // 联网每次重新打开都回到关闭：不让上一轮的计费状态静默延续。
+          // 联网与深度思考每次重新打开都回到关闭：不让上一轮的计费状态静默延续。
           web: false,
+          deepThink: false,
+          files: [],
+          thinking: false,
           tools: [],
           citations: [],
           toolUsage: null,
@@ -1016,6 +1074,9 @@ window.__ModuleLoader__.load({
           model: undefined,
           via: undefined,
           web: false,
+          deepThink: false,
+          files: [],
+          thinking: false,
           tools: [],
           citations: [],
           toolUsage: null,
@@ -1031,6 +1092,76 @@ window.__ModuleLoader__.load({
       /** 切换联网工具；下一次发送生效。 */
       function toggleWeb() {
         set({ web: !state.web });
+      }
+
+      /** 切换深度思考；下一次发送生效。 */
+      function toggleDeepThink() {
+        set({ deepThink: !state.deepThink });
+      }
+
+      /**
+       * 上传一个附件；失败时保留一条错误 chip，用户可移除。
+       * @param file - File 对象。
+       * @param key - 本地临时 id。
+       */
+      async function uploadFile(file, key) {
+        try {
+          const response = await fetch(`${API_PREFIX}/upload`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/octet-stream',
+              'x-filename': encodeURIComponent(file.name),
+            },
+            body: file,
+          });
+          const payload = await response.json().catch(() => undefined);
+          if (!response.ok || payload?.ok !== true) {
+            throw new Error(payload?.error?.code ?? `HTTP_${response.status}`);
+          }
+          set({
+            files: state.files.map((item) =>
+              item.key === key
+                ? { ...item, status: 'ready', id: payload.file.id, kind: payload.file.kind }
+                : item,
+            ),
+          });
+        } catch (error) {
+          const reason = typeof error?.message === 'string' ? error.message : 'upload-failed';
+          set({
+            files: state.files.map((item) => (item.key === key ? { ...item, status: 'error', reason } : item)),
+          });
+        }
+      }
+
+      /**
+       * 接收用户选中的文件：先占位，再逐个上传。
+       * @param list - FileList 或数组。
+       */
+      function addFiles(list) {
+        const incoming = Array.from(list ?? []);
+        for (const file of incoming) {
+          const key = uid();
+          const dot = file.name.lastIndexOf('.');
+          const extension = dot < 0 ? '' : file.name.slice(dot + 1).toLowerCase();
+          const tooLarge = file.size > MAX_UPLOAD_BYTES;
+          const unsupported = !UPLOAD_EXTENSIONS.has(extension);
+          const entry = {
+            key,
+            name: file.name,
+            status: tooLarge || unsupported ? 'error' : 'uploading',
+            ...(tooLarge ? { reason: 'file.tooLarge' } : unsupported ? { reason: 'file.unsupported' } : {}),
+          };
+          set({ files: [...state.files, entry] });
+          if (entry.status === 'uploading') void uploadFile(file, key);
+        }
+      }
+
+      /**
+       * 移除一个附件。
+       * @param key - 临时 id。
+       */
+      function removeFile(key) {
+        set({ files: state.files.filter((file) => file.key !== key) });
       }
 
       /** 收到紧凑态，保留消息与草稿。 */
@@ -1084,6 +1215,8 @@ window.__ModuleLoader__.load({
           confirmClear: false,
           model: undefined,
           via: undefined,
+          files: [],
+          thinking: false,
           tools: [],
           citations: [],
           toolUsage: null,
@@ -1232,6 +1365,9 @@ window.__ModuleLoader__.load({
         captureSelection,
         clearSelection,
         toggleWeb,
+        toggleDeepThink,
+        addFiles,
+        removeFile,
         newChat,
         openHistory,
         closeHistory,
@@ -1249,8 +1385,9 @@ window.__ModuleLoader__.load({
     const STYLE_ID = `${PLUGIN_ID}:styles`;
     const CSS = `
 .vqc-root{position:absolute;inset:0;pointer-events:none;z-index:0}
-.vqc-panel{position:absolute;right:24px;bottom:96px;display:flex;flex-direction:column;box-sizing:border-box;width:min(560px,calc(100vw - 32px));background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);border:0;border-radius:var(--dsw-radius-lg,16px);box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);--dsw-elevation-stroke-color:var(--dsw-alias-border-l2,#0000001a);pointer-events:auto;overflow:hidden;font-size:var(--dsh-content-font-size,14px);line-height:1.55;animation:vqc-rise 160ms ease-out}
-.vqc-panel--compact{height:48px;max-height:48px}
+.vqc-panel{position:absolute;right:24px;bottom:96px;display:flex;flex-direction:column;box-sizing:border-box;width:min(420px,calc(100vw - 32px));background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);border:0;border-radius:var(--dsw-radius-lg,16px);box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);--dsw-elevation-stroke-color:var(--dsw-alias-border-l2,#0000001a);pointer-events:auto;overflow:hidden;font-size:var(--dsh-content-font-size,14px);line-height:1.55;animation:vqc-rise 160ms ease-out}
+.vqc-panel--compact{min-height:48px;max-height:120px}
+.vqc-panel--compact .vqc-files{flex:none}
 .vqc-panel--expanded{height:min(520px,calc(100dvh - 120px))}
 @keyframes vqc-rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.vqc-panel{animation:none}.vqc-caret{animation:none}}
@@ -1268,6 +1405,16 @@ window.__ModuleLoader__.load({
 .vqc-brand{flex:none;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-input{flex:1;min-width:0;margin:0;padding:0;border:0;outline:0;background:transparent;color:inherit;font:inherit;line-height:22px;resize:none}
 .vqc-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-pill{display:inline-flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box;width:34px;height:28px;padding:0;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:999px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-tertiary,#81858c);cursor:pointer}
+.vqc-pill:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
+.vqc-pill:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:1px}
+.vqc-pill--on{border-color:#4176e633;background:#4176e614;color:var(--dsw-alias-state-business-primary,#4176e6)}
+.vqc-pill--on:hover{background:#4176e620;color:var(--dsw-alias-state-business-primary,#4176e6)}
+.vqc-files{display:flex;flex-wrap:wrap;gap:6px;flex:none;padding:8px 12px 0}
+.vqc-fileChip{display:inline-flex;align-items:center;gap:6px;max-width:200px;padding:3px 4px 3px 8px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#61666b);font-size:12px;line-height:18px}
+.vqc-fileChip--error{border-color:#d92d2055;color:var(--dsw-alias-state-error-primary,#d92d20)}
+.vqc-fileName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vqc-fileChip .vqc-iconbtn{width:20px;height:20px}
 .vqc-send{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:999px;background:var(--dsw-alias-button-primary-fill,#0f1115);color:var(--dsw-alias-label-primary-inverted,#fff);cursor:pointer}
 .vqc-send:hover{background:var(--dsw-alias-button-primary-hover,#33363b)}
 .vqc-send:disabled{opacity:.35;cursor:default}
@@ -1438,6 +1585,66 @@ window.__ModuleLoader__.load({
         }
         return this.props.children;
       }
+    }
+
+    /**
+     * 胶囊开关：深度思考、联网这类「开/关」状态用。
+     * 只有图标，开启时用品牌色底；`aria-pressed` 让读屏能听出状态。
+     */
+    function PillButton({ label, icon, active = false, onClick }) {
+      return h(
+        'button',
+        {
+          type: 'button',
+          className: `vqc-pill${active ? ' vqc-pill--on' : ''}`,
+          'aria-label': label,
+          'aria-pressed': active ? 'true' : 'false',
+          title: label,
+          onClick,
+        },
+        h(DshIcon, { name: icon, size: 16 }),
+      );
+    }
+
+    /**
+     * 附件 chip 行：紧凑态与展开态共用。
+     */
+    function FileChips({ files, labels, onRemove }) {
+      if (!Array.isArray(files) || files.length === 0) return null;
+      return h(
+        'div',
+        { className: 'vqc-files' },
+        files.map((file) => {
+          const failed = file.status === 'error';
+          const text =
+            file.status === 'uploading'
+              ? `${file.name} · ${labels.uploading}`
+              : failed
+                ? `${file.name} · ${labels[file.reason] ?? labels.fileFailed}`
+                : file.name;
+          return h(
+            'span',
+            {
+              key: file.key,
+              className: `vqc-fileChip${failed ? ' vqc-fileChip--error' : ''}`,
+              title: file.name,
+            },
+            h(DshIcon, { name: 'IconPaperclipOutlineRegular', size: 14 }),
+            h('span', { className: 'vqc-fileName' }, text),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'vqc-iconbtn',
+                'aria-label': labels.removeFile,
+                title: labels.removeFile,
+                onClick: () => onRemove(file.key),
+              },
+              h(DshIcon, { name: 'IconCloseOutlineRegular', size: 12 }),
+            ),
+          );
+        }),
+      );
     }
 
     /**
@@ -1661,6 +1868,7 @@ window.__ModuleLoader__.load({
     function QuickChatPanel({ controller, labels, formatTime }) {
       const state = React.useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
       const inputRef = React.useRef(null);
+      const fileInputRef = React.useRef(null);
       const bodyRef = React.useRef(null);
       const wasOpen = React.useRef(false);
       const previousFocus = React.useRef(null);
@@ -1688,6 +1896,9 @@ window.__ModuleLoader__.load({
         if (node === null) return;
         if (atBottom.current) node.scrollTop = node.scrollHeight;
       }, [state.messages, state.streamText, state.error, state.historyOpen]);
+
+      /** 打开系统文件选择器；真正的上传在 controller.addFiles 里。 */
+      const pickFiles = () => fileInputRef.current?.click();
 
       /**
        * 记录用户是否停在底部，避免用户向上翻看时被拉回。
@@ -1801,7 +2012,7 @@ window.__ModuleLoader__.load({
             h('div', { className: 'vqc-role' }, labels.assistant),
             state.tools.length > 0 ? h(ToolActivity, { tools: state.tools, labels }) : null,
             state.streamText.length === 0
-              ? h('div', { className: 'vqc-thinking' }, labels.thinking)
+              ? h('div', { className: 'vqc-thinking' }, state.thinking ? labels.deepThinking : labels.thinking)
               : h(
                   'div',
                   { className: 'vqc-prose' },
@@ -1871,6 +2082,11 @@ window.__ModuleLoader__.load({
         ? h(
             'div',
             { className: 'vqc-composer' },
+            h(IconButton, {
+              label: labels.attach,
+              icon: 'IconPaperclipOutlineRegular',
+              onClick: pickFiles,
+            }),
             h(AutoTextarea, {
               value: state.draft,
               onChange: controller.setDraft,
@@ -1879,6 +2095,18 @@ window.__ModuleLoader__.load({
               ariaLabel: labels.inputAria,
               className: 'vqc-composerInput',
               inputRef,
+            }),
+            h(PillButton, {
+              label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
+              icon: 'IconThinkOutlineRegular',
+              active: state.deepThink,
+              onClick: controller.toggleDeepThink,
+            }),
+            h(PillButton, {
+              label: state.web ? labels.webOn : labels.web,
+              icon: 'IconGlobeOutlineRegular',
+              active: state.web,
+              onClick: controller.toggleWeb,
             }),
             h(IconButton, {
               label: labels.quote,
@@ -1920,7 +2148,11 @@ window.__ModuleLoader__.load({
         : h(
             'div',
             { className: 'vqc-compact' },
-            h(DshIcon, { name: 'IconLightOutlineRegular', size: 16, className: 'vqc-brand' }),
+            h(IconButton, {
+              label: labels.attach,
+              icon: 'IconPaperclipOutlineRegular',
+              onClick: pickFiles,
+            }),
             h('input', {
               ref: inputRef,
               className: 'vqc-input',
@@ -1930,17 +2162,21 @@ window.__ModuleLoader__.load({
               onChange: (event) => controller.setDraft(event.target.value),
               onKeyDown,
             }),
-            state.selection.length > 0
-              ? h(IconButton, {
-                  label: labels.quote,
-                  icon: 'IconLinkOutlineRegular',
-                  active: true,
-                  onClick: controller.expand,
-                })
-              : null,
             hasAssistant || state.messages.length > 0
               ? h(IconButton, { label: labels.expand, icon: 'IconFullscreenOutlineRegular', onClick: controller.expand })
               : null,
+            h(PillButton, {
+              label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
+              icon: 'IconThinkOutlineRegular',
+              active: state.deepThink,
+              onClick: controller.toggleDeepThink,
+            }),
+            h(PillButton, {
+              label: state.web ? labels.webOn : labels.web,
+              icon: 'IconGlobeOutlineRegular',
+              active: state.web,
+              onClick: controller.toggleWeb,
+            }),
             state.streaming
               ? h(
                   'button',
@@ -1970,6 +2206,18 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         { className: 'vqc-root', 'data-vt-quick-chat': '' },
+        h('input', {
+          ref: fileInputRef,
+          type: 'file',
+          multiple: true,
+          className: 'vqc-srOnly',
+          tabIndex: -1,
+          'aria-hidden': 'true',
+          onChange: (event) => {
+            controller.addFiles(event.target.files);
+            event.target.value = '';
+          },
+        }),
         h(
           'section',
           {
@@ -1981,7 +2229,9 @@ window.__ModuleLoader__.load({
           },
           header,
           chip,
+          expanded ? null : h(FileChips, { files: state.files, labels, onRemove: controller.removeFile }),
           body,
+          expanded ? h(FileChips, { files: state.files, labels, onRemove: controller.removeFile }) : null,
           composer,
           hint,
           compact,
@@ -2053,6 +2303,15 @@ window.__ModuleLoader__.load({
         web: t('action.web'),
         webOn: t('action.webOn'),
         webHint: t('action.webHint'),
+        attach: t('action.attach'),
+        attachHint: t('action.attachHint'),
+        deepThink: t('action.deepThink'),
+        deepThinkOn: t('action.deepThinkOn'),
+        deepThinkHint: t('action.deepThinkHint'),
+        uploading: t('file.uploading'),
+        fileFailed: t('file.failed'),
+        removeFile: t('action.removeAttachment'),
+        deepThinking: t('thinking.deep'),
         webUnavailable: t('web.unavailable'),
         toolSearch: t('tool.search'),
         toolOpen: t('tool.open'),

@@ -6,6 +6,10 @@ import { apply, __test } from '../index.js';
 
 const {
   sanitizeBlocks,
+  sanitizeFiles,
+  toFileBlocks,
+  uploadFailure,
+  UPLOAD_PURPOSES,
   sanitizeMessages,
   toDeepSeekMessages,
   drainSseEvents,
@@ -402,4 +406,94 @@ test('没有 DeepSeek 凭证时退回默认模型，start 帧标明 default', as
   assert.equal(start.via, 'default');
   assert.equal(start.model, 'test-model');
   route.dispose();
+});
+
+test('sanitizeFiles 只接受 file-api- 前缀并限制条数', () => {
+  const files = sanitizeFiles([
+    { id: 'file-api-abc123456', kind: 'document', name: '需求.pdf' },
+    { id: 'not-a-file-id', kind: 'document', name: 'x.pdf' },
+    { id: 'file-api-def789012', kind: 'image', name: '图.png' },
+    null,
+  ]);
+  assert.equal(files.length, 2);
+  assert.deepEqual(files[1], { id: 'file-api-def789012', kind: 'image', name: '图.png' });
+  assert.equal(sanitizeFiles([]), undefined);
+  assert.equal(sanitizeFiles('nope'), undefined);
+});
+
+test('toFileBlocks 图片用 image 块，其余用 document 块', () => {
+  const blocks = toFileBlocks([
+    { id: 'file-api-a111111', kind: 'image', name: 'a.png' },
+    { id: 'file-api-b222222', kind: 'document', name: 'b.pdf' },
+  ]);
+  assert.deepEqual(blocks[0], { type: 'image', source: { type: 'file', file_id: 'file-api-a111111' } });
+  assert.deepEqual(blocks[1], { type: 'document', source: { type: 'file', file_id: 'file-api-b222222' } });
+});
+
+test('UPLOAD_PURPOSES 把文档映射到解析，图片与文本映射到 user_data', () => {
+  assert.equal(UPLOAD_PURPOSES.get('pdf'), 'text_recognition');
+  assert.equal(UPLOAD_PURPOSES.get('docx'), 'text_recognition');
+  assert.equal(UPLOAD_PURPOSES.get('png'), 'user_data');
+  assert.equal(UPLOAD_PURPOSES.get('md'), 'user_data');
+  assert.equal(UPLOAD_PURPOSES.get('exe'), undefined);
+});
+
+test('uploadFailure 映射常见上传错误', () => {
+  assert.equal(uploadFailure(413, '').code, 'file-too-large');
+  assert.equal(uploadFailure(504, '').code, 'parse-timeout');
+  assert.equal(uploadFailure(401, '').code, 'AUTH');
+  assert.equal(uploadFailure(418, 'teapot').code, 'HTTP_418');
+});
+
+test('开启深度思考时请求带 thinking，引用文件时带 beta 头', async () => {
+  let seen;
+  const restore = stubFetch(
+    [{ type: 'message_start', message: { model: 'deepseek-flash' } }, { type: 'message_stop' }],
+    (url, init) => {
+      seen = { url, body: JSON.parse(init.body), headers: init.headers };
+    },
+  );
+  try {
+    const route = createContext({ deepseekAccount: accountService });
+    await run(
+      route,
+      createRequest({
+        messages: [
+          {
+            role: 'user',
+            content: '总结这份文档',
+            files: [{ id: 'file-api-abc123456', kind: 'document', name: '需求.pdf' }],
+          },
+        ],
+        deepThink: true,
+        web: true,
+      }),
+    );
+    assert.deepEqual(seen.body.thinking, { type: 'enabled' });
+    assert.equal(seen.headers['anthropic-beta'], 'files-api-2025-04-14');
+    const content = seen.body.messages[0].content;
+    assert.equal(content[0].type, 'document');
+    assert.equal(content[1].type, 'text');
+    route.dispose();
+  } finally {
+    restore();
+  }
+});
+
+test('不带文件时不发 beta 头', async () => {
+  let seen;
+  const restore = stubFetch(
+    [{ type: 'message_start', message: { model: 'deepseek-flash' } }, { type: 'message_stop' }],
+    (url, init) => {
+      seen = { headers: init.headers };
+    },
+  );
+  try {
+    const route = createContext({ deepseekAccount: accountService });
+    await run(route, createRequest({ messages: [{ role: 'user', content: 'q' }] }));
+    assert.equal(seen.headers['anthropic-beta'], undefined);
+    route.dispose();
+  } finally {
+    restore();
+  }
 });
