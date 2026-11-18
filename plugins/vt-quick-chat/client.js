@@ -25,7 +25,7 @@ window.__ModuleLoader__.load({
     /** 插件标识（与 package.json 的 name 一致）。 */
     const PLUGIN_ID = 'dsh-vt-quick-chat';
     /** 与 package.json 的 version 保持一致。 */
-    const VERSION = '1.1.2';
+    const VERSION = '1.1.3';
     /** 文案命名空间。 */
     const NS = 'vtQuickChat';
     /** Host 路由前缀，与 index.js 的 ROUTE_PREFIX 必须一致。 */
@@ -94,7 +94,7 @@ window.__ModuleLoader__.load({
       'composer.hint': 'Enter 发送 · Shift+Enter 换行 · Esc 关闭',
       'empty.title': '临时提问，不会进入侧栏',
       'empty.body': '选中一段看不懂的文字再按快捷键，它会被当作解释对象。关掉小窗，主任务不受影响。',
-      'empty.hint': '这里只做解释：不调用工具、不读写文件、不创建会话。',
+      'empty.hint': '这里只做解释：不读写工作区文件、不创建会话；需要最新资料可打开「联网」。',
       'role.user': '你',
       'role.assistant': '助手',
       'action.send': '发送',
@@ -158,7 +158,7 @@ window.__ModuleLoader__.load({
       'composer.hint': 'Enter to send · Shift+Enter for a new line · Esc to close',
       'empty.title': 'A temporary question, outside the sidebar',
       'empty.body': 'Select a phrase you do not understand, then press the shortcut. Close this window and the main task continues untouched.',
-      'empty.hint': 'Explanations only: no tools, no file access, no new session.',
+      'empty.hint': 'Explanations only: no file access, no new session. Turn on Web for fresh sources.',
       'role.user': 'You',
       'role.assistant': 'Assistant',
       'action.send': 'Send',
