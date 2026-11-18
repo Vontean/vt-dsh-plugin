@@ -1405,6 +1405,9 @@ window.__ModuleLoader__.load({
 .vqc-brand{flex:none;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-input{flex:1;min-width:0;margin:0;padding:0;border:0;outline:0;background:transparent;color:inherit;font:inherit;line-height:22px;resize:none}
 .vqc-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-add{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:999px;background:var(--dsw-specific-selector,#f2f3f5);color:var(--dsw-alias-label-primary,#0f1115);cursor:pointer}
+.vqc-add:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f)}
+.vqc-add:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:1px}
 .vqc-pill{display:inline-flex;align-items:center;justify-content:center;flex:none;box-sizing:border-box;width:34px;height:28px;padding:0;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:999px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-tertiary,#81858c);cursor:pointer}
 .vqc-pill:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-pill:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:1px}
@@ -1415,11 +1418,11 @@ window.__ModuleLoader__.load({
 .vqc-fileChip--error{border-color:#d92d2055;color:var(--dsw-alias-state-error-primary,#d92d20)}
 .vqc-fileName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vqc-fileChip .vqc-iconbtn{width:20px;height:20px}
-.vqc-send{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:999px;background:var(--dsw-alias-button-primary-fill,#0f1115);color:var(--dsw-alias-label-primary-inverted,#fff);cursor:pointer}
-.vqc-send:hover{background:var(--dsw-alias-button-primary-hover,#33363b)}
-.vqc-send:disabled{opacity:.35;cursor:default}
-.vqc-send--stop{background:var(--dsw-alias-bg-layer-3,#353638);color:var(--dsw-alias-label-primary,#0f1115)}
-.vqc-send--stop:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f)}
+.vqc-send{display:inline-flex;align-items:center;justify-content:center;flex:none;width:34px;height:34px;padding:0;border:0;border-radius:999px;background:var(--dsw-alias-button-info-fill,#4d6bfe);color:#fff;cursor:pointer;transform:translateY(-2px);transition:background-color .1s}
+.vqc-send:hover:not(:disabled){background:var(--dsw-alias-button-info-hover,#3f5af0)}
+.vqc-send:disabled{opacity:.4;cursor:default}
+.vqc-send--stop{background:var(--dsw-alias-bg-layer-3,#353638);color:var(--dsw-alias-label-primary,#0f1115);transform:none}
+.vqc-send--stop:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,#2631480f)}
 .vqc-chip{display:flex;align-items:center;gap:6px;flex:none;margin:8px 12px 0;padding:4px 4px 4px 8px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#61666b);font-size:12px;line-height:18px}
 .vqc-chipLabel{flex:none;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-chipText{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1505,12 +1508,12 @@ window.__ModuleLoader__.load({
      * 图标按钮。
      * @param props - label/icon/size/onClick/disabled/active。
      */
-    function IconButton({ label, icon, size = 16, onClick, disabled = false, active = false }) {
+    function IconButton({ label, icon, size = 16, onClick, disabled = false, active = false, className }) {
       return h(
         'button',
         {
           type: 'button',
-          className: `vqc-iconbtn${active ? ' vqc-iconbtn--active' : ''}`,
+          className: `${className ?? 'vqc-iconbtn'}${active ? ' vqc-iconbtn--active' : ''}`,
           'aria-label': label,
           title: label,
           onClick,
@@ -1585,6 +1588,31 @@ window.__ModuleLoader__.load({
         }
         return this.props.children;
       }
+    }
+
+    /**
+     * 发送箭头：与 DSH 输入区同一条路径（16×16，fill 继承 currentColor）。
+     */
+    function SendArrow() {
+      return h(
+        'svg',
+        { viewBox: '0 0 16 16', width: 16, height: 16, 'aria-hidden': 'true' },
+        h('path', {
+          d: 'M8.3125 0.980183C8.66767 1.0531 8.97902 1.20418 9.2627 1.43233C9.48724 1.61297 9.73029 1.85793 9.97949 2.10714L14.707 6.83468L13.293 8.24874L9 3.95577V15.0417H7V3.95577L2.70703 8.24874L1.29297 6.83468L6.02051 2.10714C6.26971 1.85793 6.51277 1.61297 6.7373 1.43233C6.97662 1.23986 7.28445 1.04402 7.6875 0.980183C7.8973 0.947006 8.1031 0.95516 8.3125 0.980183Z',
+          fill: 'currentColor',
+        }),
+      );
+    }
+
+    /**
+     * 停止方块：与 DSH 输入区一致（16×16 里 10×10、圆角 3）。
+     */
+    function StopSquare() {
+      return h(
+        'svg',
+        { viewBox: '0 0 16 16', width: 16, height: 16, 'aria-hidden': 'true' },
+        h('rect', { x: 3, y: 3, width: 10, height: 10, rx: 3, fill: 'currentColor' }),
+      );
     }
 
     /**
@@ -2084,7 +2112,8 @@ window.__ModuleLoader__.load({
             { className: 'vqc-composer' },
             h(IconButton, {
               label: labels.attach,
-              icon: 'IconPaperclipOutlineRegular',
+              icon: 'IconPlusOutlineRegular',
+              className: 'vqc-add',
               onClick: pickFiles,
             }),
             h(AutoTextarea, {
@@ -2124,7 +2153,7 @@ window.__ModuleLoader__.load({
                     title: labels.stop,
                     onClick: controller.stop,
                   },
-                  h(DshIcon, { name: 'IconStopFillRegular', size: 16 }),
+                  h(StopSquare),
                 )
               : h(
                   'button',
@@ -2136,7 +2165,7 @@ window.__ModuleLoader__.load({
                     disabled: !canSend,
                     onClick: () => controller.send(),
                   },
-                  h(DshIcon, { name: 'IconSendOutlineRegular', size: 16 }),
+                  h(SendArrow),
                 ),
           )
         : null;
@@ -2150,7 +2179,8 @@ window.__ModuleLoader__.load({
             { className: 'vqc-compact' },
             h(IconButton, {
               label: labels.attach,
-              icon: 'IconPaperclipOutlineRegular',
+              icon: 'IconPlusOutlineRegular',
+              className: 'vqc-add',
               onClick: pickFiles,
             }),
             h('input', {
@@ -2187,7 +2217,7 @@ window.__ModuleLoader__.load({
                     title: labels.stop,
                     onClick: controller.stop,
                   },
-                  h(DshIcon, { name: 'IconStopFillRegular', size: 16 }),
+                  h(StopSquare),
                 )
               : h(
                   'button',
@@ -2199,7 +2229,7 @@ window.__ModuleLoader__.load({
                     disabled: !canSend,
                     onClick: () => controller.send(),
                   },
-                  h(DshIcon, { name: 'IconSendOutlineRegular', size: 16 }),
+                  h(SendArrow),
                 ),
           );
 

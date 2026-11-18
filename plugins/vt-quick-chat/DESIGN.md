@@ -187,6 +187,18 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 
 ### 7.2 图标
 
+输入区的两个动作按钮直接照搬 DSH `InputBar` 的实现，不自绘：
+
+| 按钮 | 尺寸 | 底色 | 图标 |
+|---|---|---|---|
+| 附件 | 28×28 圆形 | `--dsw-specific-selector` | `IconPlusOutlineRegular` |
+| 发送 | 34×34 圆形，上移 2px | `--dsw-alias-button-info-fill`，悬停 `-info-hover` | 16×16 实心上箭头（与 DSH 同一条 path） |
+| 停止 | 34×34 圆形 | `--dsw-alias-bg-layer-3` | 16×16 里 10×10、圆角 3 的方块 |
+
+深度思考与联网用 DSH 的 `IconThinkOutlineRegular` / `IconGlobeOutlineRegular`，
+与网页端的胶囊语义一致；所有图标都来自 `@deepseek-ai/dsh-client-ui-primitives`。
+
+
 全部来自 `@deepseek-ai/dsh-client-ui-primitives` 的具名图标组件：
 
 | 场景 | 组件 |
