@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-quick-chat",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Press a shortcut during an agent task to open a temporary quick-chat overlay that streams answers from DeepSeek, with an optional web-search switch, without creating a session, writing the session log, or calling agent tools.",
   "license": "MIT",

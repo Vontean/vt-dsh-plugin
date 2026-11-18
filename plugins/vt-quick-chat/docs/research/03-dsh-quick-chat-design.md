@@ -6,7 +6,7 @@
 > 本文只做方案与规范，不包含插件代码。
 >
 > **实现状态（2026-11-16）**：第一版已落地，与本文的差异只有四处：
-> ① Web Linux 默认不绑定 `Mod+Shift+K`（DSH 的 Web 绑定白名单拒绝该组合），macOS/Windows Web 仍为 `Mod+Shift+K`；
+> ① Web Linux 默认不绑定（DSH 的 Web 绑定白名单拒绝该组合）；Desktop 为 `Mod+Alt+N`，Web（macOS/Windows）为 `Mod+Alt+Q`；
 > ② 浮层锚定主输入框上方 24px（`bottom: 96px`），避免压住 composer；
 > ③ 按键折叠选区时，回退到 5 秒内的最近选区；
 > ④ `shell.overlay` 实测为 root 作用域 list 槽位（z-index 20），无需硬编码层级。
@@ -40,7 +40,7 @@
         │
         ├─ 选中一段文字（可选）
         │
-        └─ 按快捷键（Desktop Mod+Alt+K / Web Mod+Shift+K）
+        └─ 按快捷键（Desktop Mod+Alt+N / Web Mod+Alt+Q）
                 │
                 ▼
         ┌──────────────────┐
@@ -58,7 +58,7 @@
 
 ### 2.1 三个入口
 
-1. **快捷键**（主入口）：Desktop `Mod+Alt+K`，Web `Mod+Shift+K`。
+1. **快捷键**（主入口）：Desktop `Mod+Alt+N`（`⌘⌥N` / `Ctrl+Alt+N`）；Web（macOS/Windows）`Mod+Alt+Q`。
 2. **快捷键设置页**：DSH 的「快捷键」参考里会出现「快捷提问」，可改键。
 3. **（第二版）输入框「+」菜单**：加一条「快捷提问」，方便不知道快捷键的人。
 
@@ -70,12 +70,12 @@
 
 | 平台 | 键位 | 说明 |
 |---|---|---|
-| macOS Desktop | `⌘⌥K` | `Mod+Alt+K` |
-| Windows Desktop | `Ctrl+Alt+K` | `Mod+Alt+K` |
+| macOS Desktop | `⌘⌥N` | `Mod+Alt+N` |
+| Windows Desktop | `Ctrl+Alt+N` | `Mod+Alt+N` |
 | Linux Desktop | `Ctrl+Alt+K` | 同上 |
-| Web（macOS / Windows） | `Mod+Shift+K` | DSH Web 的 `session.search` 已占用 `Mod+Alt+K` |
+| Web（macOS / Windows） | `Mod+Alt+Q` | `Mod+Alt+N` 被 `session.new` 占用；`Mod+Shift+N` 是浏览器保留键 |
 
-### 3.2 为什么不是 `⌘⌥N`，也不是所有平台都用 `⌘⌥K`
+### 3.2 为什么是 `⌘⌥N`
 
 Codex 的 Quick Chat 用 `⌘⌥N`，但 DSH 里：
 

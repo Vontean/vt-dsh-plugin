@@ -25,7 +25,7 @@ window.__ModuleLoader__.load({
     /** 插件标识（与 package.json 的 name 一致）。 */
     const PLUGIN_ID = 'dsh-vt-quick-chat';
     /** 与 package.json 的 version 保持一致。 */
-    const VERSION = '1.1.0';
+    const VERSION = '1.1.1';
     /** 文案命名空间。 */
     const NS = 'vtQuickChat';
     /** Host 路由前缀，与 index.js 的 ROUTE_PREFIX 必须一致。 */
@@ -2131,7 +2131,10 @@ window.__ModuleLoader__.load({
         );
       });
 
-      // 快捷键：Desktop Mod+Alt+K；Web（macOS/Windows）Mod+Shift+K。
+      // 快捷键：Desktop 用 Mod+Alt+N（⌘⌥N / Ctrl+Alt+N）。
+      // Web 不能复用 N：DSH 的 session.new 在 Web 上已占用 Mod+Alt+N；
+      // 也不用 Mod+Shift+N，那是浏览器「无痕窗口」的保留键，网页收不到事件。
+      // 所以 Web 用当前空闲的 Mod+Alt+Q（Q = quick chat）。
       // Linux Web 默认不绑定（DSH 的 Web 绑定白名单不接受该组合），可在设置里指定。
       ctx.effect(
         () => {
@@ -2141,11 +2144,11 @@ window.__ModuleLoader__.load({
               label: () => t('shortcut.label'),
               aliases: ['quick chat', 'explain concept', '快捷提问'],
               defaults: {
-                'desktop:macos': { code: 'KeyK', modifiers: ['primary', 'alt'] },
-                'desktop:windows': { code: 'KeyK', modifiers: ['primary', 'alt'] },
-                'desktop:linux': { code: 'KeyK', modifiers: ['primary', 'alt'] },
-                'web:macos': { code: 'KeyK', modifiers: ['primary', 'shift'] },
-                'web:windows': { code: 'KeyK', modifiers: ['primary', 'shift'] },
+                'desktop:macos': { code: 'KeyN', modifiers: ['primary', 'alt'] },
+                'desktop:windows': { code: 'KeyN', modifiers: ['primary', 'alt'] },
+                'desktop:linux': { code: 'KeyN', modifiers: ['primary', 'alt'] },
+                'web:macos': { code: 'KeyQ', modifiers: ['primary', 'alt'] },
+                'web:windows': { code: 'KeyQ', modifiers: ['primary', 'alt'] },
               },
               regions: ['page', 'editable'],
               modals: [],

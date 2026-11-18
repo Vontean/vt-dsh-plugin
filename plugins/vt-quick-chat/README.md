@@ -6,7 +6,7 @@ agent 正在跑任务时，看到一个不懂的词：按一个快捷键，在�
 
 ## 它做了什么
 
-- **随时可开**：Desktop `⌘⌥K`（Windows/Linux `Ctrl+Alt+K`）；Web（macOS/Windows）`⌘⇧K`。
+- **随时可开**：Desktop `⌘⌥N`（Windows/Linux `Ctrl+Alt+N`）；Web（macOS/Windows）`⌘⌥Q`。
   Linux Web 默认不绑定，见下方「快捷键」。
   输入框自动聚焦，打开前的主界面焦点在关闭后归还。
 - **非模态浮层**：挂在 DSH 的根级 `shell.overlay` 上，不替换主对话、主输入框或侧栏。
@@ -42,16 +42,20 @@ agent 正在跑任务时，看到一个不懂的词：按一个快捷键，在�
 
 | 平台 | 默认键位 |
 |---|---|
-| macOS Desktop | `⌘⌥K` |
-| Windows / Linux Desktop | `Ctrl+Alt+K` |
-| Web（macOS / Windows） | `⌘⇧K` / `Ctrl+Shift+K` |
-| Web（Linux） | 默认未绑定；DSH 的 Web 绑定白名单不接受 `Mod+Shift+K`，请在「快捷键」设置里指定 |
+| macOS Desktop | `⌘⌥N` |
+| Windows / Linux Desktop | `Ctrl+Alt+N` |
+| Web（macOS / Windows） | `⌘⌥Q` / `Ctrl+Alt+Q` |
+| Web（Linux） | 默认未绑定；DSH 的 Web 绑定白名单不接受该组合，请在「快捷键」设置里指定 |
 
-Web 不用 `Mod+Alt+K`，因为 DSH 的「搜索会话」已占用它（`session.search`）。
+Desktop 用 `Mod+Alt+N`。Web 不能复用 N，原因有两个：
+
+- DSH 的 `session.new` 在 Web 上已占用 `Mod+Alt+N`（桌面端它是 `Mod+N`）；
+- `Mod+Shift+N` 是 Chrome/Edge「无痕窗口」的浏览器保留键，网页收不到事件。
+
+所以 Web 用当前空闲的 `Mod+Alt+Q`（Q = quick chat）。
 Linux Web 的默认值未绑定，是因为 DSH 的 Web 绑定白名单只接受少数组合；
 在「快捷键」设置里可以给「快捷提问」指定一个 Linux Web 可用的组合。
-Desktop 的 `Mod+Alt+K` 目前空闲。可以在 DSH 的「快捷键」设置里改成别的组合；
-命令名是「快捷提问」（`quickChat.toggle`）。
+可以在 DSH 的「快捷键」设置里改成别的组合；命令名是「快捷提问」（`quickChat.toggle`）。
 
 再按一次快捷键会关闭小窗。关闭会丢弃未发送草稿与选中引用；已发送的对话留在本地历史。
 
@@ -72,18 +76,18 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 ### npm
 
 ```bash
-dsh plugin --profile <profile> add dsh-vt-quick-chat@1.1.0
+dsh plugin --profile <profile> add dsh-vt-quick-chat@1.1.1
 ```
 
-npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view dsh-vt-quick-chat@1.1.0` 能查到即可）。
+npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view dsh-vt-quick-chat@1.1.1` 能查到即可）。
 
 ### Release tarball
 
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载
-`dsh-vt-quick-chat-1.1.0.tgz`，然后：
+`dsh-vt-quick-chat-1.1.1.tgz`，然后：
 
 ```bash
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-quick-chat-1.1.0.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-quick-chat-1.1.1.tgz
 ```
 
 ## 支持的 DSH 版本
