@@ -252,6 +252,53 @@
       ]
     },
     {
+      "name": "dsh-vt-quick-chat",
+      "title": {
+        "zh": "快捷提问",
+        "en": "Quick chat"
+      },
+      "description": {
+        "zh": "agent 执行任务时按快捷键弹出临时小窗，用 DeepSeek 流式解释概念，可按需开启联网搜索与读链接；不创建 Session、不写 session log、不调用 agent 工具，关掉即走。",
+        "en": "A shortcut opens a temporary overlay during an agent task and streams explanations from DeepSeek, with optional web search and link reading; no session, no session log, and no agent tools."
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiIgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiBmaWxsPSJub25lIj4KICA8cmVjdCB4PSIxIiB5PSIxIiB3aWR0aD0iMzAiIGhlaWdodD0iMzAiIHJ4PSI5IiBmaWxsPSIjMTExODI3Ii8+CiAgPHBhdGggZD0iTTggMTIuMkE0LjIgNC4yIDAgMCAxIDEyLjIgOGg2LjZhNC4yIDQuMiAwIDAgMSA0LjIgNC4ydjQuNmE0LjIgNC4yIDAgMCAxLTQuMiA0LjJoLTQuMWwtMy44IDMuMXYtMy40QTQuMiA0LjIgMCAwIDEgOCAxNi44di00LjZaIiBzdHJva2U9IiNGOUZBRkIiIHN0cm9rZS13aWR0aD0iMS45IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPHBhdGggZD0iTTIxLjkgNy4xbC43IDEuOSAxLjkuNy0xLjkuNy0uNyAxLjktLjctMS45LTEuOS0uNyAxLjktLjcuNy0xLjlaIiBmaWxsPSIjN0M5QkZGIi8+Cjwvc3ZnPgo=",
+      "author": "Vontean",
+      "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-quick-chat#readme",
+      "repository": {
+        "url": "https://github.com/Vontean/vt-dsh-plugin",
+        "directory": "plugins/vt-quick-chat"
+      },
+      "metadata": {
+        "category": "ui",
+        "keywords": [
+          "quick-chat",
+          "overlay",
+          "shortcut",
+          "explain",
+          "ephemeral",
+          "deepseek",
+          "web-search"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "1.3.0",
+          "publishTimestamp": 1795023743,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Vontean/vt-dsh-plugin",
+            "commit": "90322d01d44d13473406188ddd99d26b0e375a95",
+            "path": "plugins/vt-quick-chat"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        }
+      ]
+    },
+    {
       "name": "dsh-vt-quote-bar",
       "title": {
         "zh": "模型额度",
