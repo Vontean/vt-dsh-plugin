@@ -1372,7 +1372,6 @@ window.__ModuleLoader__.load({
 .vqc-root{position:absolute;inset:0;pointer-events:none;z-index:0}
 .vqc-panel{position:absolute;right:24px;bottom:96px;display:flex;flex-direction:column;box-sizing:border-box;width:min(420px,calc(100vw - 32px));background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);border:0;border-radius:var(--dsw-radius-lg,16px);box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);--dsw-elevation-stroke-color:var(--dsw-alias-border-l2,#0000001a);pointer-events:auto;overflow:hidden;font-size:var(--dsh-content-font-size,14px);line-height:1.55;animation:vqc-rise 160ms ease-out}
 .vqc-panel--compact{min-height:48px;max-height:240px}
-.vqc-panel--compact .vqc-files{flex:none}
 .vqc-panel--expanded{height:min(520px,calc(100dvh - 120px))}
 @keyframes vqc-rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.vqc-panel{animation:none}.vqc-caret{animation:none}}
@@ -1384,7 +1383,7 @@ window.__ModuleLoader__.load({
 .vqc-iconbtn:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:1px}
 .vqc-iconbtn:disabled{opacity:.4;cursor:default}
 .vqc-iconbtn--active{color:var(--dsw-alias-state-business-primary,#4176e6)}
-.vqc-compact{display:flex;align-items:flex-end;gap:8px;box-sizing:border-box;min-height:48px;padding:10px}
+.vqc-compact{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;box-sizing:border-box;min-height:48px;padding:10px}
 .vqc-brand{flex:none;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-input{flex:1;min-width:0;box-sizing:border-box;margin:0;min-height:28px;padding:3px 0;border:0;outline:0;background:transparent;color:inherit;font:inherit;line-height:22px;resize:none;overflow-y:auto;scrollbar-width:thin}
 .vqc-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858c)}
@@ -1398,7 +1397,7 @@ window.__ModuleLoader__.load({
 .vqc-pill:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:1px}
 .vqc-pill--on{border-color:#4176e633;background:#4176e614;color:var(--dsw-alias-state-business-primary,#4176e6)}
 .vqc-pill--on:hover{background:#4176e620;color:var(--dsw-alias-state-business-primary,#4176e6)}
-.vqc-files{display:flex;flex-wrap:wrap;gap:6px;flex:none;padding:8px 10px 0}
+.vqc-files{display:flex;flex-wrap:wrap;gap:6px;order:-2;flex:1 1 100%;padding:0 0 6px}
 .vqc-fileChip{display:inline-flex;align-items:center;gap:6px;max-width:200px;padding:3px 4px 3px 8px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#61666b);font-size:12px;line-height:18px}
 .vqc-fileChip--error{border-color:#d92d2055;color:var(--dsw-alias-state-error-primary,#d92d20)}
 .vqc-fileChip--quote{max-width:280px}
@@ -1466,8 +1465,12 @@ window.__ModuleLoader__.load({
 .vqc-historyTitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:20px;color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-historyMeta{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-historyEmpty{padding:16px 4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
-.vqc-composer{display:flex;align-items:flex-end;gap:8px;flex:none;padding:8px 8px 8px 16px;border-top:.5px solid var(--dsw-alias-border-l1,#0000000a)}
+.vqc-composer{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;flex:none;padding:8px 8px 8px 16px;border-top:.5px solid var(--dsw-alias-border-l1,#0000000a)}
 .vqc-composerInput{min-height:28px;max-height:120px;padding:3px 0}
+.vqc-rowActions{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
+/* 输入折行后改纵向：文本独占上面整行，按钮全部沉到最底下那行。 */
+.vqc-stacked{flex-wrap:wrap;row-gap:6px}
+.vqc-stacked .vqc-input{order:-1;flex:1 1 100%}
 .vqc-crash{position:absolute;right:24px;bottom:96px;display:flex;align-items:center;gap:10px;max-width:420px;padding:12px 14px;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-bg-layer-2,#fff);box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);color:var(--dsw-alias-label-secondary,#61666b);font-size:13px;line-height:20px;pointer-events:auto}
 .vqc-srOnly{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 `;
@@ -1540,7 +1543,7 @@ window.__ModuleLoader__.load({
      * 自动增高的多行输入框。
      * @param props - value/onChange/onKeyDown/placeholder/ariaLabel/className/inputRef。
      */
-    function AutoTextarea({ value, onChange, onKeyDown, placeholder, ariaLabel, className, inputRef }) {
+    function AutoTextarea({ value, onChange, onKeyDown, placeholder, ariaLabel, className, inputRef, onMultilineChange }) {
       const localRef = React.useRef(null);
       const assignRef = (node) => {
         localRef.current = node;
@@ -1550,7 +1553,14 @@ window.__ModuleLoader__.load({
         const node = localRef.current;
         if (node === null) return;
         node.style.height = 'auto';
-        node.style.height = `${Math.min(node.scrollHeight, 120)}px`;
+        const full = node.scrollHeight;
+        node.style.height = `${Math.min(full, 120)}px`;
+        if (onMultilineChange === undefined) return;
+        // 一行的高度 = 行高 + 上下内边距；超过它就是多行，输入区要改成上下结构。
+        const style = window.getComputedStyle(node);
+        const line = Number.parseFloat(style.lineHeight) || 22;
+        const pad = (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0);
+        onMultilineChange(full > line + pad + 1);
       }, [value]);
       return h('textarea', {
         ref: assignRef,
@@ -1975,6 +1985,8 @@ window.__ModuleLoader__.load({
     function QuickChatPanel({ controller, labels, formatTime }) {
       const state = React.useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
       const inputRef = React.useRef(null);
+      /** 输入是否已经折行：是就切成「文本在上、按钮在下」的纵向结构。 */
+      const [stacked, setStacked] = React.useState(false);
       const fileInputRef = React.useRef(null);
       const bodyRef = React.useRef(null);
       const wasOpen = React.useRef(false);
@@ -2164,7 +2176,8 @@ window.__ModuleLoader__.load({
       const composer = expanded
         ? h(
             'div',
-            { className: 'vqc-composer' },
+            { className: `vqc-composer${stacked ? ' vqc-stacked' : ''}` },
+            chips,
             h(IconButton, {
               label: labels.attach,
               icon: 'IconPlusOutlineRegular',
@@ -2180,43 +2193,48 @@ window.__ModuleLoader__.load({
               ariaLabel: labels.inputAria,
               className: 'vqc-composerInput',
               inputRef,
+              onMultilineChange: setStacked,
             }),
-            h(PillButton, {
-              label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
-              glyph: AtomIcon,
-              active: state.deepThink,
-              onClick: controller.toggleDeepThink,
-            }),
-            h(PillButton, {
-              label: state.web ? labels.webOn : labels.web,
-              glyph: WebGlyph,
-              active: state.web,
-              onClick: controller.toggleWeb,
-            }),
-            state.streaming
-              ? h(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'vqc-send vqc-send--stop',
-                    'aria-label': labels.stop,
-                    title: labels.stop,
-                    onClick: controller.stop,
-                  },
-                  h(StopSquare),
-                )
-              : h(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'vqc-send',
-                    'aria-label': labels.send,
-                    title: labels.send,
-                    disabled: !canSend,
-                    onClick: () => controller.send(),
-                  },
-                  h(SendArrow),
-                ),
+            h(
+              'div',
+              { className: 'vqc-rowActions' },
+              h(PillButton, {
+                label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
+                glyph: AtomIcon,
+                active: state.deepThink,
+                onClick: controller.toggleDeepThink,
+              }),
+              h(PillButton, {
+                label: state.web ? labels.webOn : labels.web,
+                glyph: WebGlyph,
+                active: state.web,
+                onClick: controller.toggleWeb,
+              }),
+              state.streaming
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'vqc-send vqc-send--stop',
+                      'aria-label': labels.stop,
+                      title: labels.stop,
+                      onClick: controller.stop,
+                    },
+                    h(StopSquare),
+                  )
+                : h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'vqc-send',
+                      'aria-label': labels.send,
+                      title: labels.send,
+                      disabled: !canSend,
+                      onClick: () => controller.send(),
+                    },
+                    h(SendArrow),
+                  ),
+            ),
           )
         : null;
 
@@ -2224,7 +2242,8 @@ window.__ModuleLoader__.load({
         ? null
         : h(
             'div',
-            { className: 'vqc-compact' },
+            { className: `vqc-compact${stacked ? ' vqc-stacked' : ''}` },
+            chips,
             h(IconButton, {
               label: labels.attach,
               icon: 'IconPlusOutlineRegular',
@@ -2239,43 +2258,48 @@ window.__ModuleLoader__.load({
               placeholder: labels.placeholder,
               ariaLabel: labels.inputAria,
               inputRef,
+              onMultilineChange: setStacked,
             }),
-            h(PillButton, {
-              label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
-              glyph: AtomIcon,
-              active: state.deepThink,
-              onClick: controller.toggleDeepThink,
-            }),
-            h(PillButton, {
-              label: state.web ? labels.webOn : labels.web,
-              glyph: WebGlyph,
-              active: state.web,
-              onClick: controller.toggleWeb,
-            }),
-            state.streaming
-              ? h(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'vqc-send vqc-send--stop',
-                    'aria-label': labels.stop,
-                    title: labels.stop,
-                    onClick: controller.stop,
-                  },
-                  h(StopSquare),
-                )
-              : h(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'vqc-send',
-                    'aria-label': labels.send,
-                    title: labels.send,
-                    disabled: !canSend,
-                    onClick: () => controller.send(),
-                  },
-                  h(SendArrow),
-                ),
+            h(
+              'div',
+              { className: 'vqc-rowActions' },
+              h(PillButton, {
+                label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
+                glyph: AtomIcon,
+                active: state.deepThink,
+                onClick: controller.toggleDeepThink,
+              }),
+              h(PillButton, {
+                label: state.web ? labels.webOn : labels.web,
+                glyph: WebGlyph,
+                active: state.web,
+                onClick: controller.toggleWeb,
+              }),
+              state.streaming
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'vqc-send vqc-send--stop',
+                      'aria-label': labels.stop,
+                      title: labels.stop,
+                      onClick: controller.stop,
+                    },
+                    h(StopSquare),
+                  )
+                : h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'vqc-send',
+                      'aria-label': labels.send,
+                      title: labels.send,
+                      disabled: !canSend,
+                      onClick: () => controller.send(),
+                    },
+                    h(SendArrow),
+                  ),
+            ),
           );
 
       return h(
@@ -2304,7 +2328,6 @@ window.__ModuleLoader__.load({
           },
           convBar,
           body,
-          chips,
           composer,
           compact,
         ),
