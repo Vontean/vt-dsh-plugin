@@ -2,7 +2,7 @@
 
 > 包名 `dsh-vt-quick-chat`，目录 `plugins/vt-quick-chat/`。
 > 目标：agent 执行任务中按快捷键弹出临时小窗解释概念；不创建 Session、不写 session log、
-> 不调用工具、不进侧栏。范围：Desktop `⌘⌥N` / Web（macOS/Windows）`⌘⌥Q`、`shell.overlay` 非模态浮层、
+> 不调用工具、不进侧栏。范围：Desktop `⌘⌥N`（Web 不提供）、`shell.overlay` 非模态浮层、
 > 紧凑/展开两态、`ctx.llm.stream()` 流式、本地历史、只用 DSH token 与 `ICON_SYMBOLS`。
 
 ## 1. 问题与边界
@@ -262,8 +262,8 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 
 ### 10.2 手工验收清单
 
-- [ ] Desktop `⌘⌥N`（`Ctrl+Alt+N`）/ Web `⌘⌥Q`（`Ctrl+Alt+Q`）打开；输入框聚焦；关闭后焦点归还。
-- [ ] Linux Web 默认无绑定；在快捷键设置里指定后可用。
+- [ ] Desktop `⌘⌥N`（`Ctrl+Alt+N`）打开；输入框聚焦；关闭后焦点归还。
+- [ ] Web 端不注册默认键位；命令在快捷键设置里显示为「未绑定」。
 - [ ] 侧栏不新增 session；session log 不新增；不生成标题。
 - [ ] 紧凑条 ↔ 展开；收起保留消息。
 - [ ] 流式可见；停止保留部分；重试替换上一条回答。

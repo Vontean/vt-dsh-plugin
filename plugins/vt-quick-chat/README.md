@@ -6,8 +6,7 @@ agent 正在跑任务时，看到一个不懂的词：按一个快捷键，在�
 
 ## 它做了什么
 
-- **随时可开**：Desktop `⌘⌥N`（Windows/Linux `Ctrl+Alt+N`）；Web（macOS/Windows）`⌘⌥Q`。
-  Linux Web 默认不绑定，见下方「快捷键」。
+- **随时可开**：Desktop `⌘⌥N`（Windows/Linux `Ctrl+Alt+N`）。Web 端不提供入口。
   输入框自动聚焦，打开前的主界面焦点在关闭后归还。
 - **非模态浮层**：挂在 DSH 的根级 `shell.overlay` 上，不替换主对话、主输入框或侧栏。
   小窗打开时仍可继续操作主界面；`Esc` 只在小窗内生效。
@@ -43,18 +42,19 @@ agent 正在跑任务时，看到一个不懂的词：按一个快捷键，在�
 | 平台 | 默认键位 |
 |---|---|
 | macOS Desktop | `⌘⌥N` |
-| Windows / Linux Desktop | `Ctrl+Alt+N` |
-| Web（macOS / Windows） | `⌘⌥Q` / `Ctrl+Alt+Q` |
-| Web（Linux） | 默认未绑定；DSH 的 Web 绑定白名单不接受该组合，请在「快捷键」设置里指定 |
+| Windows Desktop | `Ctrl+Alt+N` |
+| Linux Desktop | `Ctrl+Alt+N` |
+| Web | 不提供。见下方说明 |
 
-Desktop 用 `Mod+Alt+N`。Web 不能复用 N，原因有两个：
+**这个插件面向 Desktop。** Web 端不注册默认键位，原因是两个组合都被占了：
 
 - DSH 的 `session.new` 在 Web 上已占用 `Mod+Alt+N`（桌面端它是 `Mod+N`）；
 - `Mod+Shift+N` 是 Chrome/Edge「无痕窗口」的浏览器保留键，网页收不到事件。
 
-所以 Web 用当前空闲的 `Mod+Alt+Q`（Q = quick chat）。
-Linux Web 的默认值未绑定，是因为 DSH 的 Web 绑定白名单只接受少数组合；
-在「快捷键」设置里可以给「快捷提问」指定一个 Linux Web 可用的组合。
+缺少 `web:*` 默认值时 DSH 视为「未绑定」，不会报错，也不会占用任何 Web 快捷键。
+如果你想在 Web 上试用，可以在「快捷键」设置里手动给它指定一个空闲组合，
+但它不在支持范围内。
+
 可以在 DSH 的「快捷键」设置里改成别的组合；命令名是「快捷提问」（`quickChat.toggle`）。
 
 再按一次快捷键会关闭小窗。关闭会丢弃未发送草稿与选中引用；已发送的对话留在本地历史。
@@ -76,18 +76,18 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 ### npm
 
 ```bash
-dsh plugin --profile <profile> add dsh-vt-quick-chat@1.1.1
+dsh plugin --profile <profile> add dsh-vt-quick-chat@1.1.2
 ```
 
-npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view dsh-vt-quick-chat@1.1.1` 能查到即可）。
+npm 通道要等该版本真的发布到 npm 之后可用（用 `npm view dsh-vt-quick-chat@1.1.2` 能查到即可）。
 
 ### Release tarball
 
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载
-`dsh-vt-quick-chat-1.1.1.tgz`，然后：
+`dsh-vt-quick-chat-1.1.2.tgz`，然后：
 
 ```bash
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-quick-chat-1.1.1.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-quick-chat-1.1.2.tgz
 ```
 
 ## 支持的 DSH 版本
@@ -136,7 +136,7 @@ dsh plugin --profile <profile> add /绝对路径/dsh-vt-quick-chat-1.1.1.tgz
 - 本地历史是明文 `localStorage`；共享电脑上请注意。可在历史面板「清空全部」。
 - 没有拖拽位置、没有多窗口、没有语音/文件/图片输入。
 - 浮层锚定在主内容区右下角、主输入框上方 96px；窄窗口下会自动收窄到可视宽度。
-- Linux Web 默认没有快捷键，需要手动指定（原因见「快捷键」）。
+- Web 端没有快捷键入口；这是有意为之，原因见「快捷键」。
 
 ## 开发
 

@@ -265,7 +265,7 @@ async injectContext(context) {
 | `sideConversation` 读当前线程上下文 | 客户端截取当前对话片段，随请求发送 | 用户可见、可关闭 |
 | `permissions: ":read-only"`、`dynamicTools: null` | 不注册任何工具，不给模型工具定义 | 模型只能回答，不能行动 |
 | 临时线程不进入最近列表 | 不写 session log、不进入侧栏 | 没有「最近列表」可污染 |
-| `⌘⌥N` / `Alt+Space` | Desktop `Mod+Alt+K`；Web `Mod+Shift+K` | 见 03 文档的冲突分析 |
+| `⌘⌥N` / `Alt+Space` | Desktop `Mod+Alt+N`；Web 不绑定 | 见 03 文档的冲突分析 |
 | 22px 圆角、原生 glass | `--dsw-radius-lg` 16px + `--dsw-alias-bg-layer-2` + `--dsw-elevation-prominent` | 跟随 DSH 的视觉体系，不照搬 macOS 材质 |
 
 ## 6. 证据边界与风险

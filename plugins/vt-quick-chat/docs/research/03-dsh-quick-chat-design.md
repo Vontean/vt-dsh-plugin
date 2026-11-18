@@ -6,7 +6,7 @@
 > 本文只做方案与规范，不包含插件代码。
 >
 > **实现状态（2026-11-16）**：第一版已落地，与本文的差异只有四处：
-> ① Web Linux 默认不绑定（DSH 的 Web 绑定白名单拒绝该组合）；Desktop 为 `Mod+Alt+N`，Web（macOS/Windows）为 `Mod+Alt+Q`；
+> ① 只注册桌面键位 `Mod+Alt+N`，Web 不提供默认键（`session.new` 占用 `Mod+Alt+N`，`Mod+Shift+N` 是浏览器保留键）；
 > ② 浮层锚定主输入框上方 24px（`bottom: 96px`），避免压住 composer；
 > ③ 按键折叠选区时，回退到 5 秒内的最近选区；
 > ④ `shell.overlay` 实测为 root 作用域 list 槽位（z-index 20），无需硬编码层级。
@@ -40,7 +40,7 @@
         │
         ├─ 选中一段文字（可选）
         │
-        └─ 按快捷键（Desktop Mod+Alt+N / Web Mod+Alt+Q）
+        └─ 按快捷键（Desktop Mod+Alt+N；Web 无入口）
                 │
                 ▼
         ┌──────────────────┐
@@ -58,7 +58,7 @@
 
 ### 2.1 三个入口
 
-1. **快捷键**（主入口）：Desktop `Mod+Alt+N`（`⌘⌥N` / `Ctrl+Alt+N`）；Web（macOS/Windows）`Mod+Alt+Q`。
+1. **快捷键**（主入口）：仅 Desktop `Mod+Alt+N`（`⌘⌥N` / `Ctrl+Alt+N`）。
 2. **快捷键设置页**：DSH 的「快捷键」参考里会出现「快捷提问」，可改键。
 3. **（第二版）输入框「+」菜单**：加一条「快捷提问」，方便不知道快捷键的人。
 
@@ -72,8 +72,8 @@
 |---|---|---|
 | macOS Desktop | `⌘⌥N` | `Mod+Alt+N` |
 | Windows Desktop | `Ctrl+Alt+N` | `Mod+Alt+N` |
-| Linux Desktop | `Ctrl+Alt+K` | 同上 |
-| Web（macOS / Windows） | `Mod+Alt+Q` | `Mod+Alt+N` 被 `session.new` 占用；`Mod+Shift+N` 是浏览器保留键 |
+| Linux Desktop | `Ctrl+Alt+N` | 同上 |
+| Web | 不绑定 | `Mod+Alt+N` 被 `session.new` 占用；`Mod+Shift+N` 是浏览器保留键 |
 
 ### 3.2 为什么是 `⌘⌥N`
 
@@ -84,7 +84,7 @@ Codex 的 Quick Chat 用 `⌘⌥N`，但 DSH 里：
 - Desktop 的 `Mod+Alt+K` 目前没有被 DSH 的默认命令占用（截至 0.2.2-rc.1）。
 
 DSH 的快捷键服务按平台 profile 做冲突检查，会在注册时拒绝冲突的默认值。
-所以推荐：**Desktop 用 `Mod+Alt+K`，Web 用 `Mod+Shift+K`**。
+所以最终采用：**只注册桌面 `Mod+Alt+N`，Web 不绑定**（Web 上 `Mod+Alt+N` 属于 `session.new`）。
 这与 DSH 自己的惯例一致：同一个动作在 Desktop 和 Web 可以有不同默认键位，
 快捷键参考里显示的是当前设备实际生效的键。
 
@@ -102,11 +102,9 @@ ctx.effect(() => ctx.shortcuts.register({
   label: () => t("shortcut.toggle"),
   aliases: ["quick chat", "explain concept", "快捷提问"],
   defaults: {
-    "desktop:macos":   { code: "KeyK", modifiers: ["primary", "alt"] },
-    "desktop:windows": { code: "KeyK", modifiers: ["primary", "alt"] },
-    "desktop:linux":   { code: "KeyK", modifiers: ["primary", "alt"] },
-    "web:macos":       { code: "KeyK", modifiers: ["primary", "shift"] },
-    "web:windows":     { code: "KeyK", modifiers: ["primary", "shift"] }
+    "desktop:macos":   { code: "KeyN", modifiers: ["primary", "alt"] },
+    "desktop:windows": { code: "KeyN", modifiers: ["primary", "alt"] },
+    "desktop:linux":   { code: "KeyN", modifiers: ["primary", "alt"] }
   },
   regions: ["page", "editable"],
   modals: [],
@@ -604,7 +602,7 @@ Phase 0 要向 DSH 源码/维护者确认：
 2. 调用后 `ctx.sessions.list` 是否不新增？session log 是否不新增？
 3. `purpose: "quick-chat"` 在 JS 插件里是否被接受？
 4. `shell.overlay` 的 z-index 与 DSH 模态框/菜单的关系？
-5. `ctx.shortcuts.register` 的 Desktop `Mod+Alt+K` / Web `Mod+Shift+K` 是否与现有默认值冲突？
+5. `ctx.shortcuts.register` 的 Desktop `Mod+Alt+N` 是否与现有默认值冲突？（已确认不冲突；Web 不绑定）
 
 ## 13. 验收清单
 

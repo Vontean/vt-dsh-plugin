@@ -25,7 +25,7 @@ window.__ModuleLoader__.load({
     /** 插件标识（与 package.json 的 name 一致）。 */
     const PLUGIN_ID = 'dsh-vt-quick-chat';
     /** 与 package.json 的 version 保持一致。 */
-    const VERSION = '1.1.1';
+    const VERSION = '1.1.2';
     /** 文案命名空间。 */
     const NS = 'vtQuickChat';
     /** Host 路由前缀，与 index.js 的 ROUTE_PREFIX 必须一致。 */
@@ -2131,11 +2131,10 @@ window.__ModuleLoader__.load({
         );
       });
 
-      // 快捷键：Desktop 用 Mod+Alt+N（⌘⌥N / Ctrl+Alt+N）。
-      // Web 不能复用 N：DSH 的 session.new 在 Web 上已占用 Mod+Alt+N；
-      // 也不用 Mod+Shift+N，那是浏览器「无痕窗口」的保留键，网页收不到事件。
-      // 所以 Web 用当前空闲的 Mod+Alt+Q（Q = quick chat）。
-      // Linux Web 默认不绑定（DSH 的 Web 绑定白名单不接受该组合），可在设置里指定。
+      // 快捷键：只注册桌面键位 Mod+Alt+N（⌘⌥N / Ctrl+Alt+N）。
+      // Web 不提供默认键：DSH 的 session.new 在 Web 上已占用 Mod+Alt+N，
+      // Mod+Shift+N 又是浏览器「无痕窗口」的保留键，网页收不到事件。
+      // 缺少 `web:*` 默认值时 DSH 视为未绑定，不报错，Web 端就是没有入口。
       ctx.effect(
         () => {
           try {
@@ -2147,8 +2146,6 @@ window.__ModuleLoader__.load({
                 'desktop:macos': { code: 'KeyN', modifiers: ['primary', 'alt'] },
                 'desktop:windows': { code: 'KeyN', modifiers: ['primary', 'alt'] },
                 'desktop:linux': { code: 'KeyN', modifiers: ['primary', 'alt'] },
-                'web:macos': { code: 'KeyQ', modifiers: ['primary', 'alt'] },
-                'web:windows': { code: 'KeyQ', modifiers: ['primary', 'alt'] },
               },
               regions: ['page', 'editable'],
               modals: [],
