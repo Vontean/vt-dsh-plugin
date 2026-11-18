@@ -225,6 +225,16 @@
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
       }
+    },
+    {
+      "version": "1.2.1",
+      "publishTimestamp": 1794039900,
+      "source": {
+        "type": "npm"
+      },
+      "engines": {
+        "dsh": ">=0.2.1-rc.5 <0.3.0"
+      }
     }
   ],
   "dsh-vt-system-prompt": [
@@ -303,6 +313,16 @@
       "engines": {
         "dsh": ">=0.2.1-rc.5 <0.3.0"
       }
+    },
+    {
+      "version": "1.0.1",
+      "publishTimestamp": 1794041835,
+      "source": {
+        "type": "npm"
+      },
+      "engines": {
+        "dsh": ">=0.2.1-rc.5 <0.3.0"
+      }
     }
   ],
   "dsh-vt-steer-now": [
@@ -329,6 +349,16 @@
     {
       "version": "1.0.2",
       "publishTimestamp": 1793808459,
+      "source": {
+        "type": "npm"
+      },
+      "engines": {
+        "dsh": ">=0.2.1-rc.5 <0.3.0"
+      }
+    },
+    {
+      "version": "1.0.3",
+      "publishTimestamp": 1794039986,
       "source": {
         "type": "npm"
       },

@@ -230,6 +230,16 @@
       },
       "versions": [
         {
+          "version": "1.0.1",
+          "publishTimestamp": 1794041835,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        },
+        {
           "version": "1.0.0",
           "publishTimestamp": 1793556728,
           "source": {
@@ -364,6 +374,16 @@
         "sortKeys": {}
       },
       "versions": [
+        {
+          "version": "1.0.3",
+          "publishTimestamp": 1794039986,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        },
         {
           "version": "1.0.2",
           "publishTimestamp": 1793808459,
@@ -704,6 +724,16 @@
         "sortKeys": {}
       },
       "versions": [
+        {
+          "version": "1.2.1",
+          "publishTimestamp": 1794039900,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0"
+          }
+        },
         {
           "version": "1.2.0",
           "publishTimestamp": 1793810710,
