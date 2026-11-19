@@ -35,7 +35,16 @@ window.__ModuleLoader__.load({
      * 设置缓存：小窗打开时用它决定联网/深度思考的初始状态。
      * 由设置页写入，插件加载时从 Host 拉一次。
      */
-    let settingsCache = { systemPrompt: '', provider: 'follow', webByDefault: false, deepThinkByDefault: false };
+    let settingsCache = { systemPrompt: '', provider: 'follow', webByDefault: false, deepThinkByDefault: false, deepseekConnected: true };
+
+    /**
+     * 当前通道是否支持联网与深度思考。
+     * 只有「跟随 DSH 默认」且 DeepSeek 凭证可用时才有这两个能力。
+     * @returns 是否支持。
+     */
+    function canUseWebTools() {
+      return settingsCache.provider === 'follow' && settingsCache.deepseekConnected !== false;
+    }
 
     /**
      * 宿主路由的绝对地址：按页面自身目录解析，兼容 dsh-app:// 与反向代理前缀。
@@ -96,7 +105,7 @@ window.__ModuleLoader__.load({
     async function fetchSettings() {
       const response = await fetch(routeUrl('settings'), { credentials: 'same-origin' });
       const value = await readEnvelope(response);
-      settingsCache = value.settings;
+      settingsCache = { ...value.settings, deepseekConnected: value.deepseek?.connected !== false };
       return value;
     }
 
@@ -113,7 +122,7 @@ window.__ModuleLoader__.load({
         body: JSON.stringify(next),
       });
       const value = await readEnvelope(response);
-      settingsCache = value.settings;
+      settingsCache = { ...value.settings, deepseekConnected: value.deepseek?.connected !== false };
       return value;
     }
     /** 本地历史存储键。 */
@@ -252,7 +261,10 @@ window.__ModuleLoader__.load({
       'settings.promptDefault': '内置提示词（只读参考）',
       'settings.providerLabel': '模型',
       'settings.providerHint': '指定后小窗固定用这个模型，不再尝试 DeepSeek 直连。',
-      'settings.providerFollow': '跟随 DSH 默认',
+      'settings.providerFollow': 'DeepSeek 直连（支持联网与深度思考）',
+      'settings.deepseekReady': 'DeepSeek 凭证已连接，联网与深度思考可用。',
+      'settings.deepseekMissing': '未检测到 DeepSeek 凭证：会退回 DSH 默认模型，且没有联网能力。',
+      'settings.noWebTools': '当前通道不支持联网与深度思考，输入区会隐藏这两个开关。',
       'settings.webDefault': '默认开启联网',
       'settings.webDefaultHint': '每次打开小窗时联网开关的初始状态。',
       'settings.deepThinkDefault': '默认开启深度思考',
@@ -341,7 +353,10 @@ window.__ModuleLoader__.load({
       'settings.promptDefault': 'Built-in prompt (read-only)',
       'settings.providerLabel': 'Model',
       'settings.providerHint': 'When set, the window always uses this model instead of the DeepSeek channel.',
-      'settings.providerFollow': 'Follow DSH default',
+      'settings.providerFollow': 'DeepSeek direct (web + deep thinking)',
+      'settings.deepseekReady': 'DeepSeek credentials found; web and deep thinking are available.',
+      'settings.deepseekMissing': 'No DeepSeek credentials: falls back to the DSH default model without web.',
+      'settings.noWebTools': 'This channel has no web or deep thinking; both toggles are hidden in the composer.',
       'settings.webDefault': 'Web on by default',
       'settings.webDefaultHint': 'Initial state of the Web switch when the window opens.',
       'settings.deepThinkDefault': 'Deep thinking on by default',
@@ -1144,8 +1159,9 @@ window.__ModuleLoader__.load({
           historyOpen: false,
           confirmClear: false,
           // 联网与深度思考回到设置页里的默认值：不让上一轮的计费状态静默延续。
-          web: settingsCache.webByDefault === true,
-          deepThink: settingsCache.deepThinkByDefault === true,
+          // 当前通道没有这两个能力时直接关掉，界面上也不会出现这两个开关。
+          web: canUseWebTools() && settingsCache.webByDefault === true,
+          deepThink: canUseWebTools() && settingsCache.deepThinkByDefault === true,
           files: [],
           thinking: false,
           tools: [],
@@ -1619,6 +1635,7 @@ window.__ModuleLoader__.load({
 .vqcs-cardHead{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .vqcs-label{color:var(--dsw-alias-label-primary,#0f1115);font-size:13px;font-weight:600;line-height:20px}
 .vqcs-hint{color:var(--dsw-alias-label-tertiary,#81858c);font-size:12px;line-height:18px}
+.vqcs-hint--warn{color:var(--dsw-alias-state-warn-primary,#f79009)}
 .vqcs-editor{box-sizing:border-box;width:100%;height:clamp(200px,30vh,420px);min-height:140px;max-height:70vh;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2,#0000001a);border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font-family:var(--dsw-font-markdown-code-block,ui-monospace,monospace);font-size:12.5px;line-height:1.7;resize:vertical;overflow:auto;outline:none}
 .vqcs-editor:focus-visible{border-color:var(--dsw-alias-state-business-primary,#4176e6)}
 .vqcs-editor::placeholder{color:var(--dsw-alias-label-tertiary,#81858c)}
@@ -2286,6 +2303,9 @@ window.__ModuleLoader__.load({
 
       if (!state.open) return null;
 
+      // 联网与深度思考只挂在 DeepSeek 直连通道上：选了具体模型（或没有凭证）就没这两个能力，
+      // 与其让用户点了没效果，不如把两个开关直接收起来。
+      const webToolsAvailable = canUseWebTools();
       const expanded = state.mode === 'expanded';
       const canSend = state.draft.trim().length > 0 && !state.streaming;
       const canRetry = state.messages.some((message) => message.role === 'user');
@@ -2436,19 +2456,23 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { className: 'vqc-rowActions' },
-              h(PillButton, {
-                label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
-                glyph: AtomIcon,
-              glyphSize: 15,
-                active: state.deepThink,
-                onClick: controller.toggleDeepThink,
-              }),
-              h(PillButton, {
-                label: state.web ? labels.webOn : labels.web,
-                glyph: WebGlyph,
-                active: state.web,
-                onClick: controller.toggleWeb,
-              }),
+              webToolsAvailable
+                ? h(PillButton, {
+                    label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
+                    glyph: AtomIcon,
+                    glyphSize: 15,
+                    active: state.deepThink,
+                    onClick: controller.toggleDeepThink,
+                  })
+                : null,
+              webToolsAvailable
+                ? h(PillButton, {
+                    label: state.web ? labels.webOn : labels.web,
+                    glyph: WebGlyph,
+                    active: state.web,
+                    onClick: controller.toggleWeb,
+                  })
+                : null,
               state.streaming
                 ? h(
                     'button',
@@ -2502,19 +2526,23 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { className: 'vqc-rowActions' },
-              h(PillButton, {
-                label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
-                glyph: AtomIcon,
-              glyphSize: 15,
-                active: state.deepThink,
-                onClick: controller.toggleDeepThink,
-              }),
-              h(PillButton, {
-                label: state.web ? labels.webOn : labels.web,
-                glyph: WebGlyph,
-                active: state.web,
-                onClick: controller.toggleWeb,
-              }),
+              webToolsAvailable
+                ? h(PillButton, {
+                    label: state.deepThink ? labels.deepThinkOn : labels.deepThink,
+                    glyph: AtomIcon,
+                    glyphSize: 15,
+                    active: state.deepThink,
+                    onClick: controller.toggleDeepThink,
+                  })
+                : null,
+              webToolsAvailable
+                ? h(PillButton, {
+                    label: state.web ? labels.webOn : labels.web,
+                    glyph: WebGlyph,
+                    active: state.web,
+                    onClick: controller.toggleWeb,
+                  })
+                : null,
               state.streaming
                 ? h(
                     'button',
@@ -2630,7 +2658,7 @@ window.__ModuleLoader__.load({
       React.useEffect(() => (typeof locale?.subscribe === 'function' ? locale.subscribe(() => setRevision((n) => n + 1)) : undefined), [locale]);
       const tr = (key) => (typeof t === 'function' ? t(key) : key);
 
-      const [state, setState] = React.useState({ status: 'loading', error: '', providers: [], defaultPrompt: '', settings: null });
+      const [state, setState] = React.useState({ status: 'loading', error: '', providers: [], defaultPrompt: '', settings: null, deepseek: { connected: false, via: '' } });
       const [draft, setDraft] = React.useState(null);
       const [saving, setSaving] = React.useState(false);
       const [notice, setNotice] = React.useState(null);
@@ -2640,7 +2668,7 @@ window.__ModuleLoader__.load({
         fetchSettings()
           .then((value) => {
             if (!alive) return;
-            setState({ status: 'ready', error: '', providers: value.providers ?? [], defaultPrompt: value.defaultPrompt ?? '', settings: value.settings });
+            setState({ status: 'ready', error: '', providers: value.providers ?? [], defaultPrompt: value.defaultPrompt ?? '', settings: value.settings, deepseek: value.deepseek ?? { connected: false, via: '' } });
             setDraft(value.settings);
           })
           .catch((error) => {
@@ -2664,7 +2692,7 @@ window.__ModuleLoader__.load({
         setNotice(null);
         try {
           const value = await saveSettings(draft);
-          setState((prev) => ({ ...prev, providers: value.providers ?? prev.providers, defaultPrompt: value.defaultPrompt ?? prev.defaultPrompt, settings: value.settings }));
+          setState((prev) => ({ ...prev, providers: value.providers ?? prev.providers, defaultPrompt: value.defaultPrompt ?? prev.defaultPrompt, settings: value.settings, deepseek: value.deepseek ?? prev.deepseek }));
           setDraft(value.settings);
           setNotice({ tone: 'ok', text: tr('settings.saved') });
         } catch (error) {
@@ -2750,11 +2778,18 @@ window.__ModuleLoader__.load({
             'aria-label': tr('settings.providerLabel'),
             onChange: (event) => patch({ provider: event.target.value }),
           }, options.map((option) => h('option', { key: option.value, value: option.value }, option.label))),
+          h(
+            'div',
+            { className: `vqcs-hint${state.deepseek.connected ? '' : ' vqcs-hint--warn'}` },
+            state.deepseek.connected ? tr('settings.deepseekReady') : tr('settings.deepseekMissing'),
+          ),
           h('div', { className: 'vqcs-hint' }, tr('settings.providerHint')),
         ),
 
-        // 默认开关
-        h(
+        // 默认开关：只有直连通道才有联网与深度思考，其它模型下这两项没有意义
+        providerValue !== 'follow'
+          ? h('section', { className: 'vqcs-card' }, h('div', { className: 'vqcs-hint' }, tr('settings.noWebTools')))
+          : h(
           'section',
           { className: 'vqcs-card' },
           h(

@@ -259,6 +259,22 @@ async function listProviderChoices(ctx) {
 }
 
 /**
+ * DeepSeek 直连是否可用。联网与深度思考只在直连通道有效，
+ * 客户端据此决定要不要显示这两个开关。
+ * @param ctx - Host 上下文。
+ * @returns `{ connected, via }`。
+ */
+async function deepseekStatus(ctx) {
+  try {
+    const auth = await resolveDeepSeekAuth(ctx);
+    if (auth === undefined) return { connected: false, via: '' };
+    return { connected: true, via: auth.via };
+  } catch {
+    return { connected: false, via: '' };
+  }
+}
+
+/**
  * 把设置里的 provider 值解析成 `{ provider, model }`。
  * 取值形如 `provider::model`；只写 provider 时模型留空，由调用方挑第一个。
  * @param value - 设置值。
@@ -1197,8 +1213,8 @@ async function handleSettings(req, res, ctx, admitted) {
     return;
   }
   if (req.method === 'GET') {
-    const [settings, choices] = await Promise.all([readSettings(), listProviderChoices(ctx)]);
-    writeJson(res, 200, { ok: true, value: { settings, providers: choices.providers, defaultPrompt: SYSTEM_PROMPT } });
+    const [settings, choices, deepseek] = await Promise.all([readSettings(), listProviderChoices(ctx), deepseekStatus(ctx)]);
+    writeJson(res, 200, { ok: true, value: { settings, providers: choices.providers, defaultPrompt: SYSTEM_PROMPT, deepseek } });
     return;
   }
   if (req.method !== 'POST') {
@@ -1218,8 +1234,8 @@ async function handleSettings(req, res, ctx, admitted) {
   }
   try {
     const settings = await writeSettings(input);
-    const choices = await listProviderChoices(ctx);
-    writeJson(res, 200, { ok: true, value: { settings, providers: choices.providers, defaultPrompt: SYSTEM_PROMPT } });
+    const [choices, deepseek] = await Promise.all([listProviderChoices(ctx), deepseekStatus(ctx)]);
+    writeJson(res, 200, { ok: true, value: { settings, providers: choices.providers, defaultPrompt: SYSTEM_PROMPT, deepseek } });
   } catch (error) {
     writeJson(res, 500, {
       ok: false,
