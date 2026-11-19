@@ -1884,6 +1884,22 @@ window.__ModuleLoader__.load({
       });
     }
 
+    /**
+     * 流式跟随的滚动目标。
+     *
+     * 平时跟到底部；一旦「跟随到底部」会把用户的问题顶到分隔线以上，
+     * 就停在问题贴顶的位置（`padTop` 由容器内边距给出），
+     * 这样长回答流式输出时视野不会再往下跑。
+     * @param bottom - 滚到底部时的 scrollTop。
+     * @param pinTop - 问题气泡贴顶时的 scrollTop。
+     * @returns 应当设置的 scrollTop。
+     */
+    function followScrollTop(bottom, pinTop) {
+      if (typeof pinTop !== 'number' || !Number.isFinite(pinTop)) return bottom;
+      const cap = Math.max(0, pinTop);
+      return bottom > cap + 1 ? cap : bottom;
+    }
+
     /** 由 apply 注入的文案函数；error boundary 无法通过 props 拿到上下文。 */
     let tRef = (key) => key;
 
@@ -2302,6 +2318,8 @@ window.__ModuleLoader__.load({
       const wasOpen = React.useRef(false);
       const previousFocus = React.useRef(null);
       const atBottom = React.useRef(true);
+      /** 跟随状态：本轮是否已停在问题贴顶处、用户是否自己滚到底部要求继续跟随。 */
+      const followState = React.useRef({ userCount: 0, pinned: false, uncapped: false });
 
       React.useEffect(() => {
         if (state.open && !wasOpen.current) {
@@ -2323,7 +2341,33 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         const node = bodyRef.current;
         if (node === null) return;
-        if (atBottom.current) node.scrollTop = node.scrollHeight;
+        const follow = followState.current;
+        // 新一轮提问（用户消息变多）重新开始跟随。
+        const userCount = state.messages.reduce((count, message) => (message.role === 'user' ? count + 1 : count), 0);
+        if (userCount !== follow.userCount) {
+          followState.current = { userCount, pinned: false, uncapped: false };
+          // 新问题必须回到视野：上一轮可能停在贴顶处，此时 atBottom 是 false。
+          atBottom.current = true;
+        }
+        const current = followState.current;
+        if (!atBottom.current) return;
+        const bottom = node.scrollHeight - node.clientHeight;
+        if (current.uncapped) {
+          node.scrollTop = bottom;
+          return;
+        }
+        const bubbles = node.querySelectorAll('.vqc-msg--user');
+        const last = bubbles[bubbles.length - 1];
+        if (last === undefined) {
+          node.scrollTop = bottom;
+          return;
+        }
+        const padTop = Number.parseFloat(window.getComputedStyle(node).paddingTop) || 12;
+        const pinTop = last.getBoundingClientRect().top - node.getBoundingClientRect().top - padTop + node.scrollTop;
+        const target = followScrollTop(bottom, pinTop);
+        node.scrollTop = target;
+        // 停在问题贴顶处：本轮不再自动跟随，除非用户自己滚到底部。
+        current.pinned = target < bottom;
       }, [state.messages, state.streamText, state.error, state.historyOpen]);
 
       /** 打开系统文件选择器；真正的上传在 controller.addFiles 里。 */
@@ -2335,7 +2379,10 @@ window.__ModuleLoader__.load({
       const onScroll = () => {
         const node = bodyRef.current;
         if (node === null) return;
-        atBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+        const near = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+        // 已经停在问题贴顶处，用户又自己滚回底部：尊重这次动作，本轮不再截停。
+        if (near && followState.current.pinned) followState.current.uncapped = true;
+        atBottom.current = near;
       };
 
       /**
@@ -3216,6 +3263,7 @@ window.__ModuleLoader__.load({
         trimForRequest,
         createController,
         QuickChatPanel,
+        followScrollTop,
         deepseekCacheOf,
         deepseekViewOf,
         canUseWebTools,

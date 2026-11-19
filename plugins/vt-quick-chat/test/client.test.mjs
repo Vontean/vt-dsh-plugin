@@ -918,3 +918,31 @@ test('强调色不用 brand-primary（它是文字色，浅色主题下会变黑
   assert.equal(css.includes('--dsw-alias-brand-primary'), false);
   assert.ok(css.includes('--dsw-alias-state-business-primary'));
 });
+
+// ── 流式跟随：问题贴顶后停止自动滚动 ────────────────────────────────────
+
+test('followScrollTop：还没顶到问题位置时跟到底部', () => {
+  const { followScrollTop } = loadClient().internals;
+  // bottom 还没越过 pinTop：正常跟随
+  assert.equal(followScrollTop(120, 400), 120);
+});
+
+test('followScrollTop：跟随会顶飞问题时停在贴顶处', () => {
+  const { followScrollTop } = loadClient().internals;
+  assert.equal(followScrollTop(900, 400), 400);
+  // 1px 内视为同一位置，保持跟随，避免抖动
+  assert.equal(followScrollTop(400, 400), 400);
+  assert.equal(followScrollTop(401, 400), 401);
+  assert.equal(followScrollTop(402, 400), 400);
+});
+
+test('followScrollTop：没有用户气泡时跟到底部', () => {
+  const { followScrollTop } = loadClient().internals;
+  assert.equal(followScrollTop(500, undefined), 500);
+  assert.equal(followScrollTop(500, Number.NaN), 500);
+});
+
+test('followScrollTop：pinTop 为负时钳到 0，不会产生负的 scrollTop', () => {
+  const { followScrollTop } = loadClient().internals;
+  assert.equal(followScrollTop(300, -20), 0);
+});
