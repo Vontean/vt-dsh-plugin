@@ -1695,8 +1695,10 @@ window.__ModuleLoader__.load({
 .vqcs-link{appearance:none;padding:0;border:0;background:none;color:var(--dsw-alias-brand-primary,#4d6bfe);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
 .vqcs-link:disabled{opacity:.45;cursor:default}
 .vqcs-link:hover:not(:disabled){text-decoration:underline}
-/* 键位标签：与 DSH 的键帽同一套语言（等宽、细边框、轻底色） */
-.vqcs-keycap{display:inline-flex;align-items:center;width:fit-content;padding:1px 6px;border:.5px solid var(--dsw-alias-border-l2,#0000001a);border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2,#f5f6f7);color:var(--dsw-alias-label-primary,#0f1115);font-family:var(--dsw-font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:12px;line-height:18px;letter-spacing:.02em}
+/* 键位：照抄 DSH 快捷键速查里的 .keys/.key——不加边框与底色，
+   tertiary 色 + 3px 键间距；带底色那种只用于 tooltip。 */
+.vqcs-keys{display:inline-flex;flex:none;align-items:center;gap:3px;width:fit-content;color:var(--dsw-alias-label-tertiary,#81858c);font-size:12px;line-height:16px;white-space:nowrap}
+.vqcs-keycap{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;font:inherit}
 .vqc-historyRemove:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-historyEmpty{padding:16px 4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-composer{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;flex:none;padding:10px;border-top:.5px solid var(--dsw-alias-border-l2,#0000001a)}
@@ -2686,7 +2688,7 @@ window.__ModuleLoader__.load({
      * 快捷键注册结果。注册失败时 DSH 只会静默不触发，所以把结果留在这里，
      * 让设置页能说明「键位没生效」，而不是让用户反复按键。
      */
-    let shortcutState = { ok: false, label: '', error: '' };
+    let shortcutState = { ok: false, keys: [], error: '' };
 
     /** 设置页里「立即打开」的入口；由激活流程注入。 */
     let openNow = null;
@@ -2896,7 +2898,11 @@ window.__ModuleLoader__.load({
               'span',
               { className: 'vqcs-rowText' },
               shortcutState.ok
-                ? h('kbd', { className: 'vqcs-keycap' }, shortcutState.label)
+                ? h(
+                    'span',
+                    { className: 'vqcs-keys' },
+                    shortcutState.keys.map((key, index) => h('kbd', { className: 'vqcs-keycap', key: index }, key)),
+                  )
                 : h('span', { className: 'vqcs-hint vqcs-hint--warn' }, tr('settings.triggerMissing')),
               h('span', { className: 'vqcs-hint' }, tr('settings.triggerHint')),
             ),
@@ -3090,7 +3096,7 @@ window.__ModuleLoader__.load({
               modals: [],
               resolve: () => ({ status: 'handled', run: () => controller.toggle() }),
             });
-            shortcutState = { ok: true, label: isMacLike() ? '⌘⇧K' : 'Ctrl+Shift+K', error: '' };
+            shortcutState = { ok: true, keys: isMacLike() ? ['⌘', '⇧', 'K'] : ['Ctrl', '+', 'Shift', '+', 'K'], error: '' };
             return disposer;
           } catch (error) {
             // 与第三方插件的键位冲突不应让整个插件（乃至 Web boot）失败；
