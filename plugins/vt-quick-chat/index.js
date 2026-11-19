@@ -266,11 +266,11 @@ async function listProviderChoices(ctx) {
  */
 async function deepseekStatus(ctx) {
   try {
-    const auth = await resolveDeepSeekAuth(ctx);
-    if (auth === undefined) return { connected: false, via: '' };
-    return { connected: true, via: auth.via };
+    const { auth, reason } = await probeDeepSeekAuth(ctx);
+    if (auth === undefined) return { connected: false, via: '', reason };
+    return { connected: true, via: auth.via, reason };
   } catch {
-    return { connected: false, via: '' };
+    return { connected: false, via: '', reason: 'error' };
   }
 }
 
@@ -580,39 +580,54 @@ async function resolveTarget(ctx, llm) {
 }
 
 /**
- * 解析 DeepSeek 凭证。
+ * 探测 DeepSeek 凭证，并说明结论的依据。
  *
  * 顺序：账号授权 → API Key。账号授权不需要用户另存密钥，退出登录后自动落到
- * API Key；两者都没有时返回 undefined，由调用方降级到默认模型通道。
+ * API Key。设置页要据此告诉用户「能用」还是「缺什么」，所以这里把原因一并返回，
+ * 而不是只给一个布尔值——猜错了会让用户以为自己没有凭证。
+ * @param ctx - Host 插件上下文。
+ * @returns `{ auth, reason }`；不可用时 `auth` 为 undefined。
+ */
+async function probeDeepSeekAuth(ctx) {
+  // 账号服务缺席只是少一条路，API Key 仍然可能可用，所以不提前返回。
+  let reason = 'account-service-missing';
+  const account = ctx.get('deepseekAccount');
+  if (account !== undefined && account !== null && typeof account.resolveToken === 'function') {
+    reason = 'missing';
+    try {
+      // resolveToken 校验目标地址是否属于推理源；传真实请求地址，语义最直接。
+      const token = await account.resolveToken(`${DEEPSEEK_BASE_URL}/anthropic/v1/messages`);
+      if (typeof token === 'string' && token.length > 0) {
+        return { auth: { via: 'account', headers: { [ACCOUNT_TOKEN_HEADER]: token } }, reason: 'account' };
+      }
+    } catch {
+      // 未登录、授权失效或地址不被允许：继续尝试 API Key。
+    }
+  }
+  const credentials = ctx.get('credentials');
+  if (credentials === undefined || credentials === null || typeof credentials.resolve !== 'function') {
+    return { auth: undefined, reason: reason === 'missing' ? 'credentials-service-missing' : reason };
+  }
+  try {
+    const hit = await credentials.resolve(DEEPSEEK_API_KEY_REF);
+    const value = hit?.value;
+    if (typeof value === 'string' && value.length > 0) {
+      return { auth: { via: 'api-key', headers: { 'x-api-key': value } }, reason: 'api-key' };
+    }
+  } catch {
+    // 凭证服务不可用：交给调用方降级。
+  }
+  return { auth: undefined, reason };
+}
+
+/**
+ * 解析 DeepSeek 凭证。
  * @param ctx - Host 插件上下文。
  * @returns `{ via, headers }`；不可用时返回 undefined。
  */
 async function resolveDeepSeekAuth(ctx) {
-  const account = ctx.get('deepseekAccount');
-  if (account !== undefined && account !== null && typeof account.resolveToken === 'function') {
-    try {
-      // resolveToken 会校验目标地址；传根地址即可覆盖 Messages 端点。
-      const token = await account.resolveToken(DEEPSEEK_BASE_URL);
-      if (typeof token === 'string' && token.length > 0) {
-        return { via: 'account', headers: { [ACCOUNT_TOKEN_HEADER]: token } };
-      }
-    } catch {
-      // 未登录或地址不被允许：继续尝试 API Key。
-    }
-  }
-  const credentials = ctx.get('credentials');
-  if (credentials !== undefined && credentials !== null && typeof credentials.resolve === 'function') {
-    try {
-      const hit = await credentials.resolve(DEEPSEEK_API_KEY_REF);
-      const value = hit?.value;
-      if (typeof value === 'string' && value.length > 0) {
-        return { via: 'api-key', headers: { 'x-api-key': value } };
-      }
-    } catch {
-      // 凭证服务不可用：交给调用方降级。
-    }
-  }
-  return undefined;
+  const { auth } = await probeDeepSeekAuth(ctx);
+  return auth;
 }
 
 /**
@@ -1305,4 +1320,6 @@ export const __test = {
   resolveTarget,
   firstAvailableTarget,
   resolveDeepSeekAuth,
+  probeDeepSeekAuth,
+  deepseekStatus,
 };

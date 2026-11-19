@@ -4,6 +4,9 @@ import test from 'node:test';
 
 import { apply, __test } from '../index.js';
 
+/** 跨 realm / 冻结对象比较前归一化成纯数据。 */
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
 const {
   sanitizeBlocks,
   sanitizeFiles,
@@ -496,4 +499,69 @@ test('不带文件时不发 beta 头', async () => {
   } finally {
     restore();
   }
+});
+
+// ── 凭证探测：结论要带依据，缺什么说什么 ────────────────────────────────
+
+const { probeDeepSeekAuth, deepseekStatus, DEEPSEEK_API_KEY_REF } = __test;
+
+/** 只实现 get() 的最小上下文。 */
+function servicesContext(services) {
+  return { get: (name) => services[name] };
+}
+
+test('账号授权可用时直接返回账号通道，并说明依据', async () => {
+  const ctx = servicesContext({
+    deepseekAccount: { resolveToken: async (url) => (url === DEEPSEEK_MESSAGES_URL ? 'tok' : undefined) },
+    credentials: { resolve: async () => ({ value: 'key' }) },
+  });
+  const { auth, reason } = await probeDeepSeekAuth(ctx);
+  assert.equal(reason, 'account');
+  assert.equal(auth.via, 'account');
+  assert.deepEqual(plain(auth.headers), plain({ 'x-dsh-auth-token': 'tok' }));
+});
+
+test('账号未登录时落到 API Key 通道', async () => {
+  const ctx = servicesContext({
+    deepseekAccount: { resolveToken: async () => undefined },
+    credentials: { resolve: async () => ({ value: 'key' }) },
+  });
+  const { auth, reason } = await probeDeepSeekAuth(ctx);
+  assert.equal(reason, 'api-key');
+  assert.equal(auth.via, 'api-key');
+  assert.deepEqual(plain(auth.headers), plain({ 'x-api-key': 'key' }));
+});
+
+test('两个来源都没有时说清楚缺的是哪一环', async () => {
+  const noAccount = servicesContext({ credentials: { resolve: async () => undefined } });
+  assert.equal((await probeDeepSeekAuth(noAccount)).reason, 'account-service-missing');
+
+  const noCredentials = servicesContext({ deepseekAccount: { resolveToken: async () => undefined } });
+  assert.equal((await probeDeepSeekAuth(noCredentials)).reason, 'credentials-service-missing');
+
+  const both = servicesContext({
+    deepseekAccount: { resolveToken: async () => undefined },
+    credentials: { resolve: async () => ({ value: '' }) },
+  });
+  const { auth, reason } = await probeDeepSeekAuth(both);
+  assert.equal(auth, undefined);
+  assert.equal(reason, 'missing');
+});
+
+test('账号授权抛错不会中断探测，仍尝试 API Key', async () => {
+  const ctx = servicesContext({
+    deepseekAccount: { resolveToken: async () => { throw new Error('storage'); } },
+    credentials: { resolve: async () => ({ value: 'key' }) },
+  });
+  assert.equal((await probeDeepSeekAuth(ctx)).reason, 'api-key');
+});
+
+test('deepseekStatus 把依据一并交给客户端', async () => {
+  const ok = servicesContext({
+    deepseekAccount: { resolveToken: async () => 'tok' },
+  });
+  assert.deepEqual(plain(await deepseekStatus(ok)), { connected: true, via: 'account', reason: 'account' });
+
+  const missing = servicesContext({ deepseekAccount: { resolveToken: async () => undefined }, credentials: { resolve: async () => undefined } });
+  assert.deepEqual(plain(await deepseekStatus(missing)), { connected: false, via: '', reason: 'missing' });
 });
