@@ -1619,14 +1619,19 @@ window.__ModuleLoader__.load({
 .vqcs-cardHead{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .vqcs-label{color:var(--dsw-alias-label-primary,#0f1115);font-size:13px;font-weight:600;line-height:20px}
 .vqcs-hint{color:var(--dsw-alias-label-tertiary,#81858c);font-size:12px;line-height:18px}
-.vqcs-editor{box-sizing:border-box;width:100%;min-height:180px;max-height:420px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2,#0000001a);border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font-family:var(--dsw-font-markdown-code-block,ui-monospace,monospace);font-size:12.5px;line-height:1.7;resize:vertical;outline:none}
+.vqcs-editor{box-sizing:border-box;width:100%;height:clamp(200px,30vh,420px);min-height:140px;max-height:70vh;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2,#0000001a);border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font-family:var(--dsw-font-markdown-code-block,ui-monospace,monospace);font-size:12.5px;line-height:1.7;resize:vertical;overflow:auto;outline:none}
 .vqcs-editor:focus-visible{border-color:var(--dsw-alias-state-business-primary,#4176e6)}
 .vqcs-editor::placeholder{color:var(--dsw-alias-label-tertiary,#81858c)}
-.vqcs-select{box-sizing:border-box;width:100%;padding:6px 10px;border:1px solid var(--dsw-alias-border-l2,#0000001a);border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font:inherit;font-size:13px;line-height:20px;outline:none}
+.vqcs-select{box-sizing:border-box;width:100%;padding:6px 34px 6px 10px;border:1px solid var(--dsw-alias-border-l2,#0000001a);border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font:inherit;font-size:13px;line-height:20px;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%2381858c' stroke-width='1'%3E%3Cpath d='M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
 .vqcs-select:focus-visible{border-color:var(--dsw-alias-state-business-primary,#4176e6)}
 .vqcs-row{display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer}
 .vqcs-rowText{display:flex;flex-direction:column;gap:2px;min-width:0}
-.vqcs-switch{flex:none;width:16px;height:16px;accent-color:var(--dsw-alias-state-business-primary,#4176e6);cursor:pointer}
+.vqcs-switch{position:relative;flex:none;width:36px;height:20px;padding:0;border:0;border-radius:999px;background:var(--dsw-alias-border-l2,#0000001a);cursor:pointer;transition:background .12s}
+.vqcs-switch--on{background:var(--dsw-alias-state-business-primary,#4176e6)}
+.vqcs-switch:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:2px}
+.vqcs-knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0000002e;transition:transform .12s}
+.vqcs-switch--on .vqcs-knob{transform:translateX(16px)}
+@media (prefers-reduced-motion:reduce){.vqcs-switch,.vqcs-knob{transition:none}}
 .vqcs-divider{height:1px;background:var(--dsw-alias-border-l1,#0000000a)}
 .vqcs-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:20px}
 .vqcs-status{font-size:12px;line-height:18px;color:var(--dsw-alias-state-success-primary,#12b76a)}
@@ -1682,6 +1687,31 @@ window.__ModuleLoader__.load({
           disabled,
         },
         glyph ? h(glyph, { size }) : h(DshIcon, { name: icon, size }),
+      );
+    }
+
+    /**
+     * 引用 chip 的图标：Lucide 的 type（衬线 T）。24 viewBox + 描边 2，
+     * 渲染到 14px 时描边约 1.2px，比 DSH 的 1px 略重，但 T 的笔画本来就细，
+     * 在这个尺寸下反而更清楚。
+     */
+    function TypeGlyph({ size = 14 }) {
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 24 24',
+          width: size,
+          height: size,
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 2,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': 'true',
+        },
+        h('polyline', { points: '4 7 4 4 20 4 20 7' }),
+        h('line', { x1: 9, y1: 20, x2: 15, y2: 20 }),
+        h('line', { x1: 12, y1: 4, x2: 12, y2: 20 }),
       );
     }
 
@@ -1969,7 +1999,7 @@ window.__ModuleLoader__.load({
       return h(
         'span',
         { className: 'vqc-fileChip vqc-fileChip--quote', title: text },
-        h(DshIcon, { name: 'IconContextInjectionOutlineRegular', size: 14 }),
+        h(TypeGlyph, { size: 14 }),
         h('span', { className: 'vqc-fileName' }, text.length > 0 ? text : label),
         h(
           'button',
@@ -2571,6 +2601,25 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 开关：设置页里的两个默认值用它，而不是 Checkbox。
+     * @param props - checked/onChange/label。
+     */
+    function Switch({ checked, onChange, label }) {
+      return h(
+        'button',
+        {
+          type: 'button',
+          role: 'switch',
+          'aria-checked': checked === true ? 'true' : 'false',
+          'aria-label': label,
+          className: `vqcs-switch${checked === true ? ' vqcs-switch--on' : ''}`,
+          onClick: () => onChange(!(checked === true)),
+        },
+        h('span', { className: 'vqcs-knob' }),
+      );
+    }
+
+    /**
      * 「设置 → 快捷提问」页面。
      * 只做四件事：改系统提示词、选模型、设定联网/深度思考的默认开关。
      * 数据走 Host 的 /vt-quick-chat/api/settings，客户端不直接碰文件。
@@ -2709,17 +2758,17 @@ window.__ModuleLoader__.load({
           'section',
           { className: 'vqcs-card' },
           h(
-            'label',
+            'div',
             { className: 'vqcs-row' },
             h('span', { className: 'vqcs-rowText' }, h('span', { className: 'vqcs-label' }, tr('settings.webDefault')), h('span', { className: 'vqcs-hint' }, tr('settings.webDefaultHint'))),
-            h('input', { type: 'checkbox', className: 'vqcs-switch', checked: draft.webByDefault === true, onChange: (event) => patch({ webByDefault: event.target.checked }) }),
+            h(Switch, { checked: draft.webByDefault === true, label: tr('settings.webDefault'), onChange: (value) => patch({ webByDefault: value }) }),
           ),
           h('div', { className: 'vqcs-divider' }),
           h(
-            'label',
+            'div',
             { className: 'vqcs-row' },
             h('span', { className: 'vqcs-rowText' }, h('span', { className: 'vqcs-label' }, tr('settings.deepThinkDefault')), h('span', { className: 'vqcs-hint' }, tr('settings.deepThinkDefaultHint'))),
-            h('input', { type: 'checkbox', className: 'vqcs-switch', checked: draft.deepThinkByDefault === true, onChange: (event) => patch({ deepThinkByDefault: event.target.checked }) }),
+            h(Switch, { checked: draft.deepThinkByDefault === true, label: tr('settings.deepThinkDefault'), onChange: (value) => patch({ deepThinkByDefault: value }) }),
           ),
         ),
 
