@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-sidebar-sort",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Drag the global panel rows under New Session into your own order, and drop one on the More row to file it into the More menu; the drag caret is the same one the session list draws.",
   "license": "MIT",

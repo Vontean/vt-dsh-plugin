@@ -30,7 +30,7 @@ window.__ModuleLoader__.load({
     /** Package identity: one source for the module id and every log/storage prefix. */
     const PLUGIN_ID = 'dsh-vt-sidebar-sort';
     /** Must equal `version` in package.json. */
-    const VERSION = '1.0.0';
+    const VERSION = '1.0.1';
 
     // Mount trace: one line naming the loaded build (DevTools → verbose level).
     console.debug(`[${PLUGIN_ID}] v${VERSION}`);
@@ -131,9 +131,10 @@ window.__ModuleLoader__.load({
 
     /**
      * The panel id behind a row. The row renders no id of its own, so the id is
-     * read from the `PanelRow` fiber props (`id`, `label`, `renderSlot`) a few
-     * frames above the button; `getAttribute('aria-label')` is the fallback for
-     * a React version that hides its internals. The answer is cached on the node:
+     * read from the `PanelRow` fiber props (`id`, `label`, `renderSlot` — renamed
+     * `renderFactorySlot` in 0.2.2) a few frames above the button;
+     * `getAttribute('aria-label')` is the fallback for a React version that hides
+     * its internals. The answer is cached on the node:
      * React keys rows by id, so a reused node still means the same panel.
      * @param button - one panel row button.
      * @returns the stable key used by the saved layout.
@@ -151,7 +152,9 @@ window.__ModuleLoader__.load({
           typeof props === 'object' &&
           typeof props.id === 'string' &&
           typeof props.label === 'string' &&
-          typeof props.renderSlot === 'function'
+          // 0.2.2 把 PanelRow 的 renderSlot 改名成 renderFactorySlot；两个都认，
+          // 否则身份会退化成 label: 前缀，旧顺序失效、切语言后顺序还会丢。
+          (typeof props.renderSlot === 'function' || typeof props.renderFactorySlot === 'function')
         ) {
           id = props.id;
           labels.set(id, props.label);
@@ -259,8 +262,9 @@ button.vt-sort-after::after { bottom: -7px; }
 /* 被拖起的行：悬浮影像由浏览器绘制，本体压暗，避免看起来有两份。 */
 [data-vt-sort-dragging] button.vt-sort-source { opacity: 0.45; }
 
-/* 收进「更多」的行。侧边栏自己的 display:flex 会压过 UA 的 [hidden]，必须 !important。 */
-button.vt-sort-filed { display: none !important; }
+/* 收进「更多」的行。侧边栏自己的 display:flex 会压过 UA 的 [hidden]，必须 !important。
+   类挂在 entry 外层（0.2.2 起行按钮外面包了一层），只藏按钮会留下空行。 */
+.vt-sort-filed { display: none !important; }
 
 /* 「更多」作为投放目标：底色 + 内描边 + 主色文字，导轨文字提示随后。 */
 button.vt-sort-more-over {
@@ -392,9 +396,32 @@ button.vt-sort-more-accept { animation: vt-sort-accept 480ms var(--ds-ease-in-ou
         });
       }
 
-      /** Direct panel-row children only; the More button is nested in its anchor. */
+      /**
+       * Every panel row in DOM order. The More button also carries `_panelRow`,
+       * so it is filtered out by its `aria-haspopup`; 0.2.2 nests each row in an
+       * entry wrapper, so this can no longer be a direct-child query.
+       */
       function rows() {
-        return nav === null ? [] : Array.from(nav.querySelectorAll(`:scope > ${ROW_SELECTOR}`));
+        if (nav === null) return [];
+        return Array.from(nav.querySelectorAll(ROW_SELECTOR)).filter(
+          (row) => row.getAttribute('aria-haspopup') !== 'menu',
+        );
+      }
+
+      /**
+       * The node to move when a row changes place. 0.2.2 wraps each row in
+       * `div[class*="_panelEntry"]` together with its unpin button and its active
+       * state, so moving the button alone would strip those. Older builds put the
+       * row straight under `<nav>`, where the row owns itself.
+       * @param node - a panel row button (or the More button).
+       * @returns the direct child of `<nav>` that owns it, or null when detached.
+       */
+      function entryOf(node) {
+        let current = node;
+        while (current !== null && current.parentElement !== null && current.parentElement !== nav) {
+          current = current.parentElement;
+        }
+        return current !== null && current.parentElement === nav ? current : null;
       }
 
       function moreButton() {
@@ -435,20 +462,23 @@ button.vt-sort-more-accept { animation: vt-sort-accept 480ms var(--ds-ease-in-ou
           // 否则鼠标怎么拖都不会有 drag 事件（点击不受影响，浏览器有拖动阈值）。
           if (nodes[index].draggable !== true) nodes[index].draggable = true;
           // 收起的行用类隐藏（display 由本插件的 !important 规则接管，读屏同样跳过）。
-          nodes[index].classList.toggle('vt-sort-filed', state.hidden.includes(ids[index]));
+          // 类挂在外层 entry 上：只藏按钮会留下一个空的外层，行间距还在。
+          const entry = entryOf(nodes[index]);
+          if (entry !== null) entry.classList.toggle('vt-sort-filed', state.hidden.includes(ids[index]));
         }
 
         const desired = sortBySaved(ids);
         if (!sameOrder(ids, desired)) {
+          // 移动外层 entry：按钮自己挪走会把取消固定按钮和激活态留在原地。
           const byId = new Map();
-          ids.forEach((id, index) => byId.set(id, nodes[index]));
-          nav.append(...desired.map((id) => byId.get(id)).filter((node) => node !== undefined));
+          ids.forEach((id, index) => byId.set(id, entryOf(nodes[index])));
+          nav.append(...desired.map((id) => byId.get(id)).filter((node) => node !== null && node !== undefined));
         }
 
         // 「更多」永远收尾，即使 React 之后插入新行也一样。
         const more = moreButton();
-        const anchor = more === null ? null : more.parentElement;
-        if (anchor !== null && anchor.parentElement === nav && nav.lastElementChild !== anchor) {
+        const anchor = more === null ? null : entryOf(more);
+        if (anchor !== null && nav.lastElementChild !== anchor) {
           nav.appendChild(anchor);
         }
       }
@@ -497,7 +527,11 @@ button.vt-sort-more-accept { animation: vt-sort-accept 480ms var(--ds-ease-in-ou
           return;
         }
 
-        const candidates = rows().filter((row) => row !== drag.node && !row.classList.contains('vt-sort-filed'));
+        const candidates = rows().filter((row) => {
+          if (row === drag.node) return false;
+          const entry = entryOf(row);
+          return entry === null || !entry.classList.contains('vt-sort-filed');
+        });
         let marker = null;
         for (const row of candidates) {
           const rect = row.getBoundingClientRect();
@@ -532,7 +566,8 @@ button.vt-sort-more-accept { animation: vt-sort-accept 480ms var(--ds-ease-in-ou
         } else {
           const button = target.closest(ROW_SELECTOR);
           // 只接管本列表内的行：会话行、工作区行和「更多」自己都不碰。
-          if (button === null || button.parentElement !== nav) return;
+          // 0.2.2 起行按钮的父节点是 entry 外层，所以按「是否属于 nav 里的面板行」判断。
+          if (button === null || nav === null || !nav.contains(button)) return;
           if (button.getAttribute('aria-haspopup') === 'menu') return;
           id = panelIdentity(button);
           from = 'nav';

@@ -34,7 +34,7 @@
 dsh plugin --profile <profile> add dsh-vt-sidebar-sort
 
 # Release tarball
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-sidebar-sort-1.0.0.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-sidebar-sort-1.0.1.tgz
 ```
 
 装完**必须重启 dsh**，刷新页面不生效。
@@ -42,8 +42,26 @@ dsh plugin --profile <profile> add /绝对路径/dsh-vt-sidebar-sort-1.0.0.tgz
 ## 支持的 DSH 版本
 
 `engines.dsh` 为 `>=0.2.1-rc.5 <0.3.0`，与合并时的应用运行版本一致。超出范围 DSH 会在加载前拒绝该插件，
-不会带着不兼容的代码跑起来。本插件按 CSS Module 类名的稳定后缀（`_panelList` / `_panelRow`）定位侧边栏，
-并按「唯一带 `aria-haspopup` 的面板行」识别「更多」，大版本升级后请先确认这两点仍然成立。
+不会带着不兼容的代码跑起来。
+
+定位侧边栏依赖三处看起来稳定的宿主标记，大版本升级后请先确认它们仍然成立：
+
+| 依赖 | 0.2.1 | 0.2.2 起 |
+|---|---|---|
+| 列表容器 | `nav[class*="_panelList"]` | 同上 |
+| 行按钮 | `button[class*="_panelRow"]`，`<nav>` 的直接子元素 | 行被包进 `div[class*="_panelEntry"]`，同一层还有「取消固定」按钮；排序与隐藏都以这个外层为单位 |
+| 行身份 | `PanelRow` fiber 的 `renderSlot` | 改名为 `renderFactorySlot`；两者都认，认不出时退回 `aria-label` |
+| 「更多」 | 唯一带 `aria-haspopup="menu"` 的面板行 | 同上 |
+
+## 与原生「固定 / 取消固定」的关系
+
+0.2.2 起 DSH 自己在每行右侧提供取消固定按钮，取消固定的入口会进入「更多」并带固定按钮。本插件的
+「拖进更多」是**另一套**状态：只在本插件内隐藏该行，不影响 DSH 的固定状态，因此：
+
+- 两边互不覆盖：原生取消固定后行会从列表消失，本插件仍保留它原来的排序位；重新固定后按原位置回来。
+- 「更多」里看到的可拖行来自本插件，带固定按钮的行来自 DSH 原生，两者不会重复。
+
+如果只想保留一套，用 DSH 原生固定即可，把本插件的收起项全部拖回列表后它就不再介入「更多」菜单。
 
 ## 安全边界
 
