@@ -120,8 +120,8 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 | 状态 | 行为 |
 |---|---|
 | `closed` | 不渲染；历史保留；下次打开是新的临时对话 |
-| `compact` | 48px 输入条；Enter 发送；有对话时上方多一条 36px 状态行 |
-| `expanded` | 36px 状态行 + 消息区 + composer + 提示行；可停止/复制/重试/历史 |
+| `compact` | 48px 输入条；Enter 发送；有对话时上方多一条 44px 状态行 |
+| `expanded` | 44px 状态行 + 消息区 + composer + 提示行；可停止/复制/重试/历史 |
 | `history` | expanded 内的子视图；不改变主状态。列表是 DSH 会话列表那种单行结构：标题 + 右侧相对时间，hover 时时间换成删除 |
 
 ### 设置（settings.section）
@@ -218,7 +218,11 @@ SSE 和小窗自己的对话流是同一套鉴权与写法，不需要额外的�
 - 表面：`--dsw-alias-bg-layer-2` + `--dsw-elevation-prominent`；
   把 `--dsw-elevation-stroke-color` 设为 `--dsw-alias-border-l2`，`border: 0`，
   避免 elevation 的 0.5px 描边叠加成粗线。
-- 圆角：`--dsw-radius-lg`（16px）；按钮/chip `--dsw-radius-sm`；气泡 `--dsw-radius-md`。
+- 圆角：窗口统一 `--vqc-radius: 24px`；按钮/chip `--dsw-radius-sm`；气泡 `--dsw-radius-md`。
+- 单行胶囊：紧凑态只剩一行输入（无消息/附件/引用/错误/折行）时，窗口 `border-radius: 999px`，
+  48px 高即等于 24px——和常态窗口同一个值，所以展开/收起只有高度在变，圆角不跳档。
+- 状态行高度 44px、左右内边距 16 / 12：24 圆角在窗口顶部会吃掉约 6px 的横向依据，
+  36px 的行高会让标题和右侧图标压在弧线上，44px 才算真正让开。
 
 消息区的排版照 DSH 来，不用「你 / 助手」这类角色标签：
 

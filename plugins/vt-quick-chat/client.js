@@ -1557,12 +1557,12 @@ window.__ModuleLoader__.load({
    也能随时看，而且设置页里的「立即打开」必须真的出现在最前面。
    根层整体 click-through，只有卡片自己接指针事件。 */
 .vqc-root{position:absolute;inset:0;pointer-events:none;z-index:2000}
-.vqc-panel{position:absolute;right:24px;bottom:96px;display:flex;flex-direction:column;box-sizing:border-box;width:min(420px,calc(100vw - 32px));background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);border:0;border-radius:var(--dsw-radius-lg,16px);box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);--dsw-elevation-stroke-color:var(--dsw-alias-border-l2,#0000001a);pointer-events:auto;overflow:hidden;font-size:var(--dsh-content-font-size,14px);line-height:1.55;animation:vqc-rise 160ms ease-out}
+.vqc-panel{position:absolute;right:24px;bottom:96px;display:flex;flex-direction:column;box-sizing:border-box;width:min(420px,calc(100vw - 32px));background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);border:0;border-radius:var(--vqc-radius,24px);--vqc-radius:24px;box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);--dsw-elevation-stroke-color:var(--dsw-alias-border-l2,#0000001a);pointer-events:auto;overflow:hidden;font-size:var(--dsh-content-font-size,14px);line-height:1.55;animation:vqc-rise 160ms ease-out}
 .vqc-panel--compact{min-height:48px;max-height:240px}
 .vqc-panel--expanded{height:min(520px,calc(100dvh - 120px))}
 @keyframes vqc-rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.vqc-panel{animation:none}.vqc-caret{animation:none}}
-.vqc-convbar{display:flex;align-items:center;gap:8px;flex:none;height:36px;padding:0 8px 0 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#0000000a)}
+.vqc-convbar{display:flex;align-items:center;gap:8px;flex:none;height:44px;padding:0 12px 0 16px;border-bottom:.5px solid var(--dsw-alias-border-l1,#0000000a)}
 .vqc-convTitle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--dsh-content-font-size-secondary,13px);font-weight:500;line-height:20px;color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-convActions{display:flex;align-items:center;gap:2px;flex:none;margin-left:auto}
 .vqc-iconbtn{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:0;border:0;border-radius:var(--dsw-radius-sm,8px);background:transparent;color:var(--dsw-alias-label-tertiary,#81858c);cursor:pointer}
@@ -1571,6 +1571,11 @@ window.__ModuleLoader__.load({
 .vqc-iconbtn:disabled{opacity:.4;cursor:default}
 .vqc-iconbtn--active{color:var(--dsw-alias-state-business-primary,#4176e6)}
 .vqc-compact{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;box-sizing:border-box;min-height:48px;padding:10px}
+/* 只有一行、没有其它内容时，整个窗口收成一枚胶囊：圆角取高度的一半，
+   与外层的 panel 圆角（28）同一量级，切到展开态时不会跳档。 */
+/* 单行胶囊的圆角 = 行高 48 的一半 = 24，与常态窗口同一个值：
+   展开/收起时只有高度变化，圆角不动，切换不跳档。 */
+.vqc-panel--single{border-radius:999px}
 .vqc-brand{flex:none;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-input{flex:1;min-width:0;box-sizing:border-box;margin:0;min-height:28px;padding:3px 0;border:0;outline:0;background:transparent;color:inherit;font:inherit;line-height:22px;resize:none;overflow-y:auto;scrollbar-width:thin}
 .vqc-input[data-overflow="true"]{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 18px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 18px),transparent)}
@@ -2361,6 +2366,16 @@ window.__ModuleLoader__.load({
       // 与其让用户点了没效果，不如把两个开关直接收起来。
       const webToolsAvailable = canUseWebTools();
       const expanded = state.mode === 'expanded';
+      // 单行胶囊：紧凑态、只有这一行输入，没有消息、附件、引用、错误与流式。
+      // 加这些任何一样，窗口都会变高，胶囊就不成立了。
+      const singleRow =
+        !expanded &&
+        state.messages.length === 0 &&
+        state.files.length === 0 &&
+        state.selection.length === 0 &&
+        state.error === null &&
+        !state.streaming &&
+        !stacked;
       const canSend = state.draft.trim().length > 0 && !state.streaming;
       const canRetry = state.messages.some((message) => message.role === 'user');
       const showStreaming = state.streaming || state.streamText.length > 0;
@@ -2645,7 +2660,7 @@ window.__ModuleLoader__.load({
         h(
           'section',
           {
-            className: `vqc-panel ${expanded ? 'vqc-panel--expanded' : 'vqc-panel--compact'}`,
+            className: `vqc-panel ${expanded ? 'vqc-panel--expanded' : 'vqc-panel--compact'}${singleRow ? ' vqc-panel--single' : ''}`,
             role: 'dialog',
             'aria-modal': 'false',
             'aria-label': labels.panelLabel,
