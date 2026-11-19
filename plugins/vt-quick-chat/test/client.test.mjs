@@ -819,7 +819,8 @@ test('桌面快捷键不使用会被 macOS 吞掉的 Option+死键字母', () =>
     assert.ok(binding, `${profile} 必须声明默认键位`);
     const usesAlt = binding.modifiers.includes('alt');
     assert.equal(usesAlt, false, `${profile} 不能用 alt：macOS 桌面端会把它当死键放行`);
-    assert.equal(DEAD_KEY_LETTERS.includes(binding.code), false);
+    // 死键只在 Option 参与时才出现；单独 ⇧⌘N 是正常按键。
+    if (usesAlt) assert.equal(DEAD_KEY_LETTERS.includes(binding.code), false);
   }
 });
 
@@ -827,5 +828,44 @@ test('Web 端不声明默认键位，避免与 session.new 抢键', () => {
   const command = captureShortcut();
   for (const profile of ['web:macos', 'web:windows', 'web:linux']) {
     assert.equal(command.defaults[profile], undefined);
+  }
+});
+
+// ── /quick-chat 命令带来的开窗：开窗但把问题填进草稿，不自动发送 ──────────
+
+test('openWith 打开小窗并把命令后面的文字放进草稿', () => {
+  const controller = loadClient().internals.createController({ t: (key) => key });
+  try {
+    controller.openWith('  什么是 MCP  ');
+    const state = controller.snapshot();
+    assert.equal(state.open, true);
+    assert.equal(state.mode, 'compact');
+    assert.equal(state.draft, '什么是 MCP');
+    assert.equal(state.streaming, false);
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('openWith 没带问题时不塞空草稿', () => {
+  const controller = loadClient().internals.createController({ t: (key) => key });
+  try {
+    controller.openWith('   ');
+    assert.equal(controller.snapshot().open, true);
+    assert.equal(controller.snapshot().draft, '');
+  } finally {
+    controller.dispose();
+  }
+});
+
+test('应用宿主事件后不会自己发请求', () => {
+  const controller = loadClient().internals.createController({ t: (key) => key });
+  try {
+    controller.openWith('什么是 MCP');
+    // 草稿进框、没有消息、没有流式状态——发送仍然要用户按下
+    assert.deepEqual(plain(controller.snapshot().messages), []);
+    assert.equal(controller.snapshot().streamText, '');
+  } finally {
+    controller.dispose();
   }
 });

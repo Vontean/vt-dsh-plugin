@@ -289,6 +289,7 @@ window.__ModuleLoader__.load({
       'settings.triggerLabel': '触发方式',
       'settings.triggerHint': '随时按这个组合打开小窗，关掉它不影响正在跑的任务；组合可在「设置 → 通用设置 → 键盘快捷键」里改。',
       'settings.triggerMissing': '键位没有注册成功：先用右侧按钮打开，或重启 DSH 后再试。',
+      'settings.triggerCmd': '也可以在输入框里用 /quick-chat 打开，后面的文字会直接填进小窗。',
       'settings.openNow': '立即打开',
       'settings.noWebTools': '当前通道不支持联网与深度思考，输入区会隐藏这两个开关。',
       'settings.webDefault': '默认开启联网',
@@ -387,6 +388,7 @@ window.__ModuleLoader__.load({
       'settings.triggerLabel': 'Trigger',
       'settings.triggerHint': 'Opens the window any time; closing it leaves the running task alone. Rebind it under Settings → General → Keyboard shortcuts.',
       'settings.triggerMissing': 'The key binding did not register: use the button on the right, or restart DSH and try again.',
+      'settings.triggerCmd': 'You can also type /quick-chat in the composer; text after it lands in the window.',
       'settings.openNow': 'Open now',
       'settings.noWebTools': 'This channel has no web or deep thinking; both toggles are hidden in the composer.',
       'settings.webDefault': 'Web on by default',
@@ -1181,6 +1183,17 @@ window.__ModuleLoader__.load({
         return '';
       }
 
+      /**
+       * 从宿主命令打开：先开窗，再把命令后面那段文字放进输入框。
+       * 不自动发送——发不发仍然由用户决定。
+       * @param prompt - 命令后跟的文字；为空时等同 open()。
+       */
+      function openWith(prompt) {
+        open();
+        const text = typeof prompt === 'string' ? prompt.trim() : '';
+        if (text.length > 0) set({ draft: text.slice(0, MAX_MESSAGE_CHARS) });
+      }
+
       /** 打开浮层：默认紧凑态，并带上当前选中文字。 */
       function open() {
         if (state.open) return;
@@ -1510,6 +1523,7 @@ window.__ModuleLoader__.load({
         subscribe,
         snapshot,
         open,
+        openWith,
         close,
         toggle,
         minimize,
@@ -2908,6 +2922,7 @@ window.__ModuleLoader__.load({
                   )
                 : h('span', { className: 'vqcs-hint vqcs-hint--warn' }, tr('settings.triggerMissing')),
               h('span', { className: 'vqcs-hint' }, tr('settings.triggerHint')),
+              h('span', { className: 'vqcs-hint' }, tr('settings.triggerCmd')),
             ),
             h(
               'button',
@@ -3038,6 +3053,36 @@ window.__ModuleLoader__.load({
       // 设置页的「立即打开」：键位失效时用户仍然进得去。
       openNow = () => controller.toggle();
 
+      // 斜杠命令 `/quick-chat` 在宿主执行，通过事件流通知这里开窗。
+      // EventSource 自己会重连；宿主重启期间断掉也不影响快捷键。
+      ctx.effect(
+        () => {
+          if (typeof EventSource !== 'function') return () => {};
+          let source;
+          try {
+            source = new EventSource(routeUrl('events'), { withCredentials: true });
+          } catch {
+            return () => {};
+          }
+          const onMessage = (event) => {
+            let frame;
+            try {
+              frame = JSON.parse(event.data);
+            } catch {
+              return;
+            }
+            if (frame?.type !== 'open') return;
+            controller.openWith(typeof frame.prompt === 'string' ? frame.prompt : '');
+          };
+          source.addEventListener('message', onMessage);
+          return () => {
+            source.removeEventListener('message', onMessage);
+            source.close();
+          };
+        },
+        `${PLUGIN_ID}: host events`,
+      );
+
       // 启动时拉一次设置，之后由设置页维护缓存；失败就按默认值走，不影响小窗。
       void fetchSettings().catch(() => {});
 
@@ -3072,7 +3117,9 @@ window.__ModuleLoader__.load({
         );
       });
 
-      // 快捷键：只注册桌面键位 Mod+Shift+K（⌘⇧K / Ctrl+Shift+K）。
+      // 快捷键：只注册桌面键位 Mod+Shift+N（⌘⇧N / Ctrl+Shift+N）。
+      //
+      // 为什么不是 Mod+N：那是 `session.new`。为什么不是 Mod+Alt+N：见下。
       //
       // 为什么不是 Mod+Alt+N：macOS 上 Option+N 是波浪号的死键，按下时
       // `event.key` 为 "Dead"。DSH 的键盘适配层只在 Web(macOS) 上为
@@ -3091,15 +3138,15 @@ window.__ModuleLoader__.load({
               label: () => t('shortcut.label'),
               aliases: ['quick chat', 'explain concept', '快捷提问'],
               defaults: {
-                'desktop:macos': { code: 'KeyK', modifiers: ['primary', 'shift'] },
-                'desktop:windows': { code: 'KeyK', modifiers: ['primary', 'shift'] },
-                'desktop:linux': { code: 'KeyK', modifiers: ['primary', 'shift'] },
+                'desktop:macos': { code: 'KeyN', modifiers: ['primary', 'shift'] },
+                'desktop:windows': { code: 'KeyN', modifiers: ['primary', 'shift'] },
+                'desktop:linux': { code: 'KeyN', modifiers: ['primary', 'shift'] },
               },
               regions: ['page', 'editable'],
               modals: [],
               resolve: () => ({ status: 'handled', run: () => controller.toggle() }),
             });
-            shortcutState = { ok: true, keys: isMacLike() ? ['⌘', '⇧', 'K'] : ['Ctrl', '+', 'Shift', '+', 'K'], error: '' };
+            shortcutState = { ok: true, keys: isMacLike() ? ['⌘', '⇧', 'N'] : ['Ctrl', '+', 'Shift', '+', 'N'], error: '' };
             return disposer;
           } catch (error) {
             // 与第三方插件的键位冲突不应让整个插件（乃至 Web boot）失败；

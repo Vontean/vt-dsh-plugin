@@ -9,7 +9,7 @@
 > **2026-11-19 补记（实现后实测）：** 本文档结论「Desktop 用 `Mod+Alt+N`」是错的。
 > macOS 上 Option+N 是死键，`event.key` 为 `"Dead"`；DSH 的键盘适配层里的
 > `commandDeadKey` 只在 `runtime === "web"` 时成立，桌面端会把该按键按 `composing`
-> 处理并放行，因此 `Mod+Alt+N` 在桌面端永远不触发。最终改为 Desktop `Mod+Shift+K`。
+> 处理并放行，因此 `Mod+Alt+N` 在桌面端永远不触发。最终改为 Desktop `Mod+Shift+N`。
 
 > ① 只注册桌面键位 `Mod+Alt+N`，Web 不提供默认键（`session.new` 占用 `Mod+Alt+N`，`Mod+Shift+N` 是浏览器保留键）；
 > ② 浮层锚定主输入框上方 24px（`bottom: 96px`），避免压住 composer；

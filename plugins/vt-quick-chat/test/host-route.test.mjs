@@ -7,6 +7,9 @@ import test from 'node:test';
 
 import { apply } from '../index.js';
 
+/** 跨 realm 比较前归一化成纯数据。 */
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
 /**
  * 捕获 apply 注册的 webServer 路由。
  * @param services - 按服务名返回的 fake 服务。
@@ -300,5 +303,91 @@ test('settings 路由：GET 返回设置与默认提示词，POST 落盘并可�
   } finally {
     delete process.env.VT_QUICK_CHAT_SETTINGS;
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ── /quick-chat 命令与事件流 ────────────────────────────────────────────
+
+/** 造一个只记录注册的 commands 服务。 */
+function commandRecorder() {
+  const registered = [];
+  return {
+    registered,
+    register(definition) {
+      registered.push(definition);
+      return () => {};
+    },
+  };
+}
+
+test('/quick-chat 命令：名字、说明、输入提示都合契约', () => {
+  const commands = commandRecorder();
+  const route = createContext({ commands });
+  try {
+    assert.equal(commands.registered.length, 1);
+    const command = commands.registered[0];
+    assert.equal(command.name, 'quick-chat');
+    assert.match(command.name, /^[a-z][a-z0-9_-]*$/u);
+    assert.ok(command.description.trim().length > 0);
+    assert.ok(command.input.hint.trim().length > 0);
+    assert.equal(typeof command.handler, 'function');
+  } finally {
+    route.dispose();
+  }
+});
+
+test('/quick-chat 命令把后面的文字当草稿推给客户端，并回报成功', async () => {
+  const commands = commandRecorder();
+  const route = createContext({ commands });
+  const stream = new FakeResponse();
+  const events = new FakeResponse();
+  try {
+    await route.handler(createRequest('', '/vt-quick-chat/api/events', 'GET'), events);
+    assert.equal(events.status, 200);
+    assert.match(events.headers['content-type'], /text\/event-stream/u);
+    assert.match(events.text, /: quick-chat events/u);
+
+    const result = commands.registered[0].handler({ rawInput: '  什么是 MCP  ' });
+    assert.deepEqual(plain(result), { kind: 'success', text: '已打开快捷提问' });
+    assert.match(events.text, /"type":"open"/u);
+    assert.match(events.text, /"prompt":"什么是 MCP"/u);
+  } finally {
+    events.end();
+    stream.destroy();
+    route.dispose();
+  }
+});
+
+test('没有 commands 服务时不注册命令，也不影响路由', async () => {
+  const route = createContext({});
+  try {
+    const res = await run(route, createRequest({ messages: [{ role: 'user', content: 'hi' }] }));
+    assert.equal(res.status, 200);
+  } finally {
+    route.dispose();
+  }
+});
+
+test('事件流只接受 GET，且与非授权连接隔离', async () => {
+  const commands = commandRecorder();
+  const route = createContext({ commands });
+  try {
+    const wrongMethod = new FakeResponse();
+    await route.handler(createRequest('', '/vt-quick-chat/api/events', 'POST'), wrongMethod);
+    assert.equal(wrongMethod.status, 405);
+
+    const denied = createContext({
+      commands: commandRecorder(),
+      connection: { requestRejection: () => ({ status: 403 }) },
+    });
+    try {
+      const res = new FakeResponse();
+      await denied.handler(createRequest('', '/vt-quick-chat/api/events', 'GET'), res);
+      assert.equal(res.status, 403);
+    } finally {
+      denied.dispose();
+    }
+  } finally {
+    route.dispose();
   }
 });

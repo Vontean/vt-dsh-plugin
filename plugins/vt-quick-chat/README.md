@@ -6,7 +6,9 @@ agent 正在跑任务时，看到一个不懂的词：按一个快捷键，在�
 
 ## 它做了什么
 
-- **随时可开**：Desktop `⌘⇧K`（Windows/Linux `Ctrl+Shift+K`）。Web 端不提供入口。
+- **随时可开**：Desktop `⌘⇧N`（Windows/Linux `Ctrl+Shift+N`）。Web 端不提供入口。
+- **斜杠命令**：输入框的 `/` 菜单里有 `quick-chat`，选中即打开小窗；
+  命令后面跟的文字会填进小窗输入框（不自动发送）。
   输入框自动聚焦，打开前的主界面焦点在关闭后归还。
 - **非模态浮层**：挂在 DSH 的根级 `shell.overlay` 上，不替换主对话、主输入框或侧栏。
   小窗打开时仍可继续操作主界面；`Esc` 只在小窗内生效。
@@ -60,15 +62,15 @@ agent 正在跑任务时，看到一个不懂的词：按一个快捷键，在�
 
 | 平台 | 默认键位 |
 |---|---|
-| macOS Desktop | `⌘⇧K` |
-| Windows Desktop | `Ctrl+Shift+K` |
-| Linux Desktop | `Ctrl+Shift+K` |
+| macOS Desktop | `⌘⇧N` |
+| Windows Desktop | `Ctrl+Shift+N` |
+| Linux Desktop | `Ctrl+Shift+N` |
 | Web | 不提供。见下方说明 |
 
 **为什么不用 `⌘⌥N`（Codex 的同款键位）：** macOS 上 Option+N 是波浪号的死键，
 按下时 `event.key` 变成 `"Dead"`。DSH 的键盘适配层只在 Web(macOS) 上为 `Mod+Alt+N`
 开了例外，桌面端会按 `composing` 处理、直接放行，按键被静默吞掉——写这个键位等于没有快捷键。
-`⌘⇧K` 不涉及 Option，也不与 DSH 内置命令冲突（`⌘K` 是会话搜索）。
+`⌘⇧N` 不涉及 Option，也不与 `session.new`（`⌘N`）冲突。
 
 **这个插件面向 Desktop。** Web 端不注册默认键位，原因是两个组合都被占了：
 
@@ -82,6 +84,9 @@ agent 正在跑任务时，看到一个不懂的词：按一个快捷键，在�
 可以在 DSH 的「快捷键」设置里改成别的组合；命令名是「快捷提问」（`quickChat.toggle`）。
 
 再按一次快捷键会关闭小窗。关闭会丢弃未发送草稿与选中引用；已发送的对话留在本地历史。
+
+`/quick-chat` 是宿主命令，执行时会在**当前会话**里留下一条命令记录（命令由 DSH
+统一记账）；小窗本身仍然不建 Session、不写 session log。想完全不留痕迹就用快捷键。
 
 ## 安装
 

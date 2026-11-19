@@ -1216,6 +1216,69 @@ async function handleChat(req, res, ctx, admitted) {
 }
 
 /**
+ * 已连接的客户端事件流。`/quick-chat` 命令命中时向它们推一帧 `open`。
+ * 桌面端只有一个客户端，所以就是一个长度为 0 或 1 的集合。
+ */
+const eventSinks = new Set();
+
+/** 心跳间隔：防止反向代理或系统把空闲连接掐掉。 */
+const EVENT_HEARTBEAT_MS = 25_000;
+
+/**
+ * 打开一条事件流（SSE）。
+ * 与小窗的对话流不同，这条连接常驻，只承载「让客户端做一件事」的指令。
+ * @param req - 请求。
+ * @param res - 响应。
+ * @param admitted - 连接鉴权判定。
+ */
+function handleEvents(req, res, admitted) {
+  if (!admitted(req)) {
+    writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: '当前连接无权访问本机插件路由。' } });
+    return;
+  }
+  if (req.method !== 'GET') {
+    res.writeHead(405, { allow: 'GET' });
+    res.end();
+    return;
+  }
+  res.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-store, no-transform',
+    connection: 'keep-alive',
+    'x-accel-buffering': 'no',
+  });
+  // 先发一帧注释，让客户端立刻确认连接可用。
+  res.write(': quick-chat events\n\n');
+  eventSinks.add(res);
+  const heartbeat = setInterval(() => {
+    if (res.writableEnded || res.destroyed) return;
+    res.write(': ping\n\n');
+  }, EVENT_HEARTBEAT_MS);
+  heartbeat.unref?.();
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    eventSinks.delete(res);
+  };
+  res.on('close', cleanup);
+  res.on('error', cleanup);
+}
+
+/**
+ * 让客户端打开小窗。
+ * @param prompt - 命令后面跟的文字，作为草稿带进输入框；可为空。
+ */
+function broadcastOpen(prompt) {
+  const frame = `data: ${JSON.stringify({ type: 'open', prompt: typeof prompt === 'string' ? prompt : '' })}\n\n`;
+  for (const sink of eventSinks) {
+    if (sink.writableEnded || sink.destroyed) {
+      eventSinks.delete(sink);
+      continue;
+    }
+    sink.write(frame);
+  }
+}
+
+/**
  * 设置页数据：读当前设置 + 可选 provider 清单；保存后回传落盘结果。
  * @param req - 请求。
  * @param res - 响应。
@@ -1277,11 +1340,31 @@ export function apply(ctx) {
           const pathname = new URL(req.url ?? '/', 'http://dsh.internal').pathname;
           if (pathname === `${ROUTE_PREFIX}/upload`) return handleUpload(req, res, ctx, admitted);
           if (pathname === `${ROUTE_PREFIX}/settings`) return handleSettings(req, res, ctx, admitted);
+          if (pathname === `${ROUTE_PREFIX}/events`) return handleEvents(req, res, admitted);
           return handleChat(req, res, ctx, admitted);
         },
       }),
     'vt-quick-chat: chat route',
   );
+
+  // `/quick-chat`：从输入框的斜杠菜单起一个临时小窗。
+  // 命令本身在宿主执行，结果会被记进当前会话；开小窗则通过事件流交给客户端。
+  ctx.effect(() => {
+    const commands = ctx.get('commands');
+    if (commands === undefined || commands === null || typeof commands.register !== 'function') {
+      console.warn('[dsh-vt-quick-chat] 未注册 /quick-chat：commands 服务不可用');
+      return () => {};
+    }
+    return commands.register({
+      name: 'quick-chat',
+      description: '打开快捷提问小窗：临时解释概念，不新建会话、不调用工具',
+      input: { hint: '[要问的问题]（留空只打开小窗）' },
+      handler: ({ rawInput }) => {
+        broadcastOpen(typeof rawInput === 'string' ? rawInput.trim() : '');
+        return { kind: 'success', text: '已打开快捷提问' };
+      },
+    });
+  }, 'vt-quick-chat: /quick-chat command');
 }
 
 /**
@@ -1322,4 +1405,6 @@ export const __test = {
   resolveDeepSeekAuth,
   probeDeepSeekAuth,
   deepseekStatus,
+  broadcastOpen,
+  eventSinkCount: () => eventSinks.size,
 };
