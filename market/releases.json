@@ -394,11 +394,11 @@
   "dsh-vt-quick-chat": [
     {
       "version": "1.3.0",
-      "publishTimestamp": 1795052841,
+      "publishTimestamp": 1795053435,
       "source": {
         "type": "git",
         "url": "https://github.com/Vontean/vt-dsh-plugin",
-        "commit": "9cc4599da95ce7068709ecfa750afdab8b374c80",
+        "commit": "466111f5741a2ade375165916f56359e70291ee4",
         "path": "plugins/vt-quick-chat"
       },
       "engines": {
