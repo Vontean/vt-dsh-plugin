@@ -124,6 +124,21 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 | `expanded` | 36px 状态行 + 消息区 + composer + 提示行；可停止/复制/重试/历史 |
 | `history` | expanded 内的子视图；不改变主状态。列表是 DSH 会话列表那种单行结构：标题 + 右侧相对时间，hover 时时间换成删除 |
 
+### 设置（settings.section）
+
+小窗自己的配置放在 DSH 的 Settings 里，不再是写死的常量：
+
+| 设置项 | 作用 | 落点 |
+|---|---|---|
+| 系统提示词 | 替换内置 `SYSTEM_PROMPT`；留空即用内置，可一键恢复默认 | 宿主读盘后逐请求生效 |
+| 模型 | 下拉第一项是「跟随 DSH 默认」；选了具体模型就跳过 DeepSeek 直连 | 宿主按 `provider::model` 解析 |
+| 默认开启联网 | 小窗打开时联网开关的初始状态 | 客户端缓存 |
+| 默认开启深度思考 | 小窗打开时深度思考开关的初始状态 | 客户端缓存 |
+
+存储是宿主侧的 `~/.dsh/vt-quick-chat/settings.json`（临时文件 + rename 原子写），
+客户端通过 `/vt-quick-chat/api/settings` 读写，浏览器侧拿不到文件路径。
+做法与 `vt-system-prompt` 一致：客户端注册 `settings.section` 槽位，宿主提供同源路由。
+
 状态行（`ConversationBar`）是两态共用的一块，展开态里它直接充当 header：
 
 - 左：当前对话标题，取第一条用户消息压成一行，与本地历史里存的标题同源，两处不会漂移；

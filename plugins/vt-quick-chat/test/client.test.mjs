@@ -540,7 +540,8 @@ test('SSR：展开态渲染消息、引用 chip 与 Markdown 代码块', () => {
   // 选中文字与附件同一个 chip 行，样式和结构都复用附件那套。
   assert.match(html, /vqc-files/u);
   assert.match(html, /vqc-fileChip vqc-fileChip--quote/u);
-  assert.match(html, /<path d="M3\.5 4\.5h9"/u);
+  // 引用 chip 的图标用 DSH 的「上下文注入」，不再自绘 T。
+  assert.doesNotMatch(html, /M3\.5 4\.5h9/u);
   assert.match(html, /aria-label="移除引用"/u);
   assert.match(html, /vqc-prose/u);
   assert.match(html, /vqc-code/u);
@@ -711,7 +712,8 @@ test('apply 在快捷键注册失败时仍加载浮层并保留调试入口', ()
   } finally {
     console.error = originalError;
   }
-  assert.deepEqual(registered, ['quick-chat']);
+  // 浮层与设置页是两个独立槽位。
+  assert.deepEqual(registered, ['quick-chat-settings', 'quick-chat']);
   assert.equal(typeof context.window.__vtQuickChat?.state, 'function');
 });
 

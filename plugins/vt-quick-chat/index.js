@@ -26,6 +26,10 @@
  *   · 请求体有上限，消息条数、单条长度、服务端工具块大小都截断。
  */
 
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import path from 'node:path';
+
 /** 插件标识（与 package.json 的 name 一致）。 */
 export const name = 'dsh-vt-quick-chat';
 
@@ -154,6 +158,112 @@ const SYSTEM_PROMPT = [
   '- 可以用 Markdown：短段落、列表、行内代码、代码块。',
   '- 用户提供了「选中的文字」时，把它当作要解释的对象。',
 ].join('\n');
+
+/** 设置文件：只存用户在设置页里改的那几项。 */
+const SETTINGS_DIR = path.join(homedir(), '.dsh', 'vt-quick-chat');
+const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json');
+/** Provider 取值：'follow' = 跟随 DSH 默认。 */
+const PROVIDER_FOLLOW = 'follow';
+/** 内置提示词在设置页里的「恢复默认」占位。 */
+const DEFAULT_SETTINGS = Object.freeze({
+  systemPrompt: '',
+  provider: PROVIDER_FOLLOW,
+  webByDefault: false,
+  deepThinkByDefault: false,
+});
+
+/**
+ * 把任意输入收敛成合法设置。
+ * @param value - 任意 JSON 值。
+ * @returns 干净的设置对象。
+ */
+function sanitizeSettings(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return { ...DEFAULT_SETTINGS };
+  return {
+    systemPrompt: typeof value.systemPrompt === 'string' ? value.systemPrompt.slice(0, 8000) : '',
+    provider: typeof value.provider === 'string' && value.provider.length > 0 ? value.provider.slice(0, 200) : PROVIDER_FOLLOW,
+    webByDefault: value.webByDefault === true,
+    deepThinkByDefault: value.deepThinkByDefault === true,
+  };
+}
+
+/**
+ * 读取设置；文件不存在或损坏时返回默认值。
+ * @returns 设置对象。
+ */
+async function readSettings() {
+  try {
+    const raw = await readFile(SETTINGS_FILE, 'utf8');
+    return sanitizeSettings(JSON.parse(raw));
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+/**
+ * 写入设置；用「临时文件 + rename」避免写一半留下坏文件。
+ * @param value - 任意设置对象。
+ * @returns 落盘后的设置。
+ */
+async function writeSettings(value) {
+  const settings = sanitizeSettings(value);
+  await mkdir(SETTINGS_DIR, { recursive: true });
+  const temp = path.join(SETTINGS_DIR, 'settings.' + process.pid + '.' + Date.now() + '.tmp');
+  await writeFile(temp, JSON.stringify(settings, null, 2), 'utf8');
+  await rename(temp, SETTINGS_FILE);
+  return settings;
+}
+
+/**
+ * 实际生效的系统提示词：用户改过就用用户的，否则用内置的。
+ * @param settings - 设置对象。
+ * @param web - 是否开启联网。
+ * @returns 完整提示词。
+ */
+function effectiveSystemPrompt(settings, web) {
+  const custom = typeof settings?.systemPrompt === 'string' ? settings.systemPrompt.trim() : '';
+  const base = custom.length > 0 ? custom : SYSTEM_PROMPT;
+  return web ? base + WEB_PROMPT_SUFFIX : base;
+}
+
+/**
+ * 设置页下拉用的 provider / model 清单。
+ * @param ctx - Host 上下文。
+ * @returns `{ providers }`。
+ */
+async function listProviderChoices(ctx) {
+  const llm = ctx.get('llm');
+  if (llm === undefined || llm === null || typeof llm.listProviders !== 'function') return { providers: [] };
+  const providers = [];
+  for (const provider of llm.listProviders() ?? []) {
+    const id = provider?.id;
+    if (typeof id !== 'string' || id.length === 0) continue;
+    let models = [];
+    try {
+      const list = typeof llm.listModels === 'function' ? await llm.listModels(id) : [];
+      models = (Array.isArray(list) ? list : [])
+        .map((model) => ({ id: String(model?.id ?? ''), name: String(model?.name ?? model?.id ?? '') }))
+        .filter((model) => model.id.length > 0);
+    } catch {
+      models = [];
+    }
+    providers.push({ id, name: typeof provider?.name === 'string' ? provider.name : id, models });
+  }
+  return { providers };
+}
+
+/**
+ * 把设置里的 provider 值解析成 `{ provider, model }`。
+ * 取值形如 `provider::model`；只写 provider 时模型留空，由调用方挑第一个。
+ * @param value - 设置值。
+ * @returns 指定目标；'follow' 或无法解析时返回 undefined。
+ */
+function parseProviderChoice(value) {
+  if (typeof value !== 'string' || value.length === 0 || value === PROVIDER_FOLLOW) return undefined;
+  const [provider, model = ''] = value.split('::');
+  if (provider.length === 0) return undefined;
+  return model.length > 0 ? { provider, model } : { provider };
+}
 
 /** 联网开启时追加的说明：允许引用来源。 */
 const WEB_PROMPT_SUFFIX = [
@@ -559,7 +669,7 @@ async function streamDeepSeek(options) {
   const body = {
     model: DEEPSEEK_MODEL,
     max_tokens: MAX_OUTPUT_TOKENS,
-    system: web ? SYSTEM_PROMPT + WEB_PROMPT_SUFFIX : SYSTEM_PROMPT,
+    system: typeof prompt === 'string' && prompt.length > 0 ? prompt : web ? SYSTEM_PROMPT + WEB_PROMPT_SUFFIX : SYSTEM_PROMPT,
     messages,
     stream: true,
   };
@@ -719,7 +829,7 @@ function startSse(res) {
  * @param selection - 选中文本。
  * @param controller - 取消控制器。
  */
-async function runDefaultChannel(res, ctx, messages, selection, controller) {
+async function runDefaultChannel(res, ctx, messages, selection, controller, options = {}) {
   const llm = ctx.get('llm');
   if (llm === undefined || llm === null || typeof llm.stream !== 'function') {
     writeSse(res, { type: 'error', code: 'NO_LLM', message: '当前 profile 没有可用的模型服务。' });
@@ -728,7 +838,7 @@ async function runDefaultChannel(res, ctx, messages, selection, controller) {
 
   let target;
   try {
-    target = await resolveTarget(ctx, llm);
+    target = options.target ?? (await resolveTarget(ctx, llm));
   } catch (error) {
     writeSse(res, {
       type: 'error',
@@ -751,7 +861,7 @@ async function runDefaultChannel(res, ctx, messages, selection, controller) {
   const stream = llm.stream({
     provider: target.provider,
     model: target.model,
-    system: SYSTEM_PROMPT,
+    system: options.prompt ?? SYSTEM_PROMPT,
     messages: requestMessages,
     maxTokens: MAX_OUTPUT_TOKENS,
     purpose: PURPOSE,
@@ -791,7 +901,7 @@ async function runDefaultChannel(res, ctx, messages, selection, controller) {
  * @param web - 是否开启联网工具。
  * @param controller - 取消控制器。
  */
-async function runDeepSeekChannel(res, auth, messages, selection, web, deepThink, controller) {
+async function runDeepSeekChannel(res, auth, messages, selection, web, deepThink, controller, prompt) {
   const hasFiles = messages.some((message) => Array.isArray(message.files) && message.files.length > 0);
   writeSse(res, {
     type: 'start',
@@ -1027,6 +1137,10 @@ async function handleChat(req, res, ctx, admitted) {
   }
   const web = input.web === true;
   const deepThink = input.deepThink === true;
+  // 设置页里的 Provider 与提示词；读盘失败时 readSettings 会给默认值。
+  const settings = await readSettings();
+  const prompt = effectiveSystemPrompt(settings, web);
+  const forcedTarget = parseProviderChoice(settings.provider);
 
   // 客户端关闭小窗或点「停止」时，响应会被关闭；把取消透传给上游。
   // 监听 res 而不是 req：req 的 close 在请求体读完时就会触发，会立刻误取消。
@@ -1036,12 +1150,17 @@ async function handleChat(req, res, ctx, admitted) {
 
   startSse(res);
   try {
-    const auth = await resolveDeepSeekAuth(ctx);
-    if (auth === undefined) {
-      // 没有 DeepSeek 凭证：退回默认模型，联网诉求无法满足，由 start 帧说明。
-      await runDefaultChannel(res, ctx, messages, selection, controller);
+    if (forcedTarget !== undefined) {
+      // 用户指定了 provider：直接走该模型，不再尝试 DeepSeek 直连。
+      await runDefaultChannel(res, ctx, messages, selection, controller, { target: forcedTarget, prompt });
     } else {
-      await runDeepSeekChannel(res, auth, messages, selection, web, deepThink, controller);
+      const auth = await resolveDeepSeekAuth(ctx);
+      if (auth === undefined) {
+        // 没有 DeepSeek 凭证：退回默认模型，联网诉求无法满足，由 start 帧说明。
+        await runDefaultChannel(res, ctx, messages, selection, controller, { prompt });
+      } else {
+        await runDeepSeekChannel(res, auth, messages, selection, web, deepThink, controller, prompt);
+      }
     }
   } catch (error) {
     if (controller.signal.aborted) {
@@ -1056,6 +1175,50 @@ async function handleChat(req, res, ctx, admitted) {
   } finally {
     res.off('close', onClose);
     if (!res.writableEnded && !res.destroyed) res.end();
+  }
+}
+
+/**
+ * 设置页数据：读当前设置 + 可选 provider 清单；保存后回传落盘结果。
+ * @param req - 请求。
+ * @param res - 响应。
+ * @param ctx - Host 上下文。
+ * @param admitted - 连接鉴权判定。
+ */
+async function handleSettings(req, res, ctx, admitted) {
+  if (!admitted(req)) {
+    writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: '当前连接无权访问本机插件路由。' } });
+    return;
+  }
+  if (req.method === 'GET') {
+    const [settings, choices] = await Promise.all([readSettings(), listProviderChoices(ctx)]);
+    writeJson(res, 200, { ok: true, value: { settings, providers: choices.providers, defaultPrompt: SYSTEM_PROMPT } });
+    return;
+  }
+  if (req.method !== 'POST') {
+    res.writeHead(405, { allow: 'GET, POST' });
+    res.end();
+    return;
+  }
+  let input;
+  try {
+    input = await readJsonBody(req);
+  } catch (error) {
+    writeJson(res, error instanceof ApiError ? error.status : 400, {
+      ok: false,
+      error: { code: error?.apiCode ?? 'bad-request', message: error instanceof Error ? error.message : String(error) },
+    });
+    return;
+  }
+  try {
+    const settings = await writeSettings(input);
+    const choices = await listProviderChoices(ctx);
+    writeJson(res, 200, { ok: true, value: { settings, providers: choices.providers, defaultPrompt: SYSTEM_PROMPT } });
+  } catch (error) {
+    writeJson(res, 500, {
+      ok: false,
+      error: { code: 'save-failed', message: error instanceof Error ? error.message : String(error) },
+    });
   }
 }
 
@@ -1076,6 +1239,7 @@ export function apply(ctx) {
               : connection.requestRejection(request) === undefined;
           const pathname = new URL(req.url ?? '/', 'http://dsh.internal').pathname;
           if (pathname === `${ROUTE_PREFIX}/upload`) return handleUpload(req, res, ctx, admitted);
+          if (pathname === `${ROUTE_PREFIX}/settings`) return handleSettings(req, res, ctx, admitted);
           return handleChat(req, res, ctx, admitted);
         },
       }),
@@ -1089,6 +1253,10 @@ export function apply(ctx) {
  */
 export const __test = {
   SYSTEM_PROMPT,
+  DEFAULT_SETTINGS,
+  sanitizeSettings,
+  effectiveSystemPrompt,
+  parseProviderChoice,
   WEB_TOOLS,
   DEEPSEEK_MESSAGES_URL,
   DEEPSEEK_MODEL,

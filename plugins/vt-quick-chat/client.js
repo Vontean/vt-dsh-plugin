@@ -30,6 +30,64 @@ window.__ModuleLoader__.load({
     const NS = 'vtQuickChat';
     /** Host 路由前缀，与 index.js 的 ROUTE_PREFIX 必须一致。 */
     const API_PREFIX = '/vt-quick-chat/api';
+
+    /**
+     * 设置缓存：小窗打开时用它决定联网/深度思考的初始状态。
+     * 由设置页写入，插件加载时从 Host 拉一次。
+     */
+    let settingsCache = { systemPrompt: '', provider: 'follow', webByDefault: false, deepThinkByDefault: false };
+
+    /**
+     * 宿主路由的绝对地址：按页面自身目录解析，兼容 dsh-app:// 与反向代理前缀。
+     * @param route - 相对路由，如 `settings`。
+     * @returns 绝对 URL。
+     */
+    function routeUrl(route) {
+      const raw =
+        typeof document !== 'undefined' && typeof document.baseURI === 'string' && document.baseURI !== ''
+          ? document.baseURI
+          : 'http://dsh.internal/';
+      let base;
+      try {
+        base = new URL(raw);
+      } catch {
+        base = new URL('http://dsh.internal/');
+      }
+      base.search = '';
+      base.hash = '';
+      if (!base.pathname.endsWith('/')) base.pathname = base.pathname.slice(0, base.pathname.lastIndexOf('/') + 1);
+      return new URL(`${API_PREFIX}/${route}`, base).toString();
+    }
+
+    /**
+     * 读设置页数据：设置本身 + 可选 provider 清单 + 内置提示词。
+     * @returns `{ settings, providers, defaultPrompt }`。
+     */
+    async function fetchSettings() {
+      const response = await fetch(routeUrl('settings'), { credentials: 'same-origin' });
+      const envelope = await response.json();
+      if (envelope?.ok !== true) throw new Error(envelope?.error?.message ?? `HTTP ${response.status}`);
+      settingsCache = envelope.value.settings;
+      return envelope.value;
+    }
+
+    /**
+     * 保存设置；成功后刷新缓存。
+     * @param next - 完整设置对象。
+     * @returns `{ settings, providers, defaultPrompt }`。
+     */
+    async function saveSettings(next) {
+      const response = await fetch(routeUrl('settings'), {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(next),
+      });
+      const envelope = await response.json();
+      if (envelope?.ok !== true) throw new Error(envelope?.error?.message ?? `HTTP ${response.status}`);
+      settingsCache = envelope.value.settings;
+      return envelope.value;
+    }
     /** 本地历史存储键。 */
     const STORAGE_KEY = `${PLUGIN_ID}:history:v1`;
     /** 历史最多保留的对话数；超出时从最旧的一条开始删除。 */
@@ -126,7 +184,7 @@ window.__ModuleLoader__.load({
       'file.failed': '上传失败',
       'file.tooLarge': '超过 30 MiB',
       'file.unsupported': '不支持这个类型',
-      'thinking.deep': '正在深度思考…',
+      'thinking.deep': '深度求索中',
       'action.web': '联网',
       'action.webOn': '联网已开',
       'action.webHint': '开启后可用搜索与阅读链接；搜索 5 元/千次、抓取 5 元/千次',
@@ -157,6 +215,27 @@ window.__ModuleLoader__.load({
       'error.quota': '模型额度不足，请检查账户余额。',
       'error.network': '网络中断，请检查连接后重试。',
       'shortcut.label': '快捷提问',
+      'settings.nav': '快捷提问',
+      'settings.title': '快捷提问',
+      'settings.subtitle': '这里的内容只影响「快捷提问」小窗，不影响主会话。',
+      'settings.promptLabel': '系统提示词',
+      'settings.promptHint': '留空则使用内置提示词。',
+      'settings.promptReset': '恢复默认',
+      'settings.promptDefault': '内置提示词（只读参考）',
+      'settings.providerLabel': '模型',
+      'settings.providerHint': '指定后小窗固定用这个模型，不再尝试 DeepSeek 直连。',
+      'settings.providerFollow': '跟随 DSH 默认',
+      'settings.webDefault': '默认开启联网',
+      'settings.webDefaultHint': '每次打开小窗时联网开关的初始状态。',
+      'settings.deepThinkDefault': '默认开启深度思考',
+      'settings.deepThinkDefaultHint': '每次打开小窗时深度思考开关的初始状态。',
+      'settings.save': '保存',
+      'settings.saving': '保存中…',
+      'settings.saved': '已保存',
+      'settings.saveFailed': '保存失败',
+      'settings.loadFailed': '读取设置失败',
+      'settings.loading': '正在读取…',
+      'settings.settingsTitle': '设置',
     };
 
     const en = {
@@ -193,7 +272,7 @@ window.__ModuleLoader__.load({
       'file.failed': 'Upload failed',
       'file.tooLarge': 'Over 30 MiB',
       'file.unsupported': 'Unsupported type',
-      'thinking.deep': 'Thinking deeply…',
+      'thinking.deep': 'Thinking',
       'action.web': 'Web',
       'action.webOn': 'Web on',
       'action.webHint': 'Turns on search and link reading; search ¥5/1k, fetch ¥5/1k',
@@ -224,6 +303,27 @@ window.__ModuleLoader__.load({
       'error.quota': 'The model quota is exhausted. Check your balance.',
       'error.network': 'The network dropped. Check the connection and retry.',
       'shortcut.label': 'Quick chat',
+      'settings.nav': 'Quick chat',
+      'settings.title': 'Quick chat',
+      'settings.subtitle': 'These settings only affect the quick-chat window, not the main session.',
+      'settings.promptLabel': 'System prompt',
+      'settings.promptHint': 'Leave empty to use the built-in prompt.',
+      'settings.promptReset': 'Restore default',
+      'settings.promptDefault': 'Built-in prompt (read-only)',
+      'settings.providerLabel': 'Model',
+      'settings.providerHint': 'When set, the window always uses this model instead of the DeepSeek channel.',
+      'settings.providerFollow': 'Follow DSH default',
+      'settings.webDefault': 'Web on by default',
+      'settings.webDefaultHint': 'Initial state of the Web switch when the window opens.',
+      'settings.deepThinkDefault': 'Deep thinking on by default',
+      'settings.deepThinkDefaultHint': 'Initial state of the deep-thinking switch when the window opens.',
+      'settings.save': 'Save',
+      'settings.saving': 'Saving…',
+      'settings.saved': 'Saved',
+      'settings.saveFailed': 'Could not save',
+      'settings.loadFailed': 'Could not load settings',
+      'settings.loading': 'Loading…',
+      'settings.settingsTitle': 'Settings',
     };
 
     // ── 纯函数（可测试，不依赖 React / DOM） ────────────────────────────────
@@ -1013,9 +1113,9 @@ window.__ModuleLoader__.load({
           selection: readSelection(),
           historyOpen: false,
           confirmClear: false,
-          // 联网与深度思考每次重新打开都回到关闭：不让上一轮的计费状态静默延续。
-          web: false,
-          deepThink: false,
+          // 联网与深度思考回到设置页里的默认值：不让上一轮的计费状态静默延续。
+          web: settingsCache.webByDefault === true,
+          deepThink: settingsCache.deepThinkByDefault === true,
           files: [],
           thinking: false,
           tools: [],
@@ -1419,11 +1519,16 @@ window.__ModuleLoader__.load({
 .vqc-prose{overflow-wrap:anywhere}
 .vqc-prose .vqc-paragraph{margin:0 0 8px}
 .vqc-prose .vqc-paragraph:last-child{margin-bottom:0}
-.vqc-prose .vqc-heading{margin:12px 0 6px;font-size:var(--dsh-content-font-size,14px);font-weight:600;line-height:1.4}
+.vqc-prose .vqc-heading{margin:12px 0 6px;font-weight:600;line-height:1.45}
+.vqc-prose h3.vqc-heading{font-size:15px;line-height:22px}
+.vqc-prose h4.vqc-heading{font-size:14px;line-height:20px}
+.vqc-prose h5.vqc-heading,.vqc-prose h6.vqc-heading{font-size:13px;line-height:20px;color:var(--dsw-alias-label-secondary,#61666b)}
 .vqc-prose .vqc-heading:first-child{margin-top:0}
 .vqc-prose .vqc-list{margin:0 0 8px;padding-left:20px}
 .vqc-prose .vqc-list:last-child{margin-bottom:0}
 .vqc-prose .vqc-list li{margin:2px 0}
+.vqc-prose .vqc-list li>p{margin:0}
+.vqc-prose blockquote p{margin:0}
 .vqc-prose .vqc-code{margin:0 0 8px;padding:8px 10px;overflow:auto;border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-markdown-code-block,#f9fafb);font:var(--dsw-font-markdown-code-block,11px/19px ui-monospace,monospace)}
 .vqc-prose .vqc-code code{padding:0;background:transparent;font:inherit;white-space:pre}
 .vqc-prose code{padding:1px 4px;border-radius:var(--dsw-radius-xs,4px);background:var(--dsw-alias-markdown-inline-code,#f2f3f5);font:var(--dsw-font-markdown-code-block,11px/19px ui-monospace,monospace)}
@@ -1433,6 +1538,7 @@ window.__ModuleLoader__.load({
 .vqc-caret{display:inline-block;width:2px;height:1em;margin-left:2px;vertical-align:-2px;background:var(--dsw-alias-label-tertiary,#81858c);animation:vqc-blink 1s steps(2) infinite}
 @keyframes vqc-blink{50%{opacity:0}}
 .vqc-thinking{color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-thinking--deep{display:inline-flex;align-items:center;gap:6px;color:var(--dsw-alias-brand-primary,#4d6bfe)}
 .vqc-msgActions{display:flex;align-items:center;gap:4px;margin-top:2px;opacity:0;transition:opacity 120ms ease-out}
 .vqc-msg:hover .vqc-msgActions,.vqc-msg:focus-within .vqc-msgActions{opacity:1}
 @media (hover:none){.vqc-msgActions{opacity:1}}
@@ -1456,7 +1562,7 @@ window.__ModuleLoader__.load({
 .vqc-linkbtn{padding:0;border:0;background:transparent;color:var(--dsw-alias-brand-primary,#4d6bfe);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
 .vqc-linkbtn:hover{color:var(--dsw-alias-button-info-hover,#3f5af0);text-decoration:underline}
 .vqc-empty{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px 4px}
-.vqc-emptyIcon{color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqc-emptyIcon{color:var(--dsw-alias-brand-primary,#4d6bfe)}
 .vqc-emptyTitle{font-size:13px;font-weight:500;line-height:20px;color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-emptyBody{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary,#61666b)}
 .vqc-emptyHint{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
@@ -1472,9 +1578,41 @@ window.__ModuleLoader__.load({
 .vqc-historyRemove{display:none;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:var(--dsw-radius-xs,4px);background:transparent;color:var(--dsw-alias-label-tertiary,#81858c);cursor:pointer}
 .vqc-historyItem:hover .vqc-historyTime{display:none}
 .vqc-historyItem:hover .vqc-historyRemove{display:inline-flex}
+
+/* 设置页：宿主 Settings 里的一个 section，沿用内容列宽 760 与 --dsw-* token。 */
+.vqcs-page{display:flex;flex-direction:column;gap:14px;width:100%;max-width:760px;box-sizing:border-box}
+.vqcs-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.vqcs-headText{display:flex;flex-direction:column;gap:6px;min-width:0}
+.vqcs-title{margin:0;color:var(--dsw-alias-label-primary,#0f1115);font-size:16px;font-weight:600;line-height:24px}
+.vqcs-subtitle{margin:0;color:var(--dsw-alias-label-tertiary,#81858c);font-size:13px;line-height:20px}
+.vqcs-card{box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:14px 16px;border:1px solid var(--dsw-alias-border-l2,#0000001a);border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-alias-bg-layer-3,#fff)}
+.vqcs-cardHead{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.vqcs-label{color:var(--dsw-alias-label-primary,#0f1115);font-size:13px;font-weight:600;line-height:20px}
+.vqcs-hint{color:var(--dsw-alias-label-tertiary,#81858c);font-size:12px;line-height:18px}
+.vqcs-editor{box-sizing:border-box;width:100%;min-height:180px;max-height:420px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l2,#0000001a);border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font-family:var(--dsw-font-markdown-code-block,ui-monospace,monospace);font-size:12.5px;line-height:1.7;resize:vertical;outline:none}
+.vqcs-editor:focus-visible{border-color:var(--dsw-alias-state-business-primary,#4176e6)}
+.vqcs-editor::placeholder{color:var(--dsw-alias-label-tertiary,#81858c)}
+.vqcs-select{box-sizing:border-box;width:100%;padding:6px 10px;border:1px solid var(--dsw-alias-border-l2,#0000001a);border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font:inherit;font-size:13px;line-height:20px;outline:none}
+.vqcs-select:focus-visible{border-color:var(--dsw-alias-state-business-primary,#4176e6)}
+.vqcs-row{display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer}
+.vqcs-rowText{display:flex;flex-direction:column;gap:2px;min-width:0}
+.vqcs-switch{flex:none;width:16px;height:16px;accent-color:var(--dsw-alias-state-business-primary,#4176e6);cursor:pointer}
+.vqcs-divider{height:1px;background:var(--dsw-alias-border-l1,#0000000a)}
+.vqcs-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:20px}
+.vqcs-status{font-size:12px;line-height:18px;color:var(--dsw-alias-state-success-primary,#12b76a)}
+.vqcs-status--error{color:var(--dsw-alias-state-error-primary,#d92d20)}
+.vqcs-loading{padding:24px 4px;color:var(--dsw-alias-label-tertiary,#81858c);font-size:13px;line-height:20px}
+.vqcs-btn{appearance:none;font:inherit;font-size:13px;line-height:20px;padding:5px 14px;border-radius:var(--dsw-radius-sm,8px);border:1px solid var(--dsw-alias-border-l2,#0000001a);background:transparent;color:var(--dsw-alias-label-secondary,#61666b);cursor:pointer}
+.vqcs-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
+.vqcs-btn:disabled{opacity:.45;cursor:default}
+.vqcs-btnPrimary{border-color:transparent;background:var(--dsw-alias-label-primary,#0f1115);color:var(--dsw-alias-bg-layer-3,#fff)}
+.vqcs-btnPrimary:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover,#33363b);color:var(--dsw-alias-bg-layer-3,#fff)}
+.vqcs-link{appearance:none;padding:0;border:0;background:none;color:var(--dsw-alias-brand-primary,#4d6bfe);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
+.vqcs-link:disabled{opacity:.45;cursor:default}
+.vqcs-link:hover:not(:disabled){text-decoration:underline}
 .vqc-historyRemove:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-historyEmpty{padding:16px 4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
-.vqc-composer{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;flex:none;padding:10px;border-top:.5px solid var(--dsw-alias-border-l1,#0000000a)}
+.vqc-composer{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;flex:none;padding:10px;border-top:.5px solid var(--dsw-alias-border-l2,#0000001a)}
 .vqc-composerInput{min-height:28px;max-height:120px;padding:3px 0}
 .vqc-rowActions{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
 /* 输入折行后改纵向：文本独占上面整行，按钮全部沉到最底下那行。 */
@@ -1675,6 +1813,24 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * DeepSeek 鲸鱼标记：与 vt-mine-models 插件里的模型图标同一份路径，
+     * 24 viewBox、实心填充，用品牌蓝。
+     */
+    function DeepSeekMark({ size = 20 }) {
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 24 24',
+          width: size,
+          height: size,
+          fill: 'currentColor',
+          'aria-hidden': 'true',
+        },
+        h('path', { d: 'M23.748 4.482c-.254-.124-.364.113-.512.234-.051.039-.094.09-.137.136-.372.397-.806.657-1.373.626-.829-.046-1.537.214-2.163.848-.133-.782-.575-1.248-1.247-1.548-.352-.156-.708-.311-.955-.65-.172-.241-.219-.51-.305-.774-.055-.16-.11-.323-.293-.35-.2-.031-.278.136-.356.276-.313.572-.434 1.202-.422 1.84.027 1.436.633 2.58 1.838 3.393.137.093.172.187.129.323-.082.28-.18.552-.266.833-.055.179-.137.217-.329.14a5.526 5.526 0 01-1.736-1.18c-.857-.828-1.631-1.742-2.597-2.458a11.365 11.365 0 00-.689-.471c-.985-.957.13-1.743.388-1.836.27-.098.093-.432-.779-.428-.872.004-1.67.295-2.687.684a3.055 3.055 0 01-.465.137 9.597 9.597 0 00-2.883-.102c-1.885.21-3.39 1.102-4.497 2.623C.082 8.606-.231 10.684.152 12.85c.403 2.284 1.569 4.175 3.36 5.653 1.858 1.533 3.997 2.284 6.438 2.14 1.482-.085 3.133-.284 4.994-1.86.47.234.962.327 1.78.397.63.059 1.236-.03 1.705-.128.735-.156.684-.837.419-.961-2.155-1.004-1.682-.595-2.113-.926 1.096-1.296 2.746-2.642 3.392-7.003.05-.347.007-.565 0-.845-.004-.17.035-.237.23-.256a4.173 4.173 0 001.545-.475c1.396-.763 1.96-2.015 2.093-3.517.02-.23-.004-.467-.247-.588zM11.581 18c-2.089-1.642-3.102-2.183-3.52-2.16-.392.024-.321.471-.235.763.09.288.207.486.371.739.114.167.192.416-.113.603-.673.416-1.842-.14-1.897-.167-1.361-.802-2.5-1.86-3.301-3.307-.774-1.393-1.224-2.887-1.298-4.482-.02-.386.093-.522.477-.592a4.696 4.696 0 011.529-.039c2.132.312 3.946 1.265 5.468 2.774.868.86 1.525 1.887 2.202 2.891.72 1.066 1.494 2.082 2.48 2.914.348.292.625.514.891.677-.802.09-2.14.11-3.054-.614zm1-6.44a.306.306 0 01.415-.287.302.302 0 01.2.288.306.306 0 01-.31.307.303.303 0 01-.304-.308zm3.11 1.596c-.2.081-.399.151-.59.16a1.245 1.245 0 01-.798-.254c-.274-.23-.47-.358-.552-.758a1.73 1.73 0 01.016-.588c.07-.327-.008-.537-.239-.727-.187-.156-.426-.199-.688-.199a.559.559 0 01-.254-.078c-.11-.054-.2-.19-.114-.358.028-.054.16-.186.192-.21.356-.202.767-.136 1.146.016.352.144.618.408 1.001.782.391.451.462.576.685.914.176.265.336.537.445.848.067.195-.019.354-.25.452z' }),
+      );
+    }
+
+    /**
      * 深度思考图标：DeepSeek 网页端的原子形——两个交叉椭圆加中心点。
      * DSH 图标库没有这个形状，所以直接描；16×16、1.5 描边与其他图标对齐。
      */
@@ -1783,7 +1939,7 @@ window.__ModuleLoader__.load({
       return h(
         'span',
         { className: 'vqc-fileChip vqc-fileChip--quote', title: text },
-        h(TextIcon, { size: 14 }),
+        h(DshIcon, { name: 'IconContextInjectionOutlineRegular', size: 14 }),
         h('span', { className: 'vqc-fileName' }, text.length > 0 ? text : label),
         h(
           'button',
@@ -1796,27 +1952,6 @@ window.__ModuleLoader__.load({
           },
           h(DshIcon, { name: 'IconCloseOutlineRegular', size: 12 }),
         ),
-      );
-    }
-
-    /**
-     * 文本图标：选中文字的 chip 用它。DSH 图标库里没有 T 形，
-     * 按同一套规格自绘（16 viewBox、描边 1）。
-     */
-    function TextIcon({ size = 16 }) {
-      return h(
-        'svg',
-        {
-          viewBox: '0 0 16 16',
-          width: size,
-          height: size,
-          fill: 'none',
-          stroke: 'currentColor',
-          strokeWidth: 1,
-          'aria-hidden': 'true',
-        },
-        h('path', { d: 'M3.5 4.5h9' }),
-        h('path', { d: 'M8 4.5v7' }),
       );
     }
 
@@ -1883,7 +2018,7 @@ window.__ModuleLoader__.load({
             'span',
             { key: `tool${index}`, className: 'vqc-toolChip', title: detail },
             h(DshIcon, {
-              name: tool.action === 'read_link' ? 'IconLinkOutlineRegular' : 'IconSearchOutlineRegular',
+              name: tool.action === 'read_link' ? 'IconLinkOutlineRegular' : 'IconGlobeOutlineRegular',
               size: 12,
             }),
             labelFor(tool.action),
@@ -1928,7 +2063,7 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         { className: 'vqc-empty' },
-        h(DshIcon, { name: 'IconLightOutlineRegular', size: 20, className: 'vqc-emptyIcon' }),
+        h(DeepSeekMark, { size: 24, className: 'vqc-emptyIcon' }),
         h('div', { className: 'vqc-emptyTitle' }, labels.title),
         h('div', { className: 'vqc-emptyBody' }, labels.body),
         h('div', { className: 'vqc-emptyHint' }, labels.hint),
@@ -1954,7 +2089,7 @@ window.__ModuleLoader__.load({
                 { className: 'vqc-errorActions' },
                 h(
                   'button',
-                  { type: 'button', className: 'vqc-textbtn', title: labels.retryHint, onClick: onRetry },
+                  { type: 'button', className: 'vqc-linkbtn', title: labels.retryHint, onClick: onRetry },
                   labels.retry,
                 ),
               )
@@ -2136,7 +2271,12 @@ window.__ModuleLoader__.load({
             { key: 'stream', className: 'vqc-msg vqc-msg--assistant' },
             state.tools.length > 0 ? h(ToolActivity, { tools: state.tools, labels }) : null,
             state.streamText.length === 0
-              ? h('div', { className: 'vqc-thinking' }, state.thinking ? labels.deepThinking : labels.thinking)
+              ? h(
+                  'div',
+                  { className: `vqc-thinking${state.thinking ? ' vqc-thinking--deep' : ''}` },
+                  state.thinking ? h(AtomIcon, { size: 14 }) : null,
+                  state.thinking ? labels.deepThinking : labels.thinking,
+                )
               : h(
                   'div',
                   { className: 'vqc-prose' },
@@ -2401,6 +2541,151 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 「设置 → 快捷提问」页面。
+     * 只做四件事：改系统提示词、选模型、设定联网/深度思考的默认开关。
+     * 数据走 Host 的 /vt-quick-chat/api/settings，客户端不直接碰文件。
+     * @param props - t 与 locale（由槽位注入）。
+     */
+    function QuickChatSettings({ t, locale }) {
+      const [revision, setRevision] = React.useState(0);
+      React.useEffect(() => (typeof locale?.subscribe === 'function' ? locale.subscribe(() => setRevision((n) => n + 1)) : undefined), [locale]);
+      const tr = (key) => (typeof t === 'function' ? t(key) : key);
+
+      const [state, setState] = React.useState({ status: 'loading', error: '', providers: [], defaultPrompt: '', settings: null });
+      const [draft, setDraft] = React.useState(null);
+      const [saving, setSaving] = React.useState(false);
+      const [notice, setNotice] = React.useState(null);
+
+      React.useEffect(() => {
+        let alive = true;
+        fetchSettings()
+          .then((value) => {
+            if (!alive) return;
+            setState({ status: 'ready', error: '', providers: value.providers ?? [], defaultPrompt: value.defaultPrompt ?? '', settings: value.settings });
+            setDraft(value.settings);
+          })
+          .catch((error) => {
+            if (!alive) return;
+            setState((prev) => ({ ...prev, status: 'error', error: error instanceof Error ? error.message : String(error) }));
+          });
+        return () => {
+          alive = false;
+        };
+      }, []);
+
+      const save = async () => {
+        if (draft === null || saving) return;
+        setSaving(true);
+        setNotice(null);
+        try {
+          const value = await saveSettings(draft);
+          setState((prev) => ({ ...prev, providers: value.providers ?? prev.providers, defaultPrompt: value.defaultPrompt ?? prev.defaultPrompt, settings: value.settings }));
+          setDraft(value.settings);
+          setNotice({ tone: 'ok', text: tr('settings.saved') });
+        } catch (error) {
+          setNotice({ tone: 'error', text: `${tr('settings.saveFailed')}：${error instanceof Error ? error.message : String(error)}` });
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      if (state.status === 'loading') return h('div', { className: 'vqcs-page' }, h('div', { className: 'vqcs-loading' }, tr('settings.loading')));
+      if (state.status === 'error') {
+        return h('div', { className: 'vqcs-page' }, h('div', { className: 'vqcs-loading' }, `${tr('settings.loadFailed')}：${state.error}`));
+      }
+      if (draft === null) return null;
+
+      const patch = (next) => setDraft({ ...draft, ...next });
+      const providerValue = typeof draft.provider === 'string' ? draft.provider : 'follow';
+      const options = [{ value: 'follow', label: tr('settings.providerFollow') }];
+      for (const provider of state.providers) {
+        if (!provider.models || provider.models.length === 0) {
+          options.push({ value: `${provider.id}::`, label: provider.name });
+          continue;
+        }
+        for (const model of provider.models) {
+          options.push({ value: `${provider.id}::${model.id}`, label: `${provider.name} · ${model.name}` });
+        }
+      }
+
+      return h(
+        'div',
+        { className: 'vqcs-page' },
+        h(
+          'div',
+          { className: 'vqcs-head' },
+          h('div', { className: 'vqcs-headText' }, h('h2', { className: 'vqcs-title' }, tr('settings.title')), h('p', { className: 'vqcs-subtitle' }, tr('settings.subtitle'))),
+        ),
+
+        // 系统提示词
+        h(
+          'section',
+          { className: 'vqcs-card' },
+          h(
+            'div',
+            { className: 'vqcs-cardHead' },
+            h('div', { className: 'vqcs-label' }, tr('settings.promptLabel')),
+            h('button', {
+              type: 'button',
+              className: 'vqcs-link',
+              onClick: () => patch({ systemPrompt: '' }),
+              disabled: draft.systemPrompt.length === 0,
+            }, tr('settings.promptReset')),
+          ),
+          h('textarea', {
+            className: 'vqcs-editor',
+            value: draft.systemPrompt,
+            spellCheck: false,
+            placeholder: state.defaultPrompt,
+            'aria-label': tr('settings.promptLabel'),
+            onChange: (event) => patch({ systemPrompt: event.target.value }),
+          }),
+          h('div', { className: 'vqcs-hint' }, tr('settings.promptHint')),
+        ),
+
+        // 模型
+        h(
+          'section',
+          { className: 'vqcs-card' },
+          h('div', { className: 'vqcs-label' }, tr('settings.providerLabel')),
+          h('select', {
+            className: 'vqcs-select',
+            value: providerValue,
+            'aria-label': tr('settings.providerLabel'),
+            onChange: (event) => patch({ provider: event.target.value }),
+          }, options.map((option) => h('option', { key: option.value, value: option.value }, option.label))),
+          h('div', { className: 'vqcs-hint' }, tr('settings.providerHint')),
+        ),
+
+        // 默认开关
+        h(
+          'section',
+          { className: 'vqcs-card' },
+          h(
+            'label',
+            { className: 'vqcs-row' },
+            h('span', { className: 'vqcs-rowText' }, h('span', { className: 'vqcs-label' }, tr('settings.webDefault')), h('span', { className: 'vqcs-hint' }, tr('settings.webDefaultHint'))),
+            h('input', { type: 'checkbox', className: 'vqcs-switch', checked: draft.webByDefault === true, onChange: (event) => patch({ webByDefault: event.target.checked }) }),
+          ),
+          h('div', { className: 'vqcs-divider' }),
+          h(
+            'label',
+            { className: 'vqcs-row' },
+            h('span', { className: 'vqcs-rowText' }, h('span', { className: 'vqcs-label' }, tr('settings.deepThinkDefault')), h('span', { className: 'vqcs-hint' }, tr('settings.deepThinkDefaultHint'))),
+            h('input', { type: 'checkbox', className: 'vqcs-switch', checked: draft.deepThinkByDefault === true, onChange: (event) => patch({ deepThinkByDefault: event.target.checked }) }),
+          ),
+        ),
+
+        h(
+          'div',
+          { className: 'vqcs-foot' },
+          notice === null ? h('span', { className: 'vqcs-hint' }, '') : h('span', { className: `vqcs-status${notice.tone === 'error' ? ' vqcs-status--error' : ''}` }, notice.text),
+          h('button', { type: 'button', className: 'vqcs-btn vqcs-btnPrimary', onClick: save, disabled: saving }, saving ? tr('settings.saving') : tr('settings.save')),
+        ),
+      );
+    }
+
+    /**
      * 实际的激活流程。
      * @param ctx Client 插件上下文。
      */
@@ -2503,8 +2788,25 @@ window.__ModuleLoader__.load({
         return h(QuickChatPanel, { controller, labels, formatTime });
       }
 
+      // 启动时拉一次设置，之后由设置页维护缓存；失败就按默认值走，不影响小窗。
+      void fetchSettings().catch(() => {});
+
       // 浮层挂到根级 list 槽位：它覆盖整个 frame，但不替换任何主界面。
       ctx.inject(['slots'], (scope) => {
+        // 设置页：只影响小窗，所以不进主界面的其它槽位。
+        scope.slots.inject('settings.section', () =>
+          scope.slots.register(
+            {
+              name: 'settings.section',
+              id: 'quick-chat-settings',
+              order: 24,
+              label: () => t('settings.nav'),
+              inject: () => ({ t, locale: ctx.locale }),
+            },
+            QuickChatSettings,
+          ),
+        );
+
         scope.slots.inject('shell.overlay', () =>
           scope.slots.register(
             {
