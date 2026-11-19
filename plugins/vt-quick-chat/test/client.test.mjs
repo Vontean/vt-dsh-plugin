@@ -737,3 +737,95 @@ test('trimForRequest 保留最近消息并守住请求预算', () => {
   assert.equal(budget.at(-1).content, 'last');
   assert.ok(JSON.stringify(budget).length <= 200_000);
 });
+
+// ── 凭证结论的三态：不知道时不得断言「没有凭证」 ──────────────────────────
+
+test('旧宿主不返回 deepseek 字段时，客户端判定为未知而不是缺失', () => {
+  const { deepseekCacheOf } = loadClient().internals;
+  assert.deepEqual(plain(deepseekCacheOf({ settings: {} })), { deepseekKnown: false, deepseekConnected: false });
+  assert.deepEqual(plain(deepseekCacheOf({ deepseek: { connected: true, via: 'account' } })), { deepseekKnown: true, deepseekConnected: true });
+  assert.deepEqual(plain(deepseekCacheOf({ deepseek: { connected: false, via: '', reason: 'missing' } })), { deepseekKnown: true, deepseekConnected: false });
+});
+
+test('设置页视图：宿主没给结论时保持沉默，给了结论才说话', () => {
+  const { deepseekViewOf } = loadClient().internals;
+  assert.equal(plain(deepseekViewOf({})).known, false);
+  const previous = { known: true, connected: true, via: 'api-key', reason: 'api-key' };
+  // 保存时旧宿主不回字段，不能把已经确认的结论抹成「缺失」
+  assert.deepEqual(plain(deepseekViewOf({}, previous)), plain(previous));
+  assert.deepEqual(plain(deepseekViewOf({ deepseek: { connected: true, via: 'api-key', reason: 'api-key' } })), {
+    known: true,
+    connected: true,
+    via: 'api-key',
+    reason: 'api-key',
+  });
+});
+
+test('未知凭证时保留联网与深度思考入口，明确缺失时才收起', () => {
+  const client = loadClient();
+  const { canUseWebTools, setSettingsCache } = client.internals;
+  setSettingsCache({ provider: 'follow', deepseekKnown: false, deepseekConnected: false });
+  assert.equal(canUseWebTools(), true);
+  setSettingsCache({ provider: 'follow', deepseekKnown: true, deepseekConnected: true });
+  assert.equal(canUseWebTools(), true);
+  setSettingsCache({ provider: 'follow', deepseekKnown: true, deepseekConnected: false });
+  assert.equal(canUseWebTools(), false);
+  setSettingsCache({ provider: 'opencode-go::deepseek-v4.1-flash', deepseekKnown: true, deepseekConnected: true });
+  assert.equal(canUseWebTools(), false);
+});
+
+// ── 键位：桌面端不能用 macOS 的死键组合 ──────────────────────────────────
+
+/** macOS 上 Option+这些字母会产生死键，`event.key` 变成 "Dead"。 */
+const DEAD_KEY_LETTERS = ['KeyE', 'KeyI', 'KeyN', 'KeyU'];
+
+/** 只抓 shortcuts.register 的空壳 ctx。 */
+function captureShortcut() {
+  const { module } = loadClient();
+  let captured = null;
+  const ctx = {
+    effect(fn) {
+      const dispose = fn();
+      return typeof dispose === 'function' ? dispose : () => {};
+    },
+    locale: { register: () => () => {}, bind: () => (key) => key, subscribe: () => () => {} },
+    shortcuts: {
+      register(command) {
+        captured = command;
+        return () => {};
+      },
+    },
+    inject(_services, callback) {
+      callback({
+        slots: { inject: (_name, factory) => factory(), register: () => () => {} },
+      });
+    },
+  };
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    module.apply(ctx);
+  } finally {
+    console.error = originalError;
+  }
+  return captured;
+}
+
+test('桌面快捷键不使用会被 macOS 吞掉的 Option+死键字母', () => {
+  const command = captureShortcut();
+  assert.equal(command.id, 'quickChat.toggle');
+  for (const profile of ['desktop:macos', 'desktop:windows', 'desktop:linux']) {
+    const binding = command.defaults[profile];
+    assert.ok(binding, `${profile} 必须声明默认键位`);
+    const usesAlt = binding.modifiers.includes('alt');
+    assert.equal(usesAlt, false, `${profile} 不能用 alt：macOS 桌面端会把它当死键放行`);
+    assert.equal(DEAD_KEY_LETTERS.includes(binding.code), false);
+  }
+});
+
+test('Web 端不声明默认键位，避免与 session.new 抢键', () => {
+  const command = captureShortcut();
+  for (const profile of ['web:macos', 'web:windows', 'web:linux']) {
+    assert.equal(command.defaults[profile], undefined);
+  }
+});

@@ -35,7 +35,7 @@ window.__ModuleLoader__.load({
      * 设置缓存：小窗打开时用它决定联网/深度思考的初始状态。
      * 由设置页写入，插件加载时从 Host 拉一次。
      */
-    let settingsCache = { systemPrompt: '', provider: 'follow', webByDefault: false, deepThinkByDefault: false, deepseekConnected: true };
+    let settingsCache = { systemPrompt: '', provider: 'follow', webByDefault: false, deepThinkByDefault: false, deepseekKnown: false, deepseekConnected: false };
 
     /**
      * 当前通道是否支持联网与深度思考。
@@ -43,7 +43,27 @@ window.__ModuleLoader__.load({
      * @returns 是否支持。
      */
     function canUseWebTools() {
-      return settingsCache.provider === 'follow' && settingsCache.deepseekConnected !== false;
+      // 只在宿主明确说「凭证不可用」时才收掉能力；不知道就保留入口，
+      // 由宿主在请求时决定走哪条通道——猜错会让用户白丢两个按钮。
+      if (settingsCache.provider !== 'follow') return false;
+      if (settingsCache.deepseekKnown !== true) return true;
+      return settingsCache.deepseekConnected === true;
+    }
+
+    /**
+     * 把宿主的凭证结论翻译成缓存字段。
+     *
+     * 旧宿主不会返回 `deepseek`，此时结论「未知」而不是「没有」——设置页据此
+     * 保持沉默，避免让用户去补一份其实已经存在的凭证。
+     * @param value - `/settings` 的返回体。
+     * @returns 要合并进缓存的字段。
+     */
+    function deepseekCacheOf(value) {
+      const status = value?.deepseek;
+      if (status === null || typeof status !== 'object' || typeof status.connected !== 'boolean') {
+        return { deepseekKnown: false, deepseekConnected: false };
+      }
+      return { deepseekKnown: true, deepseekConnected: status.connected === true };
     }
 
     /**
@@ -105,7 +125,7 @@ window.__ModuleLoader__.load({
     async function fetchSettings() {
       const response = await fetch(routeUrl('settings'), { credentials: 'same-origin' });
       const value = await readEnvelope(response);
-      settingsCache = { ...value.settings, deepseekConnected: value.deepseek?.connected !== false };
+      settingsCache = { ...value.settings, ...deepseekCacheOf(value) };
       return value;
     }
 
@@ -122,7 +142,7 @@ window.__ModuleLoader__.load({
         body: JSON.stringify(next),
       });
       const value = await readEnvelope(response);
-      settingsCache = { ...value.settings, deepseekConnected: value.deepseek?.connected !== false };
+      settingsCache = { ...value.settings, ...deepseekCacheOf(value) };
       return value;
     }
     /** 本地历史存储键。 */
@@ -262,8 +282,14 @@ window.__ModuleLoader__.load({
       'settings.providerLabel': '模型',
       'settings.providerHint': '指定后小窗固定用这个模型，不再尝试 DeepSeek 直连。',
       'settings.providerFollow': 'DeepSeek 直连（支持联网与深度思考）',
-      'settings.deepseekReady': 'DeepSeek 凭证已连接，联网与深度思考可用。',
-      'settings.deepseekMissing': '未检测到 DeepSeek 凭证：会退回 DSH 默认模型，且没有联网能力。',
+      'settings.deepseekReady': '已用 {via} 连上 DeepSeek，联网与深度思考可用。',
+      'settings.deepseekMissing': '没拿到 DeepSeek 凭证：会退回 DSH 默认模型，且没有联网能力。',
+      'settings.viaAccount': 'DeepSeek 账号授权',
+      'settings.viaApiKey': 'API Key',
+      'settings.triggerLabel': '触发方式',
+      'settings.triggerHint': '随时按这个组合打开小窗；关掉它不影响正在跑的任务。',
+      'settings.triggerMissing': '键位没有注册成功：先用右侧按钮打开，或重启 DSH 后再试。',
+      'settings.openNow': '立即打开',
       'settings.noWebTools': '当前通道不支持联网与深度思考，输入区会隐藏这两个开关。',
       'settings.webDefault': '默认开启联网',
       'settings.webDefaultHint': '每次打开小窗时联网开关的初始状态。',
@@ -354,8 +380,14 @@ window.__ModuleLoader__.load({
       'settings.providerLabel': 'Model',
       'settings.providerHint': 'When set, the window always uses this model instead of the DeepSeek channel.',
       'settings.providerFollow': 'DeepSeek direct (web + deep thinking)',
-      'settings.deepseekReady': 'DeepSeek credentials found; web and deep thinking are available.',
+      'settings.deepseekReady': 'Connected to DeepSeek via {via}; web and deep thinking are available.',
       'settings.deepseekMissing': 'No DeepSeek credentials: falls back to the DSH default model without web.',
+      'settings.viaAccount': 'account sign-in',
+      'settings.viaApiKey': 'API key',
+      'settings.triggerLabel': 'Trigger',
+      'settings.triggerHint': 'Press it any time to open the overlay; closing it leaves the running task alone.',
+      'settings.triggerMissing': 'The key binding did not register: use the button on the right, or restart DSH and try again.',
+      'settings.openNow': 'Open now',
       'settings.noWebTools': 'This channel has no web or deep thinking; both toggles are hidden in the composer.',
       'settings.webDefault': 'Web on by default',
       'settings.webDefaultHint': 'Initial state of the Web switch when the window opens.',
@@ -1642,6 +1674,7 @@ window.__ModuleLoader__.load({
 .vqcs-select{box-sizing:border-box;width:100%;padding:6px 34px 6px 10px;border:1px solid var(--dsw-alias-border-l2,#0000001a);border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font:inherit;font-size:13px;line-height:20px;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%2381858c' stroke-width='1'%3E%3Cpath d='M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
 .vqcs-select:focus-visible{border-color:var(--dsw-alias-state-business-primary,#4176e6)}
 .vqcs-row{display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer}
+.vqcs-row--plain{cursor:default}
 .vqcs-rowText{display:flex;flex-direction:column;gap:2px;min-width:0}
 .vqcs-switch{position:relative;flex:none;width:36px;height:20px;padding:0;border:0;border-radius:999px;background:var(--dsw-alias-border-l2,#0000001a);cursor:pointer;transition:background .12s}
 .vqcs-switch--on{background:var(--dsw-alias-state-business-primary,#4176e6)}
@@ -1662,6 +1695,8 @@ window.__ModuleLoader__.load({
 .vqcs-link{appearance:none;padding:0;border:0;background:none;color:var(--dsw-alias-brand-primary,#4d6bfe);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
 .vqcs-link:disabled{opacity:.45;cursor:default}
 .vqcs-link:hover:not(:disabled){text-decoration:underline}
+/* 键位标签：与 DSH 的键帽同一套语言（等宽、细边框、轻底色） */
+.vqcs-keycap{display:inline-flex;align-items:center;width:fit-content;padding:1px 6px;border:.5px solid var(--dsw-alias-border-l2,#0000001a);border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2,#f5f6f7);color:var(--dsw-alias-label-primary,#0f1115);font-family:var(--dsw-font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:12px;line-height:18px;letter-spacing:.02em}
 .vqc-historyRemove:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-historyEmpty{padding:16px 4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .vqc-composer{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;flex:none;padding:10px;border-top:.5px solid var(--dsw-alias-border-l2,#0000001a)}
@@ -2648,6 +2683,44 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 快捷键注册结果。注册失败时 DSH 只会静默不触发，所以把结果留在这里，
+     * 让设置页能说明「键位没生效」，而不是让用户反复按键。
+     */
+    let shortcutState = { ok: false, label: '', error: '' };
+
+    /** 设置页里「立即打开」的入口；由激活流程注入。 */
+    let openNow = null;
+
+    /**
+     * 是否是非 Windows 的桌面平台（macOS/Linux 用 ⌘ 符号显示更自然）。
+     * 只用来给键位加一个可读标签，不影响真实绑定。
+     * @returns 是否按 macOS 的习惯显示。
+     */
+    function isMacLike() {
+      if (typeof navigator === 'undefined') return true;
+      return !/Win/i.test(navigator.userAgent);
+    }
+
+    /**
+     * 把宿主的凭证结论翻译成设置页要展示的三态视图。
+     * @param value - `/settings` 的返回体；保存时也传同形状对象。
+     * @param prev - 上一次的视图，用于旧宿主不返回字段时保持已有结论。
+     * @returns `{ known, connected, via, reason }`。
+     */
+    function deepseekViewOf(value, prev) {
+      const status = value?.deepseek;
+      if (status === null || typeof status !== 'object' || typeof status.connected !== 'boolean') {
+        return prev && prev.known === true ? prev : { known: false, connected: false, via: '', reason: '' };
+      }
+      return {
+        known: true,
+        connected: status.connected === true,
+        via: typeof status.via === 'string' ? status.via : '',
+        reason: typeof status.reason === 'string' ? status.reason : '',
+      };
+    }
+
+    /**
      * 「设置 → 快捷提问」页面。
      * 只做四件事：改系统提示词、选模型、设定联网/深度思考的默认开关。
      * 数据走 Host 的 /vt-quick-chat/api/settings，客户端不直接碰文件。
@@ -2658,7 +2731,7 @@ window.__ModuleLoader__.load({
       React.useEffect(() => (typeof locale?.subscribe === 'function' ? locale.subscribe(() => setRevision((n) => n + 1)) : undefined), [locale]);
       const tr = (key) => (typeof t === 'function' ? t(key) : key);
 
-      const [state, setState] = React.useState({ status: 'loading', error: '', providers: [], defaultPrompt: '', settings: null, deepseek: { connected: false, via: '' } });
+      const [state, setState] = React.useState({ status: 'loading', error: '', providers: [], defaultPrompt: '', settings: null, deepseek: deepseekViewOf(undefined) });
       const [draft, setDraft] = React.useState(null);
       const [saving, setSaving] = React.useState(false);
       const [notice, setNotice] = React.useState(null);
@@ -2668,7 +2741,7 @@ window.__ModuleLoader__.load({
         fetchSettings()
           .then((value) => {
             if (!alive) return;
-            setState({ status: 'ready', error: '', providers: value.providers ?? [], defaultPrompt: value.defaultPrompt ?? '', settings: value.settings, deepseek: value.deepseek ?? { connected: false, via: '' } });
+            setState({ status: 'ready', error: '', providers: value.providers ?? [], defaultPrompt: value.defaultPrompt ?? '', settings: value.settings, deepseek: deepseekViewOf(value) });
             setDraft(value.settings);
           })
           .catch((error) => {
@@ -2692,7 +2765,7 @@ window.__ModuleLoader__.load({
         setNotice(null);
         try {
           const value = await saveSettings(draft);
-          setState((prev) => ({ ...prev, providers: value.providers ?? prev.providers, defaultPrompt: value.defaultPrompt ?? prev.defaultPrompt, settings: value.settings, deepseek: value.deepseek ?? prev.deepseek }));
+          setState((prev) => ({ ...prev, providers: value.providers ?? prev.providers, defaultPrompt: value.defaultPrompt ?? prev.defaultPrompt, settings: value.settings, deepseek: deepseekViewOf(value, prev.deepseek) }));
           setDraft(value.settings);
           setNotice({ tone: 'ok', text: tr('settings.saved') });
         } catch (error) {
@@ -2778,11 +2851,15 @@ window.__ModuleLoader__.load({
             'aria-label': tr('settings.providerLabel'),
             onChange: (event) => patch({ provider: event.target.value }),
           }, options.map((option) => h('option', { key: option.value, value: option.value }, option.label))),
-          h(
-            'div',
-            { className: `vqcs-hint${state.deepseek.connected ? '' : ' vqcs-hint--warn'}` },
-            state.deepseek.connected ? tr('settings.deepseekReady') : tr('settings.deepseekMissing'),
-          ),
+          state.deepseek.known !== true
+            ? null
+            : h(
+                'div',
+                { className: `vqcs-hint${state.deepseek.connected ? '' : ' vqcs-hint--warn'}` },
+                state.deepseek.connected
+                  ? tr('settings.deepseekReady').replace('{via}', state.deepseek.via === 'api-key' ? tr('settings.viaApiKey') : tr('settings.viaAccount'))
+                  : tr('settings.deepseekMissing'),
+              ),
           h('div', { className: 'vqcs-hint' }, tr('settings.providerHint')),
         ),
 
@@ -2804,6 +2881,36 @@ window.__ModuleLoader__.load({
             { className: 'vqcs-row' },
             h('span', { className: 'vqcs-rowText' }, h('span', { className: 'vqcs-label' }, tr('settings.deepThinkDefault')), h('span', { className: 'vqcs-hint' }, tr('settings.deepThinkDefaultHint'))),
             h(Switch, { checked: draft.deepThinkByDefault === true, label: tr('settings.deepThinkDefault'), onChange: (value) => patch({ deepThinkByDefault: value }) }),
+          ),
+        ),
+
+        // 触发方式：键位可能被系统或其它插件占掉，所以给一行确定性和一个手动入口
+        h(
+          'section',
+          { className: 'vqcs-card' },
+          h('div', { className: 'vqcs-label' }, tr('settings.triggerLabel')),
+          h(
+            'div',
+            { className: 'vqcs-row vqcs-row--plain' },
+            h(
+              'span',
+              { className: 'vqcs-rowText' },
+              shortcutState.ok
+                ? h('kbd', { className: 'vqcs-keycap' }, shortcutState.label)
+                : h('span', { className: 'vqcs-hint vqcs-hint--warn' }, tr('settings.triggerMissing')),
+              h('span', { className: 'vqcs-hint' }, tr('settings.triggerHint')),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'vqcs-link',
+                onClick: () => {
+                  if (typeof openNow === 'function') openNow();
+                },
+              },
+              tr('settings.openNow'),
+            ),
           ),
         ),
 
@@ -2919,6 +3026,9 @@ window.__ModuleLoader__.load({
         return h(QuickChatPanel, { controller, labels, formatTime });
       }
 
+      // 设置页的「立即打开」：键位失效时用户仍然进得去。
+      openNow = () => controller.toggle();
+
       // 启动时拉一次设置，之后由设置页维护缓存；失败就按默认值走，不影响小窗。
       void fetchSettings().catch(() => {});
 
@@ -2953,29 +3063,40 @@ window.__ModuleLoader__.load({
         );
       });
 
-      // 快捷键：只注册桌面键位 Mod+Alt+N（⌘⌥N / Ctrl+Alt+N）。
-      // Web 不提供默认键：DSH 的 session.new 在 Web 上已占用 Mod+Alt+N，
-      // Mod+Shift+N 又是浏览器「无痕窗口」的保留键，网页收不到事件。
-      // 缺少 `web:*` 默认值时 DSH 视为未绑定，不报错，Web 端就是没有入口。
+      // 快捷键：只注册桌面键位 Mod+Shift+K（⌘⇧K / Ctrl+Shift+K）。
+      //
+      // 为什么不是 Mod+Alt+N：macOS 上 Option+N 是波浪号的死键，按下时
+      // `event.key` 为 "Dead"。DSH 的键盘适配层只在 Web(macOS) 上为
+      // Mod+Alt+N 开了例外（`commandDeadKey`），桌面端会因 `composing`
+      // 判定直接放行，按键被静默吞掉——写成 Mod+Alt+N 等于没有快捷键。
+      // 同理避免 Mod+Alt 配 E/I/U/N 这些死键字母。
+      //
+      // Web 不提供默认键：`session.new` 在 Web(macOS) 已占用 Mod+Alt+N，
+      // Mod+Shift+N 又是浏览器「无痕窗口」的保留键。缺少 `web:*` 默认值时
+      // DSH 视为未绑定，不报错，Web 端就是没有入口。
       ctx.effect(
         () => {
           try {
-            return ctx.shortcuts.register({
+            const disposer = ctx.shortcuts.register({
               id: 'quickChat.toggle',
               label: () => t('shortcut.label'),
               aliases: ['quick chat', 'explain concept', '快捷提问'],
               defaults: {
-                'desktop:macos': { code: 'KeyN', modifiers: ['primary', 'alt'] },
-                'desktop:windows': { code: 'KeyN', modifiers: ['primary', 'alt'] },
-                'desktop:linux': { code: 'KeyN', modifiers: ['primary', 'alt'] },
+                'desktop:macos': { code: 'KeyK', modifiers: ['primary', 'shift'] },
+                'desktop:windows': { code: 'KeyK', modifiers: ['primary', 'shift'] },
+                'desktop:linux': { code: 'KeyK', modifiers: ['primary', 'shift'] },
               },
               regions: ['page', 'editable'],
               modals: [],
               resolve: () => ({ status: 'handled', run: () => controller.toggle() }),
             });
+            shortcutState = { ok: true, label: isMacLike() ? '⌘⇧K' : 'Ctrl+Shift+K', error: '' };
+            return disposer;
           } catch (error) {
-            // 与第三方插件的键位冲突不应让整个插件（乃至 Web boot）失败。
-            console.error(`[${PLUGIN_ID}] shortcut registration failed; assign another binding in Settings`, error);
+            // 与第三方插件的键位冲突不应让整个插件（乃至 Web boot）失败；
+            // 记下原因，设置页会显示「键位没生效」。
+            shortcutState = { ok: false, label: '', error: error instanceof Error ? error.message : String(error) };
+            console.error(`[${PLUGIN_ID}] shortcut registration failed`, error);
             return () => {};
           }
         },
@@ -3024,6 +3145,13 @@ window.__ModuleLoader__.load({
         trimForRequest,
         createController,
         QuickChatPanel,
+        deepseekCacheOf,
+        deepseekViewOf,
+        canUseWebTools,
+        settingsCacheRef: () => settingsCache,
+        setSettingsCache: (next) => {
+          settingsCache = { ...settingsCache, ...next };
+        },
       },
     };
   },

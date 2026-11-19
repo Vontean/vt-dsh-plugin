@@ -2,7 +2,7 @@
 
 > 包名 `dsh-vt-quick-chat`，目录 `plugins/vt-quick-chat/`。
 > 目标：agent 执行任务中按快捷键弹出临时小窗解释概念；不创建 Session、不写 session log、
-> 不调用工具、不进侧栏。范围：Desktop `⌘⌥N`（Web 不提供）、`shell.overlay` 非模态浮层、
+> 不调用工具、不进侧栏。范围：Desktop `⌘⇧K`（Web 不提供）、`shell.overlay` 非模态浮层、
 > 紧凑/展开两态、`ctx.llm.stream()` 流式、本地历史、只用 DSH token 与 `ICON_SYMBOLS`。
 
 ## 1. 问题与边界
@@ -132,7 +132,8 @@ closed ──toggle/open──▶ compact ──send──▶ expanded
 |---|---|---|
 | 系统提示词 | 替换内置 `SYSTEM_PROMPT`；留空即用内置，可一键恢复默认 | 宿主读盘后逐请求生效 |
 | 模型 | 下拉第一项是「DeepSeek 直连（支持联网与深度思考）」；选了具体模型就跳过 DeepSeek 直连 | 宿主按 `provider::model` 解析 |
-| 凭证状态 | 显示 DeepSeek 凭证是否可用；不可用时提示会退回默认模型且无联网 | GET /settings 的 `deepseek` 字段 |
+| 凭证状态 | 三态：可用（说明走账号授权还是 API Key）/ 明确不可用（提示会退回默认模型且无联网）/ 未知（旧宿主没返回字段时不显示结论） | GET /settings 的 `deepseek` 字段 |
+| 触发方式 | 显示当前键位键帽，并提供「立即打开」；DSH 拒绝注册时直接说明原因 | 客户端 `shortcutState` + `controller.toggle()` |
 | 默认开启联网 | 小窗打开时联网开关的初始状态（仅在直连通道下生效） | 客户端缓存 |
 | 默认开启深度思考 | 小窗打开时深度思考开关的初始状态（仅在直连通道下生效） | 客户端缓存 |
 
@@ -360,7 +361,7 @@ DSH 图标的 sprite 就是
 
 ### 10.2 手工验收清单
 
-- [ ] Desktop `⌘⌥N`（`Ctrl+Alt+N`）打开；输入框聚焦；关闭后焦点归还。
+- [ ] Desktop `⌘⇧K`（`Ctrl+Shift+K`）打开；输入框聚焦；关闭后焦点归还。
 - [ ] Web 端不注册默认键位；命令在快捷键设置里显示为「未绑定」。
 - [ ] 侧栏不新增 session；session log 不新增；不生成标题。
 - [ ] 紧凑条 ↔ 展开；收起保留消息。

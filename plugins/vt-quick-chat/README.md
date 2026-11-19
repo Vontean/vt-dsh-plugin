@@ -6,7 +6,7 @@ agent 正在跑任务时，看到一个不懂的词：按一个快捷键，在�
 
 ## 它做了什么
 
-- **随时可开**：Desktop `⌘⌥N`（Windows/Linux `Ctrl+Alt+N`）。Web 端不提供入口。
+- **随时可开**：Desktop `⌘⇧K`（Windows/Linux `Ctrl+Shift+K`）。Web 端不提供入口。
   输入框自动聚焦，打开前的主界面焦点在关闭后归还。
 - **非模态浮层**：挂在 DSH 的根级 `shell.overlay` 上，不替换主对话、主输入框或侧栏。
   小窗打开时仍可继续操作主界面；`Esc` 只在小窗内生效。
@@ -33,8 +33,10 @@ agent 正在跑任务时，看到一个不懂的词：按一个快捷键，在�
 - **借用选中文字**：打开时读取当前选中文本，作为一条和附件同款的 chip（T 图标 + 文本 + ×，可移除）；
   按键导致选区折叠时，会回退到 5 秒内的最近选区。想换引用就关掉重开，输入区不再放多余的按钮；
   没有选中文字时不显示 chip。
-- **设置页**：DSH「设置 → 快捷提问」里可以改系统提示词（可恢复默认）、指定模型，
-  以及设定联网/深度思考的默认开关。数据存在 `~/.dsh/vt-quick-chat/settings.json`。
+- **设置页**：DSH「设置 → 快捷提问」里可以改系统提示词（可恢复默认）、指定模型、
+  设定联网/深度思考的默认开关，并看到当前触发键位。键位显示为「立即打开」旁边的一枚键帽；
+  如果 DSH 拒绝了这次注册，那一行会直接说明，并给一个按钮让你现在就能打开小窗。
+  数据存在 `~/.dsh/vt-quick-chat/settings.json`。
 - **本地历史**：最近 30 个临时对话存在本机 `localStorage`，可恢复、单条删除、清空全部。
   超过 30 个时自动丢掉最旧的一条；历史只在本机浏览器里，不上传、不跨设备同步。
 - **解释用 Markdown**：支持短段落、标题、列表、引用、行内代码、围栏代码块与 https 链接。
@@ -58,10 +60,15 @@ agent 正在跑任务时，看到一个不懂的词：按一个快捷键，在�
 
 | 平台 | 默认键位 |
 |---|---|
-| macOS Desktop | `⌘⌥N` |
-| Windows Desktop | `Ctrl+Alt+N` |
-| Linux Desktop | `Ctrl+Alt+N` |
+| macOS Desktop | `⌘⇧K` |
+| Windows Desktop | `Ctrl+Shift+K` |
+| Linux Desktop | `Ctrl+Shift+K` |
 | Web | 不提供。见下方说明 |
+
+**为什么不用 `⌘⌥N`（Codex 的同款键位）：** macOS 上 Option+N 是波浪号的死键，
+按下时 `event.key` 变成 `"Dead"`。DSH 的键盘适配层只在 Web(macOS) 上为 `Mod+Alt+N`
+开了例外，桌面端会按 `composing` 处理、直接放行，按键被静默吞掉——写这个键位等于没有快捷键。
+`⌘⇧K` 不涉及 Option，也不与 DSH 内置命令冲突（`⌘K` 是会话搜索）。
 
 **这个插件面向 Desktop。** Web 端不注册默认键位，原因是两个组合都被占了：
 
@@ -121,6 +128,9 @@ dsh plugin --profile <profile> add /绝对路径/dsh-vt-quick-chat-1.1.2.tgz
 - 凭证解析顺序：**DeepSeek 账号授权**（`deepseekAccount.resolveToken`，走账号余额）→
   **`DEEPSEEK_API_KEY`**（走 API Key 余额）→ 都没有时退回 DSH 默认模型
   （`agentDefaultModel.currentSelection()` → 第一个有模型的 provider），此时没有联网能力。
+- **不需要另外填密钥**：桌面端登录过的 DeepSeek 账号，插件直接用那份授权。
+  设置页那行结论来自宿主的一次真实探测，并会说明依据（账号授权 / API Key / 缺哪一环）；
+  宿主没返回结论时，设置页保持沉默，不会把「不知道」说成「没有凭证」。
 - account token / API Key **只在 Host 半边**使用；浏览器只拿同源路由的 SSE 文本。
 - 临时提问的内容会发送给当前 provider；UI 上没有额外的「已上传」提示，因为这是模型的
   正常工作方式。不要在小窗里粘贴密钥或敏感数据。
