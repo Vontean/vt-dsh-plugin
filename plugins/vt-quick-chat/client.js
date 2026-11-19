@@ -264,7 +264,6 @@ window.__ModuleLoader__.load({
 
     const zh = {
       'panel.label': '快捷提问',
-      'panel.resize': '拖动调整高度（也可用上下方向键）',
       'input.aria': '快捷提问输入',
       'input.placeholder': '问点什么…',
       'input.placeholderExpanded': '继续追问…',
@@ -364,7 +363,6 @@ window.__ModuleLoader__.load({
 
     const en = {
       'panel.label': 'Quick chat',
-      'panel.resize': 'Drag to resize (or use the up/down arrow keys)',
       'input.aria': 'Quick chat input',
       'input.placeholder': 'Ask something…',
       'input.placeholderExpanded': 'Ask a follow-up…',
@@ -1617,11 +1615,9 @@ window.__ModuleLoader__.load({
 .vqc-panel{position:absolute;right:24px;bottom:96px;display:flex;flex-direction:column;box-sizing:border-box;width:min(420px,calc(100vw - 32px));background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);border:0;border-radius:var(--vqc-radius,24px);--vqc-radius:24px;box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);--dsw-elevation-stroke-color:var(--dsw-alias-border-l2,#0000001a);pointer-events:auto;overflow:hidden;font-size:var(--dsh-content-font-size,14px);line-height:1.55;animation:vqc-rise 160ms ease-out}
 .vqc-panel--compact{min-height:48px;max-height:240px}
 .vqc-panel--expanded{height:min(520px,calc(100dvh - 120px))}
-/* 顶部拖拽条：面板贴底，往上拖就是加高。6px 高，避开 44px 状态行里的按钮中心。 */
+/* 顶部拖拽热区：面板贴底，往上拖就是加高。不画任何把手——
+   光标变 ns-resize 就够说明这里能拉，界面不多长一个元素。 */
 .vqc-resize{position:absolute;inset-inline:0;top:0;z-index:3;height:6px;cursor:ns-resize;touch-action:none}
-.vqc-resize::after{content:'';position:absolute;left:50%;top:2px;width:32px;height:2px;margin-left:-16px;border-radius:999px;corner-shape:round;background:var(--dsw-alias-border-l3,#c9ccd1);opacity:0;transition:opacity .12s}
-.vqc-resize:hover::after,.vqc-resize:focus-visible::after{opacity:1}
-.vqc-resize:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:-2px}
 @keyframes vqc-rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.vqc-panel{animation:none}.vqc-caret{animation:none}}
 .vqc-convbar{display:flex;align-items:center;gap:8px;flex:none;height:44px;padding:0 12px 0 16px;border-bottom:.5px solid var(--dsw-alias-border-l1,#0000000a)}
@@ -2484,22 +2480,6 @@ window.__ModuleLoader__.load({
         window.addEventListener('pointercancel', stop);
       };
 
-      /**
-       * 键盘调高度：给不能用鼠标的人留一条路。
-       * @param event - 键盘事件。
-       */
-      const onResizeKeyDown = (event) => {
-        if (typeof window === 'undefined') return;
-        const step = event.key === 'ArrowUp' ? 24 : event.key === 'ArrowDown' ? -24 : 0;
-        if (step === 0) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const next = clampExpandedHeight((panelHeight ?? EXPANDED_MIN_HEIGHT) + step, window.innerHeight);
-        heightRef.current = next;
-        setPanelHeight(next);
-        storeHeight(localStorage, next);
-      };
-
       // 视口变小时把记住的高度收回可用范围。
       React.useEffect(() => {
         if (typeof window === 'undefined') return undefined;
@@ -2844,18 +2824,7 @@ window.__ModuleLoader__.load({
             style: expanded && typeof panelHeight === 'number' ? { height: `${panelHeight}px` } : undefined,
             onKeyDown,
           },
-          expanded
-            ? h('div', {
-                className: 'vqc-resize',
-                role: 'separator',
-                tabIndex: 0,
-                'aria-orientation': 'horizontal',
-                'aria-label': labels.resize,
-                title: labels.resize,
-                onPointerDown: onResizeStart,
-                onKeyDown: onResizeKeyDown,
-              })
-            : null,
+          expanded ? h('div', { className: 'vqc-resize', onPointerDown: onResizeStart }) : null,
           convBar,
           body,
           composer,
@@ -3184,7 +3153,6 @@ window.__ModuleLoader__.load({
         truncated: t('stream.truncated'),
         retryHint: t('action.retryHint'),
         panelLabel: t('panel.label'),
-        resize: t('panel.resize'),
         web: t('action.web'),
         webOn: t('action.webOn'),
         webHint: t('action.webHint'),
