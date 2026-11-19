@@ -63,12 +63,41 @@ window.__ModuleLoader__.load({
      * 读设置页数据：设置本身 + 可选 provider 清单 + 内置提示词。
      * @returns `{ settings, providers, defaultPrompt }`。
      */
+    /**
+     * 解析 Host 的 JSON 信封。
+     * 宿主端没更新时（旧代码没有 /settings 路由）会回 405 空响应，这里要给出
+     * 「重启 DSH」这种能直接照做的提示，而不是 JSON 解析栈。
+     * @param response - fetch 响应。
+     * @returns 信封里的 value。
+     */
+    async function readEnvelope(response) {
+      const text = await response.text();
+      let envelope = null;
+      if (text.length > 0) {
+        try {
+          envelope = JSON.parse(text);
+        } catch {
+          envelope = null;
+        }
+      }
+      if (envelope === null) {
+        const error = new Error(`HTTP ${response.status}`);
+        error.code = response.status === 405 || response.status === 404 ? 'host-stale' : 'bad-response';
+        throw error;
+      }
+      if (envelope.ok !== true) {
+        const error = new Error(envelope.error?.message ?? `HTTP ${response.status}`);
+        error.code = envelope.error?.code ?? 'rejected';
+        throw error;
+      }
+      return envelope.value;
+    }
+
     async function fetchSettings() {
       const response = await fetch(routeUrl('settings'), { credentials: 'same-origin' });
-      const envelope = await response.json();
-      if (envelope?.ok !== true) throw new Error(envelope?.error?.message ?? `HTTP ${response.status}`);
-      settingsCache = envelope.value.settings;
-      return envelope.value;
+      const value = await readEnvelope(response);
+      settingsCache = value.settings;
+      return value;
     }
 
     /**
@@ -83,10 +112,9 @@ window.__ModuleLoader__.load({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(next),
       });
-      const envelope = await response.json();
-      if (envelope?.ok !== true) throw new Error(envelope?.error?.message ?? `HTTP ${response.status}`);
-      settingsCache = envelope.value.settings;
-      return envelope.value;
+      const value = await readEnvelope(response);
+      settingsCache = value.settings;
+      return value;
     }
     /** 本地历史存储键。 */
     const STORAGE_KEY = `${PLUGIN_ID}:history:v1`;
@@ -234,6 +262,7 @@ window.__ModuleLoader__.load({
       'settings.saved': '已保存',
       'settings.saveFailed': '保存失败',
       'settings.loadFailed': '读取设置失败',
+      'settings.hostStale': '宿主端还没更新：请完全退出并重新打开 DSH，再回到这里。',
       'settings.loading': '正在读取…',
       'settings.settingsTitle': '设置',
     };
@@ -322,6 +351,7 @@ window.__ModuleLoader__.load({
       'settings.saved': 'Saved',
       'settings.saveFailed': 'Could not save',
       'settings.loadFailed': 'Could not load settings',
+      'settings.hostStale': 'The host half has not been updated yet: quit and reopen DSH, then come back.',
       'settings.loading': 'Loading…',
       'settings.settingsTitle': 'Settings',
     };
@@ -2566,7 +2596,13 @@ window.__ModuleLoader__.load({
           })
           .catch((error) => {
             if (!alive) return;
-            setState((prev) => ({ ...prev, status: 'error', error: error instanceof Error ? error.message : String(error) }));
+            const stale = error?.code === 'host-stale';
+            setState((prev) => ({
+              ...prev,
+              status: 'error',
+              stale,
+              error: error instanceof Error ? error.message : String(error),
+            }));
           });
         return () => {
           alive = false;
@@ -2583,7 +2619,8 @@ window.__ModuleLoader__.load({
           setDraft(value.settings);
           setNotice({ tone: 'ok', text: tr('settings.saved') });
         } catch (error) {
-          setNotice({ tone: 'error', text: `${tr('settings.saveFailed')}：${error instanceof Error ? error.message : String(error)}` });
+          const stale = error?.code === 'host-stale';
+          setNotice({ tone: 'error', text: stale ? tr('settings.hostStale') : `${tr('settings.saveFailed')}：${error instanceof Error ? error.message : String(error)}` });
         } finally {
           setSaving(false);
         }
@@ -2591,7 +2628,17 @@ window.__ModuleLoader__.load({
 
       if (state.status === 'loading') return h('div', { className: 'vqcs-page' }, h('div', { className: 'vqcs-loading' }, tr('settings.loading')));
       if (state.status === 'error') {
-        return h('div', { className: 'vqcs-page' }, h('div', { className: 'vqcs-loading' }, `${tr('settings.loadFailed')}：${state.error}`));
+        return h(
+          'div',
+          { className: 'vqcs-page' },
+          h(
+            'div',
+            { className: 'vqcs-loading' },
+            state.stale === true
+              ? tr('settings.hostStale')
+              : `${tr('settings.loadFailed')}：${state.error}`,
+          ),
+        );
       }
       if (draft === null) return null;
 

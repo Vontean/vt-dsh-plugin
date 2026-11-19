@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import test from 'node:test';
 
@@ -257,4 +260,45 @@ test('客户端断开时把 abort 传给 llm.stream', async () => {
   await pending;
   assert.equal(aborted, true);
   route.dispose();
+});
+
+test('settings 路由：GET 返回设置与默认提示词，POST 落盘并可读回', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'vtqc-settings-'));
+  process.env.VT_QUICK_CHAT_SETTINGS = path.join(dir, 'settings.json');
+  try {
+    const app = createContext({ connection: undefined, llm: undefined });
+
+    const getRes = new FakeResponse();
+    await app.handler(createRequest({}, '/vt-quick-chat/api/settings', 'GET'), getRes);
+    assert.equal(getRes.status, 200);
+    const read = JSON.parse(getRes.text);
+    assert.equal(read.ok, true);
+    assert.equal(read.value.settings.provider, 'follow');
+    assert.equal(read.value.settings.webByDefault, false);
+    assert.ok(read.value.defaultPrompt.length > 0);
+    assert.deepEqual(read.value.providers, []);
+
+    const postRes = new FakeResponse();
+    await app.handler(
+      createRequest(
+        { systemPrompt: '只说重点', provider: 'deepseek::deepseek-flash', webByDefault: true, deepThinkByDefault: true },
+        '/vt-quick-chat/api/settings',
+        'POST',
+      ),
+      postRes,
+    );
+    assert.equal(postRes.status, 200);
+    const saved = JSON.parse(postRes.text);
+    assert.equal(saved.value.settings.systemPrompt, '只说重点');
+    assert.equal(saved.value.settings.provider, 'deepseek::deepseek-flash');
+    assert.equal(saved.value.settings.webByDefault, true);
+
+    const again = new FakeResponse();
+    await app.handler(createRequest({}, '/vt-quick-chat/api/settings', 'GET'), again);
+    assert.equal(JSON.parse(again.text).value.settings.deepThinkByDefault, true);
+    app.dispose();
+  } finally {
+    delete process.env.VT_QUICK_CHAT_SETTINGS;
+    await rm(dir, { recursive: true, force: true });
+  }
 });

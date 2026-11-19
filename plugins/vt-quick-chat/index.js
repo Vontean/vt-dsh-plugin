@@ -161,7 +161,13 @@ const SYSTEM_PROMPT = [
 
 /** 设置文件：只存用户在设置页里改的那几项。 */
 const SETTINGS_DIR = path.join(homedir(), '.dsh', 'vt-quick-chat');
-const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json');
+/**
+ * 设置文件路径。按需解析，这样测试可以用环境变量把落点指到临时目录。
+ * @returns 绝对路径。
+ */
+function settingsFile() {
+  return process.env.VT_QUICK_CHAT_SETTINGS ?? path.join(SETTINGS_DIR, 'settings.json');
+}
 /** Provider 取值：'follow' = 跟随 DSH 默认。 */
 const PROVIDER_FOLLOW = 'follow';
 /** 内置提示词在设置页里的「恢复默认」占位。 */
@@ -193,7 +199,7 @@ function sanitizeSettings(value) {
  */
 async function readSettings() {
   try {
-    const raw = await readFile(SETTINGS_FILE, 'utf8');
+    const raw = await readFile(settingsFile(), 'utf8');
     return sanitizeSettings(JSON.parse(raw));
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -207,10 +213,10 @@ async function readSettings() {
  */
 async function writeSettings(value) {
   const settings = sanitizeSettings(value);
-  await mkdir(SETTINGS_DIR, { recursive: true });
-  const temp = path.join(SETTINGS_DIR, 'settings.' + process.pid + '.' + Date.now() + '.tmp');
+  await mkdir(path.dirname(settingsFile()), { recursive: true });
+  const temp = path.join(path.dirname(settingsFile()), 'settings.' + process.pid + '.' + Date.now() + '.tmp');
   await writeFile(temp, JSON.stringify(settings, null, 2), 'utf8');
-  await rename(temp, SETTINGS_FILE);
+  await rename(temp, settingsFile());
   return settings;
 }
 
