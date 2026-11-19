@@ -219,6 +219,11 @@ SSE 和小窗自己的对话流是同一套鉴权与写法，不需要额外的�
   把 `--dsw-elevation-stroke-color` 设为 `--dsw-alias-border-l2`，`border: 0`，
   避免 elevation 的 0.5px 描边叠加成粗线。
 - 圆角：窗口统一 `--vqc-radius: 24px`；按钮/chip `--dsw-radius-sm`；气泡 `--dsw-radius-md`。
+- **全圆角必须写 `corner-shape: round`**：DSH 用通配选择器把 `corner-shape` 设成
+  `superellipse(1.5)`，`border-radius: 999px` 会被画成「圆角方块」而不是圆/胶囊
+  （实测截图为证：同样 28px 的圆点在 superellipse 下是方角）。所以 `.vqc-send`、
+  `.vqc-pill`、`.vqc-add`、`.vqc-panel--single`、设置页开关都必须显式 `round`，
+  `test/client.test.mjs` 有一条守卫按规则扫描，漏写会挂测试。
 - 单行胶囊：紧凑态只剩一行输入（无消息/附件/引用/错误/折行）时，窗口 `border-radius: 999px`，
   48px 高即等于 24px——和常态窗口同一个值，所以展开/收起只有高度在变，圆角不跳档。
 - 状态行高度 44px、左右内边距 16 / 12：24 圆角在窗口顶部会吃掉约 6px 的横向依据，

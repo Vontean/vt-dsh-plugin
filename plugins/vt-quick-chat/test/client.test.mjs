@@ -869,3 +869,44 @@ test('应用宿主事件后不会自己发请求', () => {
     controller.dispose();
   }
 });
+
+// ── 单行胶囊：真实渲染下类名是否挂上 ────────────────────────────────────
+
+test('SSR：紧凑态只有一行输入时，窗口挂上胶囊类', () => {
+  const html = renderPanel({ draft: '' });
+  const cls = html.match(/class="(vqc-panel[^"]*)"/u)?.[1] ?? '';
+  assert.match(cls, /vqc-panel--compact/u);
+  assert.match(cls, /vqc-panel--single/u, `实得：${cls}`);
+});
+
+test('SSR：有消息、有附件、有引用、有错误时都不是胶囊', () => {
+  for (const override of [
+    { messages: [{ id: '1', role: 'user', content: 'hi', at: 0 }] },
+    { files: [{ key: 'k', name: 'a.pdf', status: 'ready' }] },
+    { selection: '一段引用' },
+    { error: { code: 'AUTH', message: 'x' } },
+    { streaming: true },
+    { mode: 'expanded' },
+  ]) {
+    const html = renderPanel(override);
+    const cls = html.match(/class="(vqc-panel[^"]*)"/u)?.[1] ?? '';
+    assert.equal(/vqc-panel--single/u.test(cls), false, `不该是胶囊：${JSON.stringify(override)} → ${cls}`);
+  }
+});
+
+// ── DSH 的 corner-shape：全圆角必须显式 round ────────────────────────────
+
+test('所有 999px / 50% 圆角都显式声明 corner-shape:round', () => {
+  // DSH 用通配选择器把 corner-shape 设成 superellipse(1.5)，
+  // 不写 round 的话 999px 会被画成圆角方块，而不是圆/胶囊。
+  const css = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  const rules = [...css.matchAll(/([^\n{}]+)\{([^{}\n]*)\}/gu)];
+  assert.ok(rules.length > 50, '没读到样式表');
+  const offenders = [];
+  for (const rule of rules) {
+    const body = rule[2];
+    if (!/border-radius:\s*(999px|50%)/u.test(body)) continue;
+    if (!/corner-shape:\s*round/u.test(body)) offenders.push(rule[1].trim().slice(0, 60));
+  }
+  assert.deepEqual(offenders, [], `这些规则缺 corner-shape:round：${offenders.join(' | ')}`);
+});
