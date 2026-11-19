@@ -287,7 +287,7 @@ window.__ModuleLoader__.load({
       'settings.viaAccount': 'DeepSeek 账号授权',
       'settings.viaApiKey': 'API Key',
       'settings.triggerLabel': '触发方式',
-      'settings.triggerHint': '随时按这个组合打开小窗；关掉它不影响正在跑的任务。',
+      'settings.triggerHint': '随时按这个组合打开小窗，关掉它不影响正在跑的任务；组合可在「设置 → 通用设置 → 键盘快捷键」里改。',
       'settings.triggerMissing': '键位没有注册成功：先用右侧按钮打开，或重启 DSH 后再试。',
       'settings.openNow': '立即打开',
       'settings.noWebTools': '当前通道不支持联网与深度思考，输入区会隐藏这两个开关。',
@@ -385,7 +385,7 @@ window.__ModuleLoader__.load({
       'settings.viaAccount': 'account sign-in',
       'settings.viaApiKey': 'API key',
       'settings.triggerLabel': 'Trigger',
-      'settings.triggerHint': 'Press it any time to open the overlay; closing it leaves the running task alone.',
+      'settings.triggerHint': 'Opens the window any time; closing it leaves the running task alone. Rebind it under Settings → General → Keyboard shortcuts.',
       'settings.triggerMissing': 'The key binding did not register: use the button on the right, or restart DSH and try again.',
       'settings.openNow': 'Open now',
       'settings.noWebTools': 'This channel has no web or deep thinking; both toggles are hidden in the composer.',
@@ -1539,7 +1539,10 @@ window.__ModuleLoader__.load({
 
     const STYLE_ID = `${PLUGIN_ID}:styles`;
     const CSS = `
-.vqc-root{position:absolute;inset:0;pointer-events:none;z-index:0}
+/* 浮在整个 frame 之上，包括设置弹窗这类模态：小窗的用途就是在任务/设置进行中
+   也能随时看，而且设置页里的「立即打开」必须真的出现在最前面。
+   根层整体 click-through，只有卡片自己接指针事件。 */
+.vqc-root{position:absolute;inset:0;pointer-events:none;z-index:2000}
 .vqc-panel{position:absolute;right:24px;bottom:96px;display:flex;flex-direction:column;box-sizing:border-box;width:min(420px,calc(100vw - 32px));background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);border:0;border-radius:var(--dsw-radius-lg,16px);box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);--dsw-elevation-stroke-color:var(--dsw-alias-border-l2,#0000001a);pointer-events:auto;overflow:hidden;font-size:var(--dsh-content-font-size,14px);line-height:1.55;animation:vqc-rise 160ms ease-out}
 .vqc-panel--compact{min-height:48px;max-height:240px}
 .vqc-panel--expanded{height:min(520px,calc(100dvh - 120px))}
