@@ -946,3 +946,44 @@ test('followScrollTop：pinTop 为负时钳到 0，不会产生负的 scrollTop'
   const { followScrollTop } = loadClient().internals;
   assert.equal(followScrollTop(300, -20), 0);
 });
+
+// ── 展开态拖拽高度 ──────────────────────────────────────────────────────
+
+test('clampExpandedHeight：默认 520 就是最小高度', () => {
+  const { clampExpandedHeight, EXPANDED_MIN_HEIGHT } = loadClient().internals;
+  assert.equal(EXPANDED_MIN_HEIGHT, 520);
+  assert.equal(clampExpandedHeight(520, 900), 520);
+  assert.equal(clampExpandedHeight(300, 900), 520);
+  assert.equal(clampExpandedHeight(760, 900), 760);
+});
+
+test('clampExpandedHeight：上限给顶部留出空隙', () => {
+  const { clampExpandedHeight } = loadClient().internals;
+  // 900 - 96(底距) - 12(顶距) = 792
+  assert.equal(clampExpandedHeight(5000, 900), 792);
+  // 视口很矮时最小高度也要跟着降，不能超过可用空间
+  const short = clampExpandedHeight(520, 500);
+  assert.ok(short < 520, `矮视口应降低最小高度，实得 ${short}`);
+  assert.ok(short <= 500 - 96 - 12);
+});
+
+test('clampExpandedHeight：非法输入回落到默认高度', () => {
+  const { clampExpandedHeight } = loadClient().internals;
+  assert.equal(clampExpandedHeight(undefined, 900), 520);
+  assert.equal(clampExpandedHeight(Number.NaN, 900), 520);
+  assert.equal(clampExpandedHeight('700', 900), 520);
+});
+
+test('高度记忆：存得进、读得出、坏数据不影响启动', () => {
+  const { readStoredHeight, storeHeight } = loadClient().internals;
+  const store = { value: null, getItem() { return this.value; }, setItem(_k, v) { this.value = v; } };
+  storeHeight(store, 640);
+  assert.equal(store.value, '640');
+  assert.equal(readStoredHeight(store, 900), 640);
+  // 超出上限的旧值读出来要被钳制
+  store.value = '5000';
+  assert.equal(readStoredHeight(store, 900), 792);
+  store.value = 'abc';
+  assert.equal(readStoredHeight(store, 900), undefined);
+  assert.equal(readStoredHeight(undefined, 900), undefined);
+});

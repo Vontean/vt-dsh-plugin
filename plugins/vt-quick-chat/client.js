@@ -147,6 +147,61 @@ window.__ModuleLoader__.load({
     }
     /** 本地历史存储键。 */
     const STORAGE_KEY = `${PLUGIN_ID}:history:v1`;
+    /** 展开态高度：默认值同时是拖拽的最小高度。 */
+    const EXPANDED_MIN_HEIGHT = 520;
+    /** 展开态高度存储键。 */
+    const HEIGHT_KEY = `${PLUGIN_ID}:expandedHeight:v1`;
+    /** 面板离底部的距离（与 CSS 的 bottom 一致）；拖拽上限要用到。 */
+    const PANEL_BOTTOM = 96;
+    /** 面板与视口顶部至少保留的空隙。 */
+    const PANEL_TOP_GAP = 12;
+
+    /**
+     * 把展开态高度钳到可用范围。
+     *
+     * 最小高度就是设计里的默认高度（520），再大就被收成 520；上限取决于视口，
+     * 让窗口顶部始终留一点空隙，不会顶到状态栏。
+     * @param value - 期望高度（px）。
+     * @param viewportHeight - 视口高度。
+     * @returns 钳制后的高度。
+     */
+    function clampExpandedHeight(value, viewportHeight) {
+      const min = Math.min(EXPANDED_MIN_HEIGHT, Math.max(240, viewportHeight - 120));
+      const max = Math.max(min, viewportHeight - PANEL_BOTTOM - PANEL_TOP_GAP);
+      if (typeof value !== 'number' || !Number.isFinite(value)) return min;
+      return Math.round(Math.min(max, Math.max(min, value)));
+    }
+
+    /**
+     * 读取上次拖拽的高度。
+     * @param storage - localStorage 兼容对象。
+     * @param viewportHeight - 视口高度。
+     * @returns 高度；没存过返回 undefined。
+     */
+    function readStoredHeight(storage, viewportHeight) {
+      try {
+        const raw = storage?.getItem(HEIGHT_KEY);
+        if (typeof raw !== 'string' || raw.length === 0) return undefined;
+        const value = Number.parseInt(raw, 10);
+        if (!Number.isSafeInteger(value)) return undefined;
+        return clampExpandedHeight(value, viewportHeight);
+      } catch {
+        return undefined;
+      }
+    }
+
+    /**
+     * 记住这次拖拽的高度。
+     * @param storage - localStorage 兼容对象。
+     * @param value - 高度。
+     */
+    function storeHeight(storage, value) {
+      try {
+        storage?.setItem(HEIGHT_KEY, String(value));
+      } catch {
+        // 存储不可用就只在本次会话生效，不影响功能。
+      }
+    }
     /** 历史最多保留的对话数；超出时从最旧的一条开始删除。 */
     const MAX_HISTORY = 30;
     /** 单条历史对话最多保留的消息数。 */
@@ -209,6 +264,7 @@ window.__ModuleLoader__.load({
 
     const zh = {
       'panel.label': '快捷提问',
+      'panel.resize': '拖动调整高度（也可用上下方向键）',
       'input.aria': '快捷提问输入',
       'input.placeholder': '问点什么…',
       'input.placeholderExpanded': '继续追问…',
@@ -308,6 +364,7 @@ window.__ModuleLoader__.load({
 
     const en = {
       'panel.label': 'Quick chat',
+      'panel.resize': 'Drag to resize (or use the up/down arrow keys)',
       'input.aria': 'Quick chat input',
       'input.placeholder': 'Ask something…',
       'input.placeholderExpanded': 'Ask a follow-up…',
@@ -1560,6 +1617,11 @@ window.__ModuleLoader__.load({
 .vqc-panel{position:absolute;right:24px;bottom:96px;display:flex;flex-direction:column;box-sizing:border-box;width:min(420px,calc(100vw - 32px));background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);border:0;border-radius:var(--vqc-radius,24px);--vqc-radius:24px;box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px #0000001a,0 3px 8px #0000000a);--dsw-elevation-stroke-color:var(--dsw-alias-border-l2,#0000001a);pointer-events:auto;overflow:hidden;font-size:var(--dsh-content-font-size,14px);line-height:1.55;animation:vqc-rise 160ms ease-out}
 .vqc-panel--compact{min-height:48px;max-height:240px}
 .vqc-panel--expanded{height:min(520px,calc(100dvh - 120px))}
+/* 顶部拖拽条：面板贴底，往上拖就是加高。6px 高，避开 44px 状态行里的按钮中心。 */
+.vqc-resize{position:absolute;inset-inline:0;top:0;z-index:3;height:6px;cursor:ns-resize;touch-action:none}
+.vqc-resize::after{content:'';position:absolute;left:50%;top:2px;width:32px;height:2px;margin-left:-16px;border-radius:999px;corner-shape:round;background:var(--dsw-alias-border-l3,#c9ccd1);opacity:0;transition:opacity .12s}
+.vqc-resize:hover::after,.vqc-resize:focus-visible::after{opacity:1}
+.vqc-resize:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4176e6);outline-offset:-2px}
 @keyframes vqc-rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.vqc-panel{animation:none}.vqc-caret{animation:none}}
 .vqc-convbar{display:flex;align-items:center;gap:8px;flex:none;height:44px;padding:0 12px 0 16px;border-bottom:.5px solid var(--dsw-alias-border-l1,#0000000a)}
@@ -2313,6 +2375,12 @@ window.__ModuleLoader__.load({
       const inputRef = React.useRef(null);
       /** 输入是否已经折行：是就切成「文本在上、按钮在下」的纵向结构。 */
       const [stacked, setStacked] = React.useState(false);
+      // 展开态高度：undefined 表示用 CSS 默认（= 最小高度）。
+      const [panelHeight, setPanelHeight] = React.useState(() =>
+        readStoredHeight(typeof localStorage === 'undefined' ? undefined : localStorage, typeof window === 'undefined' ? 800 : window.innerHeight),
+      );
+      const panelRef = React.useRef(null);
+      const heightRef = React.useRef(panelHeight);
       const fileInputRef = React.useRef(null);
       const bodyRef = React.useRef(null);
       const wasOpen = React.useRef(false);
@@ -2384,6 +2452,67 @@ window.__ModuleLoader__.load({
         if (near && followState.current.pinned) followState.current.uncapped = true;
         atBottom.current = near;
       };
+
+      /**
+       * 拖住面板上边缘调高度：面板贴底，往上拖就是把窗口拉高。
+       * 起点高度用真实测量值，避免 CSS 的 min() 与状态不一致。
+       * @param event - pointerdown 事件。
+       */
+      const onResizeStart = (event) => {
+        const node = panelRef.current;
+        if (node === null || typeof window === 'undefined') return;
+        event.preventDefault();
+        const startY = event.clientY;
+        const startHeight = node.getBoundingClientRect().height;
+        const move = (moveEvent) => {
+          const next = clampExpandedHeight(startHeight + (startY - moveEvent.clientY), window.innerHeight);
+          heightRef.current = next;
+          setPanelHeight(next);
+        };
+        const stop = () => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', stop);
+          window.removeEventListener('pointercancel', stop);
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          if (heightRef.current !== null && heightRef.current !== undefined) storeHeight(localStorage, heightRef.current);
+        };
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', stop);
+        window.addEventListener('pointercancel', stop);
+      };
+
+      /**
+       * 键盘调高度：给不能用鼠标的人留一条路。
+       * @param event - 键盘事件。
+       */
+      const onResizeKeyDown = (event) => {
+        if (typeof window === 'undefined') return;
+        const step = event.key === 'ArrowUp' ? 24 : event.key === 'ArrowDown' ? -24 : 0;
+        if (step === 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const next = clampExpandedHeight((panelHeight ?? EXPANDED_MIN_HEIGHT) + step, window.innerHeight);
+        heightRef.current = next;
+        setPanelHeight(next);
+        storeHeight(localStorage, next);
+      };
+
+      // 视口变小时把记住的高度收回可用范围。
+      React.useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        const reconcile = () => {
+          setPanelHeight((current) => {
+            if (current === undefined || current === null) return current;
+            const next = clampExpandedHeight(current, window.innerHeight);
+            return next === current ? current : next;
+          });
+        };
+        window.addEventListener('resize', reconcile);
+        return () => window.removeEventListener('resize', reconcile);
+      }, []);
 
       /**
        * 键盘：Esc 关闭；Enter 发送；Shift+Enter 换行；输入法组合中不发送。
@@ -2711,8 +2840,22 @@ window.__ModuleLoader__.load({
             role: 'dialog',
             'aria-modal': 'false',
             'aria-label': labels.panelLabel,
+            ref: panelRef,
+            style: expanded && typeof panelHeight === 'number' ? { height: `${panelHeight}px` } : undefined,
             onKeyDown,
           },
+          expanded
+            ? h('div', {
+                className: 'vqc-resize',
+                role: 'separator',
+                tabIndex: 0,
+                'aria-orientation': 'horizontal',
+                'aria-label': labels.resize,
+                title: labels.resize,
+                onPointerDown: onResizeStart,
+                onKeyDown: onResizeKeyDown,
+              })
+            : null,
           convBar,
           body,
           composer,
@@ -3041,6 +3184,7 @@ window.__ModuleLoader__.load({
         truncated: t('stream.truncated'),
         retryHint: t('action.retryHint'),
         panelLabel: t('panel.label'),
+        resize: t('panel.resize'),
         web: t('action.web'),
         webOn: t('action.webOn'),
         webHint: t('action.webHint'),
@@ -3264,6 +3408,10 @@ window.__ModuleLoader__.load({
         createController,
         QuickChatPanel,
         followScrollTop,
+        clampExpandedHeight,
+        readStoredHeight,
+        storeHeight,
+        EXPANDED_MIN_HEIGHT,
         deepseekCacheOf,
         deepseekViewOf,
         canUseWebTools,
