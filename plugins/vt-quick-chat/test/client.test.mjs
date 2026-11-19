@@ -910,3 +910,11 @@ test('所有 999px / 50% 圆角都显式声明 corner-shape:round', () => {
   }
   assert.deepEqual(offenders, [], `这些规则缺 corner-shape:round：${offenders.join(' | ')}`);
 });
+
+test('强调色不用 brand-primary（它是文字色，浅色主题下会变黑）', () => {
+  // --dsw-alias-brand-primary 映射到 label-primary，用它会渲染成正文黑；
+  // DSH 的品牌蓝是 --dsw-alias-state-business-primary（deepseek-400/500）。
+  const css = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.equal(css.includes('--dsw-alias-brand-primary'), false);
+  assert.ok(css.includes('--dsw-alias-state-business-primary'));
+});

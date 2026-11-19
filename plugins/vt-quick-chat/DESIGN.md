@@ -219,6 +219,9 @@ SSE 和小窗自己的对话流是同一套鉴权与写法，不需要额外的�
   把 `--dsw-elevation-stroke-color` 设为 `--dsw-alias-border-l2`，`border: 0`，
   避免 elevation 的 0.5px 描边叠加成粗线。
 - 圆角：窗口统一 `--vqc-radius: 24px`；按钮/chip `--dsw-radius-sm`；气泡 `--dsw-radius-md`。
+- **强调色用 `--dsw-alias-state-business-primary`**（deepseek-500 = `#4176e6`）。
+  `--dsw-alias-brand-primary` 名字像品牌色，实际映射到 `label-primary`，浅色主题下
+  渲染成正文黑——「正在深度思考」那行曾因此变黑。`test/client.test.mjs` 有守卫禁止再用它。
 - **全圆角必须写 `corner-shape: round`**：DSH 用通配选择器把 `corner-shape` 设成
   `superellipse(1.5)`，`border-radius: 999px` 会被画成「圆角方块」而不是圆/胶囊
   （实测截图为证：同样 28px 的圆点在 superellipse 下是方角）。所以 `.vqc-send`、

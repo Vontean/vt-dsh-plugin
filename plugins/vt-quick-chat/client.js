@@ -1638,7 +1638,7 @@ window.__ModuleLoader__.load({
 .vqc-caret{display:inline-block;width:2px;height:1em;margin-left:2px;vertical-align:-2px;background:var(--dsw-alias-label-tertiary,#81858c);animation:vqc-blink 1s steps(2) infinite}
 @keyframes vqc-blink{50%{opacity:0}}
 .vqc-thinking{color:var(--dsw-alias-label-tertiary,#81858c)}
-.vqc-thinking--deep{display:inline-flex;align-items:center;gap:6px;color:var(--dsw-alias-brand-primary,#4d6bfe)}
+.vqc-thinking--deep{display:inline-flex;align-items:center;gap:6px;color:var(--dsw-alias-state-business-primary,#4176e6)}
 .vqc-msgActions{display:flex;align-items:center;gap:4px;margin-top:2px;opacity:0;transition:opacity 120ms ease-out}
 .vqc-msg:hover .vqc-msgActions,.vqc-msg:focus-within .vqc-msgActions{opacity:1}
 @media (hover:none){.vqc-msgActions{opacity:1}}
@@ -1659,10 +1659,10 @@ window.__ModuleLoader__.load({
 .vqc-errorActions{display:flex;gap:6px;margin-top:6px}
 .vqc-textbtn{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:.5px solid var(--dsw-alias-border-l1,#0000000a);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#0f1115);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
 .vqc-textbtn:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f)}
-.vqc-linkbtn{padding:0;border:0;background:transparent;color:var(--dsw-alias-brand-primary,#4d6bfe);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
+.vqc-linkbtn{padding:0;border:0;background:transparent;color:var(--dsw-alias-state-business-primary,#4176e6);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
 .vqc-linkbtn:hover{color:var(--dsw-alias-button-info-hover,#3f5af0);text-decoration:underline}
 .vqc-empty{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px 4px}
-.vqc-emptyIcon{color:var(--dsw-alias-brand-primary,#4d6bfe)}
+.vqc-emptyIcon{color:var(--dsw-alias-state-business-primary,#4176e6)}
 .vqc-emptyTitle{font-size:13px;font-weight:500;line-height:20px;color:var(--dsw-alias-label-primary,#0f1115)}
 .vqc-emptyBody{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary,#61666b)}
 .vqc-emptyHint{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858c)}
@@ -1714,7 +1714,7 @@ window.__ModuleLoader__.load({
 .vqcs-btn:disabled{opacity:.45;cursor:default}
 .vqcs-btnPrimary{border-color:transparent;background:var(--dsw-alias-label-primary,#0f1115);color:var(--dsw-alias-bg-layer-3,#fff)}
 .vqcs-btnPrimary:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover,#33363b);color:var(--dsw-alias-bg-layer-3,#fff)}
-.vqcs-link{appearance:none;padding:0;border:0;background:none;color:var(--dsw-alias-brand-primary,#4d6bfe);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
+.vqcs-link{appearance:none;padding:0;border:0;background:none;color:var(--dsw-alias-state-business-primary,#4176e6);font:inherit;font-size:12px;line-height:18px;cursor:pointer}
 .vqcs-link:disabled{opacity:.45;cursor:default}
 .vqcs-link:hover:not(:disabled){text-decoration:underline}
 /* 键位：照抄 DSH 快捷键速查里的 .keys/.key——不加边框与底色，
