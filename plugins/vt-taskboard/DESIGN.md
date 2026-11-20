@@ -66,6 +66,23 @@
 | 阴影 | 卡片无阴影（只有描边）；下拉与弹窗用 `shadow-1/2/3` |
 | 动效 | 120ms，`cubic-bezier(.2,.7,.3,1)` |
 
+### 2.4 圆角几何（`corner-shape`）
+
+DSH 外壳用通配选择器给所有元素加了平滑圆角，本插件默认沿用：
+
+```css
+@supports (corner-shape: superellipse(1.5)) {
+  :root { --dsw-corner-shape: superellipse(1.5) }
+  *, ::before, ::after { corner-shape: var(--dsw-corner-shape) }
+}
+```
+
+- **圆角矩形**（控件 6 / 卡片 8 / 列 12 / 弹窗 14）不覆盖，与 DSH 其它界面同一种手感。
+- **半径达到盒子半边时**（`border-radius: 50%`、`999px` 胶囊）超级椭圆会把圆压成「圆角方块」，
+  与设计稿不符。这些规则必须显式配 `corner-shape: round`——这也是 DSH 自己跨包强制的配对规则。
+- 受此约束的元素：圆点、头像、开关滑块、胶囊徽标、计数气泡、圆形图标按钮。
+  `tests/corner-shape.spec.ts` 校验「全圆半径必须配对」，并禁止插件自持 squircle/superellipse。
+
 ---
 
 ## 3. 组件判据
