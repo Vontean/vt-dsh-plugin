@@ -1,6 +1,6 @@
 {
   "name": "dsh-vt-taskboard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Agent-first task board for the DSH web GUI — host-authoritative task ledger, taskboard_* agent tools, project claim boundaries, scheduled runs and git-worktree isolation, with a soft-paper visual rework forked from dsh-taskboard.",
   "icon": "./icon.svg",
