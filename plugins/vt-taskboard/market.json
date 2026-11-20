@@ -1,0 +1,13 @@
+{
+  "title": {
+    "zh": "VT 任务看板",
+    "en": "VT Taskboard"
+  },
+  "description": {
+    "zh": "人建卡、Agent 认领执行、人验收的任务看板：五列流转、定时执行、Worktree 隔离与验收清单，配一套柔和纸张视觉。",
+    "en": "A human-in-the-loop task board: humans create cards, agents claim and execute them, humans accept. Five-column flow, scheduled runs, worktree isolation and acceptance checklists, with a soft-paper visual system."
+  },
+  "icon": "icon.svg",
+  "category": "workflow",
+  "keywords": ["taskboard", "kanban", "agent", "workflow", "scheduler"]
+}

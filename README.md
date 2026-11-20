@@ -16,6 +16,7 @@
 | [网页对话](plugins/vt-web-chat/README.md) | `dsh-vt-web-chat` | 「新建会话」下方的网页对话入口，把 chat.deepseek.com 作为主区面板打开 | 界面与外观 |
 | [全局提示词](plugins/vt-system-prompt/README.md) | `dsh-vt-system-prompt` | 设置页里的全局系统提示词（`AGENTS.md`）查看与编辑 | 工作流与提示词 |
 | [Figma 使用手册](plugins/vt-use-figma/README.md) | `dsh-vt-use-figma` | 遇到 Figma 链接自动走远程 Figma MCP，并按官方要求先加载对应技能；把 Figma 官方技能就地接进 DSH | 工作流与提示词 |
+| [VT 任务看板](plugins/vt-taskboard/README.md) | `dsh-vt-taskboard` | 人建卡、Agent 认领执行、人验收的任务看板：五列流转、定时执行、Worktree 隔离与验收清单，配一套柔和纸张视觉 | 工作流与提示词 |
 | [MineDesign 设计稿](plugins/vt-minedesign/README.md) | `dsh-vt-minedesign` | 把本机已装的 MineDesign 接进 DSH：本地 MCP 工具、设计稿与设计系统技能都能用，并把编辑器地址交到你手上 | 工作流与提示词 |
 | [插话立即生效](plugins/vt-steer-now/README.md) | `dsh-vt-steer-now` | 插入消息卡在慢工具上时，在待生效气泡下方给一个「立即发送」：点击中断当前工具，让消息立刻被读到 | 界面与外观 |
 | [快捷提问](plugins/vt-quick-chat/README.md) | `dsh-vt-quick-chat` | agent 执行任务时按快捷键弹出临时小窗解释概念；不创建 Session、不写 session log、不调用工具，关掉即走 | 界面与外观 |

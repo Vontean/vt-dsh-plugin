@@ -1,0 +1,3257 @@
+// @vitest-environment jsdom
+/**
+ * Client-half smoke: apply() against a fake client context with stubbed
+ * fetch (route responses) — proves the whole client half (styles, sidebar
+ * entry, board mount, controller, SSE wiring) starts and renders into a
+ * jsdom document without throwing.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { waitFor } from './wait-for.ts'
+
+/** Stub a route payload. */
+function routeResponse(path: string): unknown {
+  if (path === '/dsh-vt-taskboard/state') {
+    return { ok: true, value: { schemaVersion: 1, revision: 3, tasks: [] } }
+  }
+  if (path === '/dsh-vt-taskboard/workspaces') {
+    return { ok: true, value: [{ id: 'ws-a', path: '/proj/a', title: 'A', sessionCount: 0 }] }
+  }
+  throw new Error(`unexpected fetch ${path}`)
+}
+
+const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const path = String(input)
+  return new Response(JSON.stringify(routeResponse(path)), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })
+})
+
+class EventSourceMock {
+  static instances: EventSourceMock[] = []
+  onerror: (() => void) | null = null
+  closed = false
+  private readonly listeners = new Map<string, Array<(event: { data: string }) => void>>()
+  constructor(public url: string) { EventSourceMock.instances.push(this) }
+  addEventListener(type: string, listener: (event: { data: string }) => void): void {
+    const list = this.listeners.get(type) ?? []
+    list.push(listener)
+    this.listeners.set(type, list)
+  }
+  /** Test-side frame dispatch — the payload is JSON.stringify'd like a real SSE data frame. */
+  dispatch(type: string, payload: unknown): void {
+    for (const listener of [...this.listeners.get(type) ?? []]) listener({ data: JSON.stringify(payload) })
+  }
+  close(): void { this.closed = true }
+}
+
+describe('client half', () => {
+  const disposers: Array<() => void> = []
+
+  beforeEach(() => {
+    // i18n: no DSH locale service exists in this fake context, so the
+    // adapter resolves the fallback locale — pin it to zh to match the
+    // (historical, verbatim) zh copy these tests assert on.
+    document.documentElement.lang = 'zh-CN'
+  })
+
+  afterEach(() => {
+    for (const d of disposers.splice(0)) d()
+    vi.unstubAllGlobals()
+  })
+
+  it('apply() registers the host panel and disposes the client services', async () => {
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('EventSource', EventSourceMock as unknown as typeof EventSource)
+    const { apply } = await import('../src/client/index.ts')
+
+    // REAL cordis effect semantics: callback runs immediately, its return
+    // value is the disposer (this fake caught nothing when the plugin passed
+    // a single-layer arrow that cordis executed as immediate teardown).
+    const disposers: unknown[] = []
+    const registrations: string[] = []
+    const slots = {
+      inject: (_key: string, callback: () => unknown) => callback(),
+      register: (options: { name: string }) => { registrations.push(options.name); return () => {} },
+    }
+    const ctx = { get: (name: string) => name === 'slots' ? slots : undefined, effect: (fn: () => unknown) => { disposers.push(fn()) } }
+    expect(() => apply(ctx as never)).not.toThrow()
+
+    // Styles injected exactly once, and ownership-tagged: the shell's
+    // client-module system claims UN-tagged styles for whichever sibling
+    // plugin materializes next, and HMR deletes them by this attribute on
+    // that sibling's rebuild — the 0.4.3 random CSS-drop field report.
+    const styleEl = document.getElementById('dsh-vt-taskboard-styles')!
+    expect(styleEl).not.toBeNull()
+    expect(styleEl.getAttribute('data-plugin')).toBe('dsh-vt-taskboard')
+    expect(styleEl.getAttribute('data-plugin-css')).toBe('dsh-vt-taskboard/styles')
+
+    expect(registrations).toEqual(['main', 'sidebar.panellist'])
+    // Give the controller's initial refresh a tick.
+    await new Promise(r => setTimeout(r, 10))
+    expect(fetchMock).toHaveBeenCalled()
+
+    // Nothing was torn down by the effect itself (the bug this guards: an
+    // immediate teardown would have closed the SSE stream already).
+    expect(EventSourceMock.instances.length).toBe(1)
+    expect(EventSourceMock.instances[0]!.url).toBe('/dsh-vt-taskboard/events')
+    expect(disposers.every(d => typeof d === 'function')).toBe(true)
+
+    // Explicit dispose through the captured disposers.
+    for (const fn of disposers) (fn as () => void)()
+  })
+
+  it('stylesheet is ownership-tagged, idempotent, and re-attaches after removal', async () => {
+    const { injectStyles } = await import('../src/client/styles.ts')
+    document.getElementById('dsh-vt-taskboard-styles')?.remove()
+
+    injectStyles()
+    const style = document.getElementById('dsh-vt-taskboard-styles')!
+    expect(style).not.toBeNull()
+    // Ownership tag: untagged styles get claimed by whichever sibling plugin
+    // materializes next and deleted on THAT plugin's HMR rebuild (observed
+    // with lazily-materializing profile bundles) — data-plugin pins the
+    // stylesheet to this plugin.
+    expect(style.getAttribute('data-plugin')).toBe('dsh-vt-taskboard')
+    expect(style.getAttribute('data-plugin-css')).toBe('dsh-vt-taskboard/styles')
+
+    // DOM-idempotent: a second call neither duplicates nor recreates.
+    injectStyles()
+    expect(document.querySelectorAll('#dsh-vt-taskboard-styles')).toHaveLength(1)
+
+    // Re-attach on demand: a removal (e.g. this plugin's own HMR rebuild
+    // cleanup) is undone by the next call — the old module-level flag once
+    // blocked this until a full page refresh. (No polling watchdog since
+    // 0.4.5: the ownership tag above is the root fix; re-apply re-injects.)
+    style.remove()
+    injectStyles()
+    expect(document.getElementById('dsh-vt-taskboard-styles')).not.toBeNull()
+
+    // A leftover element mistagged by a pre-0.4.4 claim is adopted AND
+    // re-tagged with correct ownership.
+    const leftover = document.getElementById('dsh-vt-taskboard-styles')!
+    leftover.setAttribute('data-plugin', 'other-plugin')
+    injectStyles()
+    expect(leftover.getAttribute('data-plugin')).toBe('dsh-vt-taskboard')
+    leftover.remove()
+  })
+
+  it("toolbar yields the viewport top-right corner to better-sidebar's toggle cluster (#19)", async () => {
+    const { injectStyles } = await import('../src/client/styles.ts')
+    document.getElementById('dsh-vt-taskboard-styles')?.remove()
+    injectStyles()
+    const css = document.getElementById('dsh-vt-taskboard-styles')!.textContent ?? ''
+    // The yield rule mirrors better-sidebar's own contract for DSH's session
+    // header (padding-right 78px from the viewport edge; ours sits inside the
+    // board's 16px padding → 78 − 16 = 62px). It must stay gated on BOTH the
+    // official panel root and better-sidebar's right panel being
+    // collapsed (body attr), so it never matches on setups without the plugin.
+    expect(css).toContain('body[data-dsh-sidebar-collapsed] .dsh-atb-panel-root .dsh-atb-toolbar')
+    expect(css).toContain('.dsh-atb-toolbar { padding-right: 62px; }')
+  })
+
+  it('board columns wear status dots before their labels', async () => {
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('EventSource', EventSourceMock as unknown as typeof EventSource)
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskBoard } = await import('../src/client/board/TaskBoard.tsx')
+    const { MAIN_STATUSES } = await import('../src/shared/protocol.ts')
+
+    // One live task per lifecycle status; trashed takes precedence in the
+    // secondary tab, so the trashed task's old status stays 'canceled'.
+    const mkTask = (id: string, status: string, trashed = false) => ({
+      id, title: id, description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: status as never, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+      ...(trashed ? { trashedAt: 1 } : {}),
+    })
+    const tasks = [
+      mkTask('t-1', 'backlog'), mkTask('t-2', 'todo'), mkTask('t-3', 'in_progress'),
+      mkTask('t-4', 'in_review'), mkTask('t-5', 'done'),
+      mkTask('t-6', 'canceled'), mkTask('t-7', 'archived'),
+      mkTask('t-8', 'canceled', true),
+    ]
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks }),
+      workspaces: async () => [],
+      stream: () => () => {},
+    }
+    const controller = new BoardController(client as never)
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskBoard, { controller }))
+    controller.start()
+    // Let the refresh land and React commit outside act().
+    await new Promise(r => setTimeout(r, 20))
+
+    // Main view: one column head per main status, each starting with its
+    // status dot placed before the label text.
+    const heads = () => Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-colhead'))
+    expect(heads().length).toBe(MAIN_STATUSES.length)
+    for (const head of heads()) {
+      const dot = head.querySelector<HTMLElement>('.dsh-atb-dot')
+      expect(dot).not.toBeNull()
+      expect(head.firstChild).toBe(dot)
+    }
+    const dotStatuses = heads().map(h => h.querySelector<HTMLElement>('.dsh-atb-dot')!.dataset.status)
+    expect(dotStatuses).toEqual([...MAIN_STATUSES])
+
+    // Secondary tab: canceled / archived / trashed groups wear their dots too.
+    controller.toggleSecondary()
+    await new Promise(r => setTimeout(r, 20))
+    for (const key of ['canceled', 'archived', 'trashed']) {
+      const dot = host.querySelector<HTMLElement>(`.dsh-atb-colhead .dsh-atb-dot[data-status="${key}"]`)
+      expect(dot, `secondary dot for ${key}`).not.toBeNull()
+    }
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+  })
+
+  it('in_review cards carry quick ✓/✗ actions; other columns do not', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskBoard } = await import('../src/client/board/TaskBoard.tsx')
+
+    const mkTask = (id: string, status: string) => ({
+      id, title: id, description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: status as never, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    })
+    const tasks = [mkTask('t-todo', 'todo'), mkTask('t-rev', 'in_review'), mkTask('t-done', 'done')]
+
+    const calls: Array<{ op: string; id: string; body: unknown }> = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks }),
+      workspaces: async () => [],
+      stream: () => () => {},
+      move: async (id: string, body: unknown) => { calls.push({ op: 'move', id, body }); return { id } },
+      reject: async (id: string, body: unknown) => { calls.push({ op: 'reject', id, body }); return { id } },
+    }
+    const controller = new BoardController(client as never)
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskBoard, { controller }))
+    controller.start()
+    await new Promise(r => setTimeout(r, 20))
+
+    // Quick actions exist ONLY on the in_review card.
+    const acts = () => Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-quickbtn'))
+    expect(acts().length).toBe(2)
+    const card = (id: string) => Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-card'))
+      .find(el => el.querySelector('.dsh-atb-card-title')!.textContent === id)!
+    expect(card('t-todo').querySelector('.dsh-atb-quick')).toBeNull()
+    expect(card('t-done').querySelector('.dsh-atb-quick')).toBeNull()
+    const quick = card('t-rev').querySelector('.dsh-atb-quick')!
+    expect(quick.querySelector<HTMLElement>('[data-act="done"]')).not.toBeNull()
+    expect(quick.querySelector<HTMLElement>('[data-act="reject"]')).not.toBeNull()
+
+    // ✓ completes: one move call, ifVersion from the snapshot, target done.
+    const doneBtn = quick.querySelector<HTMLButtonElement>('[data-act="done"]')!
+    doneBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(calls).toEqual([{ op: 'move', id: 't-rev', body: { ifVersion: 1, status: 'done' } }])
+    // The click must NOT also open the detail pane (stopPropagation on the row).
+    expect(controller.getSnapshot().selectedId).toBeUndefined()
+
+    // ✗ opens the inline note form; submit with text → reject carries the note.
+    const rejectBtn = card('t-rev').querySelector<HTMLButtonElement>('[data-act="reject"]')!
+    rejectBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+    const input = card('t-rev').querySelector<HTMLInputElement>('.dsh-atb-quick-note')!
+    expect(input).not.toBeNull()
+    // jsdom + React 18 onChange: use the native setter then dispatch.
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(input, '按钮颜色不对')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    const confirmBtn = card('t-rev').querySelector<HTMLButtonElement>('[data-act="reject-confirm"]')!
+    confirmBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(calls[1]).toEqual({ op: 'reject', id: 't-rev', body: { ifVersion: 1, body: '按钮颜色不对' } })
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('controller.reject: empty note sends no body; failure surfaces the error', async () => {
+    localStorage.clear()
+    const { BoardController } = await import('../src/client/controller.ts')
+
+    const tasks = [{
+      id: 't-1', title: 'T', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'in_review' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 4, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }]
+    const bodies: unknown[] = []
+    let failNext = false
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks }),
+      workspaces: async () => [],
+      stream: () => () => {},
+      reject: async (_id: string, body: unknown) => {
+        if (failNext) throw new Error('taskboard: version_conflict: stale version 4 (current 5)')
+        bodies.push(body)
+        return { id: 't-1' }
+      },
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    // Whitespace-only note → plain reject, no body field.
+    expect(await controller.reject('t-1', 4, '   ')).toBe(true)
+    expect(bodies).toEqual([{ ifVersion: 4 }])
+
+    // Failure: reports false, error surface explains, nothing else thrown.
+    failNext = true
+    expect(await controller.reject('t-1', 4, 'x')).toBe(false)
+    expect(controller.getSnapshot().error).toContain('version_conflict')
+
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('isolation toggle: create defaults follow the board setting, disables on non-git projects', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskFormModal } = await import('../src/client/board/TaskFormModal.tsx')
+
+    const creates: unknown[] = []
+    // The board setting (看板设置) pins the default to worktree (0.5.0).
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [], settings: { defaultIsolation: 'worktree' } }),
+      // ws-git reports gitAvailable; ws-plain does not.
+      workspaces: async () => [
+        { id: 'ws-git', path: '/p/g', title: 'G', sessionCount: 0, gitAvailable: true },
+        { id: 'ws-plain', path: '/p/n', title: 'N', sessionCount: 0, gitAvailable: false },
+        // 0.6.3: a multi-repo workspace (repoCount > 1) shows the mirror note.
+        { id: 'ws-mirror', path: '/p/m', title: 'M', sessionCount: 0, gitAvailable: true, repoCount: 3 },
+      ],
+      stream: () => () => {},
+      create: async (body: unknown) => { creates.push(body); return { id: 't-new' } },
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    // Create mode: the initial toggle mirrors the board setting (worktree on).
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskFormModal, { controller }))
+    await new Promise(r => setTimeout(r, 10))
+
+    const opts = () => Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-mode-opt'))
+    expect(opts().length).toBeGreaterThanOrEqual(2)
+    // The isolation pair is the second mode-picker in the modal.
+    const isoPicker = Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-mode-picker'))[1]!
+    const isoOpts = () => Array.from(isoPicker.querySelectorAll<HTMLButtonElement>('.dsh-atb-mode-opt'))
+    expect(isoOpts()[0]!.dataset.on).toBe('true') // board default worktree
+    expect(isoOpts()[1]!.dataset.on).toBe('false')
+
+    // Switch to 原目录执行, submit on the git workspace → explicit isolation sent.
+    isoOpts()[1]!.click()
+    await new Promise(r => setTimeout(r, 10))
+    const title = host.querySelector<HTMLInputElement>('input[maxlength="200"]')!
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(title, 'Iso task')
+    title.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    ;(Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-modal-footbtns .dsh-atb-btn')).find(b => b.textContent === '创建任务'))!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(creates[0]).toMatchObject({ title: 'Iso task', isolation: 'none' })
+
+    // Non-git workspace: both options disabled, hint shown, isolation omitted.
+    const wsSelect = host.querySelector<HTMLSelectElement>('select')!
+    wsSelect.value = 'ws-plain'
+    wsSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(isoOpts().every(o => o.disabled)).toBe(true)
+    expect(host.querySelector('.dsh-atb-isolation-note')?.textContent).toContain('非 git 仓库')
+    ;(Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-modal-footbtns .dsh-atb-btn')).find(b => b.textContent === '创建任务'))!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(creates[1]).toMatchObject({ workspaceId: 'ws-plain' })
+    expect((creates[1] as Record<string, unknown>).isolation).toBeUndefined()
+
+    // Multi-repo workspace (0.6.3): worktree stays enabled and the mirror
+    // note names the repo count (auto-mirror, no per-task repo selection).
+    wsSelect.value = 'ws-mirror'
+    wsSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(isoOpts().every(o => !o.disabled)).toBe(true)
+    expect(host.querySelector('.dsh-atb-isolation-note[data-mirror]')?.textContent).toContain('3')
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+
+    // A board WITHOUT the setting falls back to the factory default: 原目录执行.
+    const client2 = {
+      ...client,
+      state: async () => ({ schemaVersion: 1, revision: 2, tasks: [] }),
+    }
+    const controller2 = new BoardController(client2 as never)
+    controller2.start()
+    await new Promise(r => setTimeout(r, 10))
+    const host2 = document.createElement('div')
+    document.body.append(host2)
+    const root2 = createRoot(host2)
+    root2.render(React.createElement(TaskFormModal, { controller: controller2 }))
+    await new Promise(r => setTimeout(r, 10))
+    const picker2 = Array.from(host2.querySelectorAll<HTMLElement>('.dsh-atb-mode-picker'))[1]!
+    const opts2 = Array.from(picker2.querySelectorAll<HTMLButtonElement>('.dsh-atb-mode-opt'))
+    expect(opts2[0]!.dataset.on).toBe('false')
+    expect(opts2[1]!.dataset.on).toBe('true') // factory default 'none'
+
+    root2.unmount()
+    host2.remove()
+    controller2.dispose()
+    localStorage.clear()
+  })
+
+  it('settings modal stages a draft, enables save only when dirty, saves via the controller', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { SettingsModal } = await import('../src/client/board/SettingsModal.tsx')
+
+    const saved: unknown[] = []
+    const migrated: string[] = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [], settings: { defaultIsolation: 'worktree' } }),
+      workspaces: async () => [],
+      stream: () => () => {},
+      updateSettings: async (body: unknown) => { saved.push(body); return body },
+      storage: async () => ({ currentDirectory: 'C:\\old', defaultDirectory: 'C:\\old', isDefault: true, configured: false, writable: true, assetCount: 2, assetBytes: 1024 }),
+      checkStorage: async (directory: string) => ({ currentDirectory: 'C:\\old', defaultDirectory: 'C:\\old', isDefault: true, configured: false, writable: true, assetCount: 2, assetBytes: 1024, checkedDirectory: directory }),
+      migrateStorage: async (directory: string) => { migrated.push(directory); return { currentDirectory: directory, defaultDirectory: 'C:\\old', isDefault: false, configured: true, writable: true, assetCount: 2, assetBytes: 1024, migrated: true, warnings: [] } },
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    controller.openSettings()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(SettingsModal, { controller }))
+    await new Promise(r => setTimeout(r, 10))
+
+    const sectionOptions = (heading: string) => {
+      const section = Array.from(host.querySelectorAll('.dsh-atb-diag-sec')).find(el => el.querySelector('h4')?.textContent === heading)
+      return Array.from(section!.querySelectorAll<HTMLButtonElement>('.dsh-atb-mode-opt'))
+    }
+    const isoOpts = () => sectionOptions('默认执行隔离')
+    expect(isoOpts().length).toBe(2)
+    expect(isoOpts()[0]!.textContent).toContain('原目录执行')
+    // Current setting worktree is the selected draft.
+    expect(isoOpts()[0]!.dataset.on).toBe('false')
+    expect(isoOpts()[1]!.dataset.on).toBe('true')
+
+    const syncOpts = () => sectionOptions('自动同步工作区会话')
+    expect(syncOpts().length).toBe(2)
+    expect(syncOpts()[0]!.textContent).toContain('关闭同步')
+    expect(syncOpts()[1]!.textContent).toContain('自动纳入会话')
+    expect(syncOpts()[0]!.dataset.on).toBe('true') // default false
+    expect(syncOpts()[1]!.dataset.on).toBe('false')
+
+    const saveBtn = () => Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-btn'))
+      .find(b => b.textContent === '保存设置')!
+    expect(saveBtn().disabled).toBe(true) // clean draft → save disabled
+
+    // Pick 原目录执行 & 自动纳入会话 → dirty → save goes through the controller.
+    isoOpts()[0]!.click()
+    syncOpts()[1]!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(saveBtn().disabled).toBe(false)
+    saveBtn().click()
+    await new Promise(r => setTimeout(r, 20))
+    expect(saved).toEqual([{
+      defaultIsolation: 'none',
+      branchNameMode: 'title-id',
+      branchNamePrefix: 'task',
+      syncExternalSessions: true,
+      defaultPermission: 'workspace-write',
+      maxConcurrent: 3,
+      scheduleMissedAfterMinutes: 5,
+      queueMaxAgeMinutes: 0,
+      dispatchIntervalMs: 1_000,
+      completedDisplayLimit: 50,
+      allowClaimFromLinkedRoots: false,
+      dependencyGates: { agent: true, manual: true, scheduled: true, review: true },
+    }])
+
+    const storageInput = host.querySelector<HTMLInputElement>('.dsh-atb-storage-path')!
+    expect(storageInput.value).toBe('C:\\old')
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    valueSetter.call(storageInput, 'D:\\taskboard-data')
+    storageInput.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const migrateBtn = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-btn')).find(b => b.textContent === '迁移数据')!
+    expect(migrateBtn.disabled).toBe(false)
+    migrateBtn.click()
+    await new Promise(r => setTimeout(r, 20))
+    expect(migrated).toEqual(['D:\\taskboard-data'])
+    confirm.mockRestore()
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('detail: comment-wake deliver button (issue #51) renders on in_review only and reaches the controller', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskDetail } = await import('../src/client/board/TaskDetail.tsx')
+
+    const mkTask = (status: string) => ({
+      id: 't-wake', title: 'W', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [
+        { id: 'c1', body: '验收留言', version: 1, createdAt: 100 },
+        { id: 'c2', body: '投过的留言', version: 1, createdAt: 110, deliveredAt: 120, deliveredExecutionId: 'e-1' },
+        { id: 'c3', body: 'agent 汇报', version: 1, createdAt: 130, threadId: 'session-a' },
+        { id: 'c4', body: '[系统] 会话执行完毕，已自动进入待验收。', version: 1, createdAt: 140, systemKey: 'sys.sessionDone' },
+        { id: 'c5', body: '[系统] 用户留言已投递，唤醒会话处理。', version: 1, createdAt: 150, threadId: 'session-wake12', systemKey: 'sys.commentWoke' },
+      ],
+      executions: [{ id: 'e-1', trigger: 'manual' as const, startedAt: 0, endedAt: 1, outcome: 'succeeded' as const, sessionId: 'session-a' }],
+    })
+
+    const commentRunCalls: Array<[string, string]> = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [mkTask('in_review')] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      comment: async () => ({ id: 'c-x', body: '', version: 1, createdAt: 1 }),
+      commentRun: async (id: string, body: string) => { commentRunCalls.push([id, body]); return { delivered: 'run', count: 1 } },
+    }
+    const controller = new BoardController(client as never)
+    const openSessions: string[] = []
+    controller.installSessionJumper(async id => { openSessions.push(id); return 'missing' as never })
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    // in_review: the deliver button renders with the pending-backlog badge.
+    root.render(React.createElement(TaskDetail, { task: mkTask('in_review') as never, controller, now: 1_000 }))
+    await new Promise(r => setTimeout(r, 10))
+    const deliver = () => host.querySelector<HTMLButtonElement>('.dsh-atb-composer-deliver')
+    expect(deliver()).not.toBeNull()
+    expect(deliver()!.textContent).toContain('(1)')
+    // Bubble markers: pending on the undelivered user comment, delivered on
+    // the marked one (jump button), none on the agent comment.
+    const bubbles = Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-bubble'))
+    expect(bubbles[0]!.textContent).toContain('待投递')
+    expect(bubbles[1]!.textContent).toContain('已投递')
+    expect(bubbles[2]!.textContent).not.toContain('待投递')
+    // Two author kinds only: threadId → agent, else → user. System comments
+    // are attributed via threadId; a legacy one (no threadId) falls back to
+    // the user label but never joins the pending-delivery backlog (the
+    // deliver badge above stays (1)).
+    expect(bubbles[0]!.getAttribute('data-from')).toBe('user')
+    expect(bubbles[2]!.getAttribute('data-from')).toBe('agent')
+    expect(bubbles[3]!.getAttribute('data-from')).toBe('user')
+    expect(bubbles[3]!.textContent).not.toContain('待投递')
+    expect(bubbles[4]!.getAttribute('data-from')).toBe('agent')
+    // Session-backed agent labels render as jump buttons; clicking jumps to
+    // the session. Synthetic ('sched'/'host') and legacy ids stay plain.
+    const agentBtn = bubbles[2]!.querySelector<HTMLButtonElement>('.dsh-atb-comment-agent')
+    expect(agentBtn).not.toBeNull()
+    expect(agentBtn!.textContent).toBe('agent a')
+    expect(bubbles[4]!.querySelector('.dsh-atb-bubble-meta b')).toBeNull()
+    const sysBtn = bubbles[4]!.querySelector<HTMLButtonElement>('.dsh-atb-comment-agent')
+    expect(sysBtn!.textContent).toBe('agent wake12')
+    agentBtn!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(openSessions).toEqual(['session-a'])
+    // Executions section: collapsed by default, the header toggles it.
+    expect(host.querySelector('.dsh-atb-execlist')).toBeNull()
+    host.querySelector<HTMLButtonElement>('.dsh-atb-section-toggle')!.click()
+    await new Promise(r => setTimeout(r, 10))
+    const execList = host.querySelector('.dsh-atb-execlist')
+    expect(execList).not.toBeNull()
+    expect(execList!.children.length).toBe(1)
+    host.querySelector<HTMLButtonElement>('.dsh-atb-section-toggle')!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(host.querySelector('.dsh-atb-execlist')).toBeNull()
+    // Click with an empty composer still flushes the backlog through the controller.
+    deliver()!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(commentRunCalls).toEqual([['t-wake', '']])
+    root.unmount()
+
+    // todo: the deliver button does not exist outside the review loop.
+    const root2 = createRoot(host)
+    root2.render(React.createElement(TaskDetail, { task: mkTask('todo') as never, controller, now: 1_000 }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(host.querySelector('.dsh-atb-composer-deliver')).toBeNull()
+    root2.unmount()
+
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('detail renders the isolation block; merge/remove call the controller', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskDetail } = await import('../src/client/board/TaskDetail.tsx')
+
+    const task = {
+      id: 't-iso', title: 'Isolated work', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'in_review' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 3, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      branch: 'task/Isolated-work+t-iso',
+      comments: [], executions: [{
+        id: 'e-1', trigger: 'manual' as const, startedAt: 0, endedAt: 10, outcome: 'succeeded' as const,
+        isolation: 'worktree' as const, branch: 'task/Isolated-work+t-iso',
+        worktreePath: '/proj/a/.dsh-worktrees/t-iso', baseCommit: 'aaaa0000', headCommit: 'bbbb1111',
+        commits: [{ hash: 'bbbb1111', subject: 'feat: the change' }],
+        dirtyFiles: [' M src/a.ts'], diffStat: '1 file changed', changedFiles: 1,
+      }],
+    }
+    const calls: Array<{ op: string; id: string; deleteBranch?: boolean }> = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [task] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      mergeBranch: async (id: string) => { calls.push({ op: 'merge', id }); return { ok: true } },
+      worktreeRemove: async (id: string, body: { deleteBranch?: boolean }) => { calls.push({ op: 'remove', id, deleteBranch: body.deleteBranch }); return { ok: true } },
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskDetail, { task: task as never, controller, now: 1_000 }))
+    await new Promise(r => setTimeout(r, 10))
+
+    // The isolation block shows branch, commits, stats, and the dirty warning.
+    const block = host.querySelector<HTMLElement>('.dsh-atb-fieldcard[data-kind="isolation"]')!
+    expect(block).not.toBeNull()
+    expect(block.textContent).toContain('task/Isolated-work+t-iso')
+    expect(block.textContent).toContain('feat: the change')
+    expect(block.textContent).toContain('1 处未提交修改')
+
+    // ⇥ 合并: confirm flow reaches controller.mergeBranch.
+    const mergeBtn = Array.from(block.querySelectorAll<HTMLButtonElement>('.dsh-atb-btn')).find(b => b.textContent!.includes('合并到主工作区'))!
+    mergeBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+    const confirmBtn = Array.from(block.querySelectorAll<HTMLButtonElement>('.dsh-atb-btn')).find(b => b.textContent === '确认合并')!
+    confirmBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(calls).toEqual([{ op: 'merge', id: 't-iso' }])
+
+    // 🗑 删 worktree + 分支: confirm reaches controller.removeWorktree(true).
+    const removeBtn = Array.from(block.querySelectorAll<HTMLButtonElement>('.dsh-atb-btn')).find(b => b.textContent!.includes('worktree + 分支'))!
+    removeBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+    const confirmRemove = Array.from(block.querySelectorAll<HTMLButtonElement>('.dsh-atb-btn')).find(b => b.textContent === '确认删除')!
+    confirmRemove.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(calls[1]).toEqual({ op: 'remove', id: 't-iso', deleteBranch: true })
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('detail: 续跑 button only with a pinned branch; noop merge surfaces an info alert', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskDetail } = await import('../src/client/board/TaskDetail.tsx')
+
+    const mkTask = (branch?: string) => ({
+      id: 't-r', title: 'R', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'todo' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      ...(branch !== undefined ? { branch } : {}),
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    })
+
+    const runCalls: Array<[string, boolean]> = []
+    let noopNext = false
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [mkTask('task/R+t-r')] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      run: async (id: string, body?: { reuse?: boolean }) => { runCalls.push([id, body?.reuse === true]); return { executionId: 'e', sessionId: 's' } },
+      mergeBranch: async (id: string) => (noopNext
+        ? { merged: false, noop: true, branch: 'task/R+t-r' }
+        : { merged: true, branch: 'task/R+t-r' }),
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    // With a pinned branch: both 续跑 and 立即执行 appear; clicks carry reuse flag.
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskDetail, { task: mkTask('task/R+t-r') as never, controller, now: 1_000 }))
+    await new Promise(r => setTimeout(r, 10))
+    const btns = () => Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-detail-topbtns .dsh-atb-detail-run'))
+    const resume = btns().find(b => b.textContent!.includes('续跑'))!
+    const fresh = btns().find(b => b.textContent!.includes('立即执行'))!
+    resume.click()
+    fresh.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(runCalls).toEqual([['t-r', true], ['t-r', false]])
+
+    // Noop merge: an info alert renders (task needs an isolated execution so
+    // the isolation block with the merge button shows).
+    noopNext = true
+    root.unmount()
+    const root2 = createRoot(host)
+    const task2 = { ...mkTask('task/R+t-r'), status: 'in_review', executions: [{
+      id: 'e-1', trigger: 'manual' as const, startedAt: 0, endedAt: 1, outcome: 'succeeded' as const,
+      isolation: 'worktree' as const, branch: 'task/R+t-r', worktreePath: '/p/a/.dsh-worktrees/t-r',
+      baseCommit: 'a0', headCommit: 'b1', commits: [{ hash: 'b1', subject: 'x' }], commitsTotal: 1,
+      dirtyFiles: [], dirtyFilesTotal: 0, changedFiles: 1,
+    }] }
+    root2.render(React.createElement(TaskDetail, { task: task2 as never, controller, now: 1_000 }))
+    await new Promise(r => setTimeout(r, 10))
+    const mergeBtn2 = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-iso-actions .dsh-atb-btn')).find(b => b.textContent!.includes('合并到主工作区'))!
+    mergeBtn2.click()
+    await new Promise(r => setTimeout(r, 10))
+    const confirmBtn = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-btn')).find(b => b.textContent === '确认合并')!
+    confirmBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(host.textContent).toContain('没有领先主工作区的新提交')
+
+    root2.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('preset dropdown: pre-selects the deployment default on create, submits the choice', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskFormModal } = await import('../src/client/board/TaskFormModal.tsx')
+
+    const creates: unknown[] = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      create: async (body: unknown) => { creates.push(body); return { id: 't-new' } },
+    }
+    const controller = new BoardController(client as never)
+    // preset roster face (T13: formal installer): 标准 is the deployment default, 梁神 also available.
+    controller.installPresetRoster(async () => ({
+      presets: [{ id: 'standard', name: '标准模式' }, { id: 'liangshen', name: '梁神模式' }],
+      defaultId: 'standard',
+    }))
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskFormModal, { controller }))
+    await new Promise(r => setTimeout(r, 30))
+
+    // The preset select exists and pre-selects the deployment default.
+    const presetSelect = Array.from(host.querySelectorAll<HTMLSelectElement>('select'))
+      .find(s => Array.from(s.options).some(o => o.value === 'standard'))!
+    expect(presetSelect).toBeTruthy()
+    expect(presetSelect.value).toBe('standard')
+
+    // Fill the title, submit → the default preset id rides along.
+    const title = host.querySelector<HTMLInputElement>('input[maxlength="200"]')!
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(title, 'Preset task')
+    title.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    ;(Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-modal-footbtns .dsh-atb-btn')).find(b => b.textContent === '创建任务'))!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(creates[0]).toMatchObject({ title: 'Preset task', presetId: 'standard' })
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('session jump opens live sessions and guards deleted/archived ones', async () => {    const { BoardController } = await import('../src/client/controller.ts')
+    const { createSessionJumper } = await import('../src/client/session-jump.ts')
+
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [],
+      stream: () => () => {},
+    }
+    const controller = new BoardController(client as never)
+    const closePanel = vi.fn()
+    controller.installCloseRequester(closePanel)
+    closePanel.mockClear()
+
+    // Fake runtime services: list mirror + archive set + staging open.
+    let byId: Record<string, unknown> = { 's-live': {}, 's-arch': {} }
+    let lagging = false // when true, refresh() reveals the late-listed session
+    const opened: string[] = []
+    let refreshed = 0
+    const sessions = {
+      open: (id: string) => { opened.push(id) },
+      refresh: async () => {
+        refreshed++
+        if (lagging) byId = { ...byId, 's-late': {} }
+      },
+      list: { getSnapshot: () => ({ byId }) },
+    }
+    const workspaces = { list: { getSnapshot: () => ({ archivedSessionIds: ['s-arch'] }) } }
+
+    // LAZY resolution: services absent at first (jump degrades), then present.
+    let provided = false
+    controller.installSessionJumper(createSessionJumper({
+      getSessions: () => (provided ? sessions : undefined) as never,
+      getWorkspaces: () => (provided ? workspaces : undefined) as never,
+    }))
+    expect(await controller.openSession('s-live')).toBe('unavailable')
+    expect(closePanel).not.toHaveBeenCalled()
+    provided = true
+
+    // Listed + not archived: opens, and the board closes over the session.
+    expect(await controller.openSession('s-live')).toBe('opened')
+    expect(opened).toEqual(['s-live'])
+    expect(closePanel).toHaveBeenCalledTimes(1)
+
+    // Archived: a definitive verdict — no refresh, never opened.
+    closePanel.mockClear()
+    expect(await controller.openSession('s-arch')).toBe('archived')
+    expect(refreshed).toBe(0)
+    expect(opened).toEqual(['s-live'])
+    expect(closePanel).not.toHaveBeenCalled()
+
+    // Deleted (absent from the list): one refresh re-check, still missing.
+    expect(await controller.openSession('s-gone')).toBe('missing')
+    expect(refreshed).toBe(1)
+    expect(opened).toEqual(['s-live'])
+
+    // Lagging mirror: the refresh reveals the session and the jump opens it.
+    lagging = true
+    expect(await controller.openSession('s-late')).toBe('opened')
+    expect(refreshed).toBe(2)
+    expect(opened).toEqual(['s-live', 's-late'])
+
+    controller.dispose()
+  })
+
+  // Regression guard for the DSH 0.1.7 runtime shape: the runtime's sessions
+  // service no longer carries `open()` (0.1.5 had one, 0.1.6+ removed it —
+  // "navigation belongs to view owners"). The documented navigation entry is
+  // uiWorkspace.openSession(); reading a missing `sessions.open` throws inside
+  // the jumper's try, so a runtime-shaped sessions service must still open.
+  it('session jump opens through the navigation service when sessions has no open()', async () => {
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { createSessionJumper } = await import('../src/client/session-jump.ts')
+
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [],
+      stream: () => () => {},
+    }
+    const controller = new BoardController(client as never)
+    const closePanel = vi.fn()
+    controller.installCloseRequester(closePanel)
+    closePanel.mockClear()
+
+    // Runtime-shaped services: probe-clean, no `open` key at all.
+    const sessions = {
+      refresh: async () => {},
+      list: { getSnapshot: () => ({ byId: { 's-live': {} } }) },
+    }
+    const workspaces = { list: { getSnapshot: () => ({ archivedSessionIds: [] as string[] }) } }
+    const navigated: string[] = []
+    const uiWorkspace = { openSession: (id: string) => { navigated.push(id) } }
+
+    controller.installSessionJumper(createSessionJumper({
+      getSessions: () => sessions as never,
+      getWorkspaces: () => workspaces as never,
+      getUiWorkspace: () => uiWorkspace as never,
+    }))
+
+    // The jump must not degrade to 'unavailable' on this runtime, and the
+    // board must close over the session it navigated to.
+    expect(await controller.openSession('s-live')).toBe('opened')
+    expect(navigated).toEqual(['s-live'])
+    expect(closePanel).toHaveBeenCalledTimes(1)
+
+    controller.dispose()
+  })
+
+  it('controller: search filter, urgency sort, and persisted view state', async () => {
+    localStorage.clear()
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { filterTasks } = await import('../src/client/board/TaskBoard.tsx')
+
+    const mkTask = (id: string, title: string, urgency: 'urgent' | 'normal' | 'relaxed', updatedAt: number) => ({
+      id, title, description: '', prompt: '', workspaceId: 'ws-a', urgency,
+      status: 'todo' as const, blocked: false, execution: { mode: 'claim' as const },
+      version: 1, createdAt: updatedAt - 10, updatedAt,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    })
+    const tasks = [
+      mkTask('t-slow', '巡检服务器', 'relaxed', 100),
+      mkTask('t-fix', '修复登录 BUG', 'urgent', 50),
+      mkTask('t-doc', '补文档', 'normal', 200),
+    ]
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks }),
+      workspaces: async () => [],
+      stream: () => () => {},
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    // Search by title and by id (case-insensitive).
+    let state = controller.getSnapshot()
+    expect(filterTasks(state, tasks).map(t => t.id)).toEqual(['t-slow', 't-fix', 't-doc'])
+    controller.setSearch('BUG')
+    state = controller.getSnapshot()
+    expect(filterTasks(state, tasks).map(t => t.id)).toEqual(['t-fix'])
+    controller.setSearch('T-DOC')
+    state = controller.getSnapshot()
+    expect(filterTasks(state, tasks).map(t => t.id)).toEqual(['t-doc'])
+    controller.setSearch('')
+
+    // Sort by urgency (urgent → normal → relaxed), tie-break by updated desc.
+    controller.setSortBy('urgency')
+    state = controller.getSnapshot()
+    expect(filterTasks(state, tasks).map(t => t.id)).toEqual(['t-fix', 't-doc', 't-slow'])
+    // Sort by recent update.
+    controller.setSortBy('updated')
+    state = controller.getSnapshot()
+    expect(filterTasks(state, tasks).map(t => t.id)).toEqual(['t-doc', 't-slow', 't-fix'])
+
+    // Sort by title: numeric-aware comparison, so numeric prefixes order 01 < 02 < 10 < 90.
+    controller.setSortBy('title')
+    state = controller.getSnapshot()
+    const numbered = [
+      mkTask('t-10', '10 晚间巡检', 'normal', 400),
+      mkTask('t-02', '02 上午修复', 'normal', 300),
+      mkTask('t-01', '01 晨会', 'normal', 500),
+      mkTask('t-90', '90 收尾', 'normal', 600),
+    ]
+    expect(filterTasks(state, numbered).map(t => t.id)).toEqual(['t-01', 't-02', 't-10', 't-90'])
+    controller.setSortBy('updated')
+
+    // Filters + sort persist to localStorage and hydrate a fresh controller.
+    controller.setWorkspaceFilter('ws-a')
+    const persisted = JSON.parse(localStorage.getItem('dsh-vt-taskboard-view-v1')!) as { workspaceId?: string; sortBy?: string }
+    expect(persisted.workspaceId).toBe('ws-a')
+    expect(persisted.sortBy).toBe('updated')
+    const second = new BoardController(client as never)
+    expect(second.getSnapshot().sortBy).toBe('updated')
+    expect(second.getSnapshot().filters.workspaceId).toBe('ws-a')
+    // Search is transient — never persisted.
+    expect(persisted).not.toHaveProperty('search')
+    controller.dispose()
+    second.dispose()
+    localStorage.clear()
+  })
+
+  it('controller: doneCollapsed view persistence and conditional state refetch', async () => {
+    localStorage.clear()
+    const { BoardController } = await import('../src/client/controller.ts')
+    const stateCalls: Array<{ excludeDone?: boolean } | undefined> = []
+    const client = {
+      state: async (opts?: { excludeDone?: boolean }) => {
+        stateCalls.push(opts)
+        return {
+          schemaVersion: 1,
+          revision: 1,
+          tasks: opts?.excludeDone ? [] : [{ id: 't-done', status: 'done' as const }],
+          doneCount: 1,
+        }
+      },
+      workspaces: async () => [],
+      stream: () => () => {},
+    }
+
+    const controller = new BoardController(client as never)
+    // 默认未折叠，初始值为 false
+    expect(controller.getSnapshot().doneCollapsed).toBe(false)
+
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+    expect(stateCalls.length).toBeGreaterThan(0)
+    expect(stateCalls[stateCalls.length - 1]?.excludeDone).toBe(false)
+    expect(controller.getSnapshot().ledger.tasks.length).toBe(1)
+    expect(controller.getSnapshot().doneCount).toBe(1)
+
+    // 切换为收起：应更新状态并持久化到 localStorage
+    stateCalls.length = 0
+    controller.setDoneCollapsed(true)
+    expect(controller.getSnapshot().doneCollapsed).toBe(true)
+    const persisted = JSON.parse(localStorage.getItem('dsh-vt-taskboard-view-v1')!) as { doneCollapsed?: boolean }
+    expect(persisted.doneCollapsed).toBe(true)
+
+    // 在收起状态下刷新：应传递 excludeDone: true
+    await controller.refresh()
+    expect(stateCalls[stateCalls.length - 1]?.excludeDone).toBe(true)
+    expect(controller.getSnapshot().ledger.tasks.length).toBe(0)
+    expect(controller.getSnapshot().doneCount).toBe(1)
+
+    // 实例化新控制器：自动从 localStorage 读取到 doneCollapsed: true
+    const newController = new BoardController(client as never)
+    expect(newController.getSnapshot().doneCollapsed).toBe(true)
+
+    // 展开：自动触发一次 refresh，拉取全量任务
+    stateCalls.length = 0
+    controller.setDoneCollapsed(false)
+    expect(controller.getSnapshot().doneCollapsed).toBe(false)
+    await new Promise(r => setTimeout(r, 10))
+    expect(stateCalls[stateCalls.length - 1]?.excludeDone).toBe(false)
+    expect(controller.getSnapshot().ledger.tasks.length).toBe(1)
+
+    controller.dispose()
+    newController.dispose()
+    localStorage.clear()
+  })
+
+  it('controller: backlogCollapsed state lifecycle, view persistence, error isolation and concurrency', async () => {
+    localStorage.clear()
+    const { BoardController } = await import('../src/client/controller.ts')
+    let refreshCalls = 0
+    const client = {
+      state: async () => {
+        refreshCalls++
+        return {
+          schemaVersion: 1,
+          revision: 1,
+          tasks: [],
+          doneCount: 0,
+        }
+      },
+      workspaces: async () => [],
+      stream: () => () => {},
+    }
+
+    // @tc TC-FUNC-001
+    // 实例化全新 BoardController，默认未折叠，初始值为 false
+    const controller = new BoardController(client as never)
+    expect(controller.getSnapshot().backlogCollapsed).toBe(false)
+
+    // @tc TC-FUNC-002
+    // 切换为收起：快照变为 true，通知订阅者，不触发网络请求或全量刷新
+    let notifyCount = 0
+    const unsub = controller.subscribe(() => { notifyCount++ })
+    refreshCalls = 0
+    controller.setBacklogCollapsed(true)
+    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
+    expect(notifyCount).toBe(1)
+    expect(refreshCalls).toBe(0)
+
+    // @tc TC-FUNC-004
+    // persistView 正常保存 backlogCollapsed 且保留其他视图状态
+    const persisted = JSON.parse(localStorage.getItem('dsh-vt-taskboard-view-v1')!) as { backlogCollapsed?: boolean }
+    expect(persisted.backlogCollapsed).toBe(true)
+
+    // @tc TC-FUNC-003
+    // 切换为展开：快照恢复为 false，且不得触发 refresh()（RT-001 质询明确要求）
+    controller.setBacklogCollapsed(false)
+    expect(controller.getSnapshot().backlogCollapsed).toBe(false)
+    await new Promise(r => setTimeout(r, 10))
+    expect(refreshCalls).toBe(0)
+
+    // @tc TC-ERR-001
+    // 幂点操作防重：重复调用相同值不触发多余通知
+    notifyCount = 0
+    controller.setBacklogCollapsed(false)
+    expect(notifyCount).toBe(0)
+    controller.setBacklogCollapsed(true)
+    expect(notifyCount).toBe(1)
+    controller.setBacklogCollapsed(true)
+    expect(notifyCount).toBe(1)
+
+    // @tc TC-FUNC-005
+    // loadView 预设 {"backlogCollapsed": true, "sortBy": "title"} 时新实例正确读取
+    localStorage.setItem('dsh-vt-taskboard-view-v1', JSON.stringify({ backlogCollapsed: true, sortBy: 'title' }))
+    const hydratedController = new BoardController(client as never)
+    expect(hydratedController.getSnapshot().backlogCollapsed).toBe(true)
+    expect(hydratedController.getSnapshot().sortBy).toBe('title')
+    hydratedController.dispose()
+
+    // @tc TC-EDGE-001
+    // 存储为 null 时安全降级为 false
+    localStorage.clear()
+    const nullController = new BoardController(client as never)
+    expect(nullController.getSnapshot().backlogCollapsed).toBe(false)
+    nullController.dispose()
+
+    // @tc TC-EDGE-002
+    // 损坏的存储数据 (Malformed JSON) 安全降级为 false
+    localStorage.setItem('dsh-vt-taskboard-view-v1', '{ invalid json')
+    const malformedController = new BoardController(client as never)
+    expect(malformedController.getSnapshot().backlogCollapsed).toBe(false)
+    malformedController.dispose()
+
+    // @tc TC-EDGE-003
+    // 脏数据类型防御：非布尔 true（"true", 1, {}, null）严格 === true 检查并降级为 false (RT-003)
+    for (const dirtyVal of ['true', 1, {}, null, [true]]) {
+      localStorage.setItem('dsh-vt-taskboard-view-v1', JSON.stringify({ backlogCollapsed: dirtyVal }))
+      const dirtyController = new BoardController(client as never)
+      expect(dirtyController.getSnapshot().backlogCollapsed).toBe(false)
+      dirtyController.dispose()
+    }
+
+    // @tc TC-EDGE-004
+    // 历史版本数据迁移兼容：已有 urgencies/sortBy/doneCollapsed 但无 backlogCollapsed
+    localStorage.setItem('dsh-vt-taskboard-view-v1', JSON.stringify({ urgencies: ['urgent'], sortBy: 'urgency', doneCollapsed: true }))
+    const legacyController = new BoardController(client as never)
+    expect(legacyController.getSnapshot().doneCollapsed).toBe(true)
+    expect(legacyController.getSnapshot().backlogCollapsed).toBe(false)
+    expect(legacyController.getSnapshot().sortBy).toBe('urgency')
+    legacyController.dispose()
+
+    // @tc TC-ERR-002
+    // 存储受限与异常隔离：localStorage.setItem 抛出 QuotaExceededError 时静默降级
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage quota exceeded', 'QuotaExceededError')
+    })
+    try {
+      expect(() => { controller.setBacklogCollapsed(false) }).not.toThrow()
+      expect(controller.getSnapshot().backlogCollapsed).toBe(false)
+      expect(setItem).toHaveBeenCalledOnce()
+      expect(setItem).toHaveBeenCalledWith('dsh-vt-taskboard-view-v1', expect.any(String))
+    } finally {
+      setItem.mockRestore()
+    }
+
+    // @tc TC-CONC-001
+    // 高频连续切换收起与展开，维持最终一致性
+    controller.setBacklogCollapsed(true)
+    controller.setBacklogCollapsed(false)
+    controller.setBacklogCollapsed(true)
+    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
+    const finalPersisted = JSON.parse(localStorage.getItem('dsh-vt-taskboard-view-v1')!) as { backlogCollapsed?: boolean }
+    expect(finalPersisted.backlogCollapsed).toBe(true)
+
+    // @tc TC-CONC-004
+    // 独立性互不干扰：doneCollapsed 与 backlogCollapsed 并发修改
+    controller.setDoneCollapsed(true)
+    controller.setBacklogCollapsed(true)
+    refreshCalls = 0
+    controller.setDoneCollapsed(false)
+    await new Promise(r => setTimeout(r, 10))
+    expect(refreshCalls).toBe(1) // setDoneCollapsed(false) 触发 refresh
+    expect(controller.getSnapshot().doneCollapsed).toBe(false)
+    expect(controller.getSnapshot().backlogCollapsed).toBe(true) // backlog 依然为 true
+    const dualPersisted = JSON.parse(localStorage.getItem('dsh-vt-taskboard-view-v1')!) as { doneCollapsed?: boolean; backlogCollapsed?: boolean }
+    expect(dualPersisted.doneCollapsed).toBe(false)
+    expect(dualPersisted.backlogCollapsed).toBe(true)
+
+    unsub()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('controller: todoCollapsed state lifecycle, view persistence, error isolation and concurrency', async () => {
+    localStorage.clear()
+    const { BoardController } = await import('../src/client/controller.ts')
+    let refreshCalls = 0
+    const client = {
+      state: async () => {
+        refreshCalls++
+        return { schemaVersion: 1, revision: 1, tasks: [], doneCount: 0 }
+      },
+      workspaces: async () => [],
+      stream: () => () => {},
+    }
+
+    const controller = new BoardController(client as never)
+    expect(controller.getSnapshot().todoCollapsed).toBe(false)
+
+    let notifyCount = 0
+    const unsub = controller.subscribe(() => { notifyCount++ })
+    refreshCalls = 0
+    controller.setTodoCollapsed(true)
+    expect(controller.getSnapshot().todoCollapsed).toBe(true)
+    expect(notifyCount).toBe(1)
+    expect(refreshCalls).toBe(0)
+
+    const persisted = JSON.parse(localStorage.getItem('dsh-vt-taskboard-view-v1')!) as { todoCollapsed?: boolean }
+    expect(persisted.todoCollapsed).toBe(true)
+
+    controller.setTodoCollapsed(false)
+    expect(controller.getSnapshot().todoCollapsed).toBe(false)
+    await new Promise(r => setTimeout(r, 10))
+    expect(refreshCalls).toBe(0)
+
+    // 幂等防重
+    notifyCount = 0
+    controller.setTodoCollapsed(false)
+    expect(notifyCount).toBe(0)
+    controller.setTodoCollapsed(true)
+    expect(notifyCount).toBe(1)
+    controller.setTodoCollapsed(true)
+    expect(notifyCount).toBe(1)
+
+    // loadView 预设读取
+    localStorage.setItem('dsh-vt-taskboard-view-v1', JSON.stringify({ todoCollapsed: true, sortBy: 'created' }))
+    const hydrated = new BoardController(client as never)
+    expect(hydrated.getSnapshot().todoCollapsed).toBe(true)
+    expect(hydrated.getSnapshot().sortBy).toBe('created')
+    hydrated.dispose()
+
+    // 脏数据防御
+    for (const dirtyVal of ['true', 1, {}, null, [true]]) {
+      localStorage.setItem('dsh-vt-taskboard-view-v1', JSON.stringify({ todoCollapsed: dirtyVal }))
+      const dirty = new BoardController(client as never)
+      expect(dirty.getSnapshot().todoCollapsed).toBe(false)
+      dirty.dispose()
+    }
+
+    // 与 doneCollapsed、backlogCollapsed 互不干扰
+    controller.setDoneCollapsed(true)
+    controller.setBacklogCollapsed(true)
+    controller.setTodoCollapsed(true)
+    expect(controller.getSnapshot().doneCollapsed).toBe(true)
+    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
+    expect(controller.getSnapshot().todoCollapsed).toBe(true)
+    const triplePersisted = JSON.parse(localStorage.getItem('dsh-vt-taskboard-view-v1')!) as { doneCollapsed?: boolean; backlogCollapsed?: boolean; todoCollapsed?: boolean }
+    expect(triplePersisted.doneCollapsed).toBe(true)
+    expect(triplePersisted.backlogCollapsed).toBe(true)
+    expect(triplePersisted.todoCollapsed).toBe(true)
+
+    unsub()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('checklist editor: template prefill, add/remove rows, create submits texts, edit submits items', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskFormModal } = await import('../src/client/board/TaskFormModal.tsx')
+
+    const creates: unknown[] = []
+    const updates: unknown[] = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      create: async (body: unknown) => { creates.push(body); return { id: 't-new' } },
+      update: async (_id: string, body: unknown) => { updates.push(body); return { id: 't' } },
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    // Template prefill: open the create form from a template with a checklist.
+    controller.newFromTemplate({ title: '模板任务', urgency: 'urgent', checklist: ['复现', '修复'] })
+    let host = document.createElement('div')
+    document.body.append(host)
+    let root = createRoot(host)
+    root.render(React.createElement(TaskFormModal, { controller }))
+    await new Promise(r => setTimeout(r, 20))
+
+    const titleInput = host.querySelector<HTMLInputElement>('input[maxlength="200"]')!
+    expect(titleInput.value).toBe('模板任务')
+    let rows = Array.from(host.querySelectorAll<HTMLInputElement>('.dsh-atb-cke-text'))
+    expect(rows).toHaveLength(2)
+    expect(rows[0]!.value).toBe('复现')
+
+    // Add one blank row, fill it, then submit → texts ride along.
+    const addBtn = host.querySelector<HTMLButtonElement>('.dsh-atb-cke-add')!
+    addBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+    rows = Array.from(host.querySelectorAll<HTMLInputElement>('.dsh-atb-cke-text'))
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(rows[2]!, '回归通过')
+    rows[2]!.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    ;(Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-modal-footbtns .dsh-atb-btn')).find(b => b.textContent === '创建任务'))!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(creates[0]).toMatchObject({ title: '模板任务', urgency: 'urgent', checklist: ['复现', '修复', '回归通过'] })
+
+    root.unmount()
+    host.remove()
+
+    // Edit mode: existing items render with checkboxes; a toggle is submitted
+    // as a full-list replace preserving ids and the checked state.
+    const task = {
+      id: 't-cl', title: '编辑我', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'todo' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 4, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      checklist: [
+        { id: 'k1', text: '复现', checked: false },
+        { id: 'k2', text: '修复', checked: false },
+      ],
+      comments: [], executions: [],
+    }
+    controller.openEditor('t-cl')
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    root.render(React.createElement(TaskFormModal, { controller, task: task as never }))
+    await new Promise(r => setTimeout(r, 20))
+
+    const boxes = Array.from(host.querySelectorAll<HTMLInputElement>('.dsh-atb-cke-box'))
+    expect(boxes).toHaveLength(2)
+    boxes[0]!.click()
+    await new Promise(r => setTimeout(r, 10))
+    ;(Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-modal-footbtns .dsh-atb-btn')).find(b => b.textContent === '保存修改'))!.click()
+    await new Promise(r => setTimeout(r, 10))
+    const body = updates[0] as { checklist: Array<{ id?: string; text: string; checked: boolean }> }
+    expect(body.checklist).toHaveLength(2)
+    expect(body.checklist[0]).toMatchObject({ id: 'k1', text: '复现', checked: true })
+    expect(body.checklist[1]).toMatchObject({ id: 'k2', text: '修复', checked: false })
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('detail: checklist block toggles as user; report block renders; done confirm counts unchecked', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskDetail } = await import('../src/client/board/TaskDetail.tsx')
+
+    const task = {
+      id: 't-cl2', title: '验收中', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'in_review' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 7, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      checklist: [
+        { id: 'k1', text: '已复现', checked: true, checkedBy: 'agent', checkedAt: 1, note: '证据在评论' },
+        { id: 'k2', text: '回归通过', checked: false },
+      ],
+      comments: [], executions: [{
+        id: 'e-1', trigger: 'manual' as const, startedAt: 0, endedAt: 9, outcome: 'succeeded' as const,
+        report: { summary: '修复了崩溃', changedFiles: ['src/a.ts'], checks: ['npm test 145 passed'], artifacts: [], risk: '低' },
+      }],
+    }
+    const updates: Array<Record<string, unknown>> = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [task] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      update: async (_id: string, body: Record<string, unknown>) => { updates.push(body); return { id: 't' } },
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskDetail, { task: task as never, controller, now: 1_000 }))
+    await new Promise(r => setTimeout(r, 10))
+
+    // Checklist block: progress label, alert highlight on the unchecked item,
+    // the checked item shows checker + evidence note.
+    const clBlock = host.querySelector<HTMLElement>('.dsh-atb-fieldcard[data-kind="checklist"]')!
+    expect(clBlock).not.toBeNull()
+    expect(clBlock.textContent).toContain('1/2')
+    expect(clBlock.textContent).toContain('1 项未完成')
+    expect(clBlock.querySelector('.dsh-atb-cl-item[data-alert="true"]')).not.toBeNull()
+    expect(clBlock.textContent).toContain('证据：证据在评论')
+
+    // Report block renders all sections.
+    const rptBlock = host.querySelector<HTMLElement>('.dsh-atb-fieldcard[data-kind="report"]')!
+    expect(rptBlock.textContent).toContain('修复了崩溃')
+    expect(rptBlock.textContent).toContain('src/a.ts')
+    expect(rptBlock.textContent).toContain('npm test 145 passed')
+    expect(rptBlock.textContent).toContain('低')
+
+    // Toggling the unchecked item as the USER → full-list update with
+    // checkedBy 'user' on the flipped item.
+    const item = clBlock.querySelectorAll<HTMLInputElement>('.dsh-atb-cl-item input')[1]!
+    item.click()
+    await new Promise(r => setTimeout(r, 10))
+    const sent = updates[0]!.checklist as Array<{ id: string; checked: boolean; checkedBy?: string }>
+    expect(sent[0]).toMatchObject({ id: 'k1', checked: true, checkedBy: 'agent' })
+    expect(sent[1]).toMatchObject({ id: 'k2', checked: true, checkedBy: 'user' })
+
+    // Done confirm warns about the unchecked item count.
+    const doneBtn = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-movebtn')).find(b => b.textContent!.includes('完成'))!
+    doneBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(host.querySelector('.dsh-atb-confirm-label')!.textContent).toContain('仍有 1 项清单未勾选')
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  // Issue #50: the run button was gated on the STATUS label, so a card the
+  // user moved back from review (in progress, nothing holding it) lost both
+  // the button and the ability to run — the card was stuck.
+  it('detail: run stays available on an unheld in-progress card and hides while work is in flight', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskDetail } = await import('../src/client/board/TaskDetail.tsx')
+
+    const base = {
+      title: '回来了', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, blocked: false, execution: { mode: 'claim' as const },
+      version: 3, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    /** Render one card shape and report whether the run button is offered. */
+    const runOffered = async (task: Record<string, unknown>): Promise<boolean> => {
+      const host = document.createElement('div')
+      document.body.append(host)
+      const root = createRoot(host)
+      root.render(React.createElement(TaskDetail, { task: task as never, controller, now: 1_000 }))
+      await new Promise(r => setTimeout(r, 10))
+      const offered = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-detail-run'))
+        .some(button => button.textContent?.includes('立即执行') === true)
+      root.unmount()
+      host.remove()
+      return offered
+    }
+
+    // Orphaned in progress (the reported state): runnable again.
+    expect(await runOffered({ ...base, id: 't-orphan', status: 'in_progress' })).toBe(true)
+    // Held by a session: someone is on it, so no second runner.
+    expect(await runOffered({ ...base, id: 't-held', status: 'in_progress', claimedBy: 'session-holder' })).toBe(false)
+    // A live execution: same.
+    expect(await runOffered({
+      ...base,
+      id: 't-live',
+      status: 'in_progress',
+      executions: [{ id: 'e-1', trigger: 'manual', startedAt: 0, outcome: 'running', sessionId: 'session-live' }],
+    })).toBe(false)
+    // Review is still runnable (unchanged behavior).
+    expect(await runOffered({ ...base, id: 't-review', status: 'in_review' })).toBe(true)
+
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('detail: archive move with associated session prompts for confirmation and supports archive with session vs card only', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskDetail } = await import('../src/client/board/TaskDetail.tsx')
+
+    const taskWithSession = {
+      id: 't-arch-1', title: '已完成任务', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'done' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 5, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [{
+        id: 'e-1', trigger: 'manual' as const, startedAt: 0, endedAt: 10, outcome: 'succeeded' as const,
+        sessionId: 'session-taskboard-s1234567',
+      }],
+    }
+    const moves: Array<{ id: string; body: Record<string, unknown> }> = []
+    let archiveSupported = true
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [taskWithSession], capabilities: { archiveSessions: archiveSupported } }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      move: async (id: string, body: Record<string, unknown>) => { moves.push({ id, body }); return { ...taskWithSession, ...(body.archiveSessions === true ? { sessionArchive: { archived: [], failed: [{ sessionId: 'session-taskboard-s1234567', error: 'disk failure' }], unsupported: [] } } : {}) } },
+      archiveSessions: async () => ({ archived: ['session-taskboard-s1234567'], failed: [], unsupported: [] }),
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskDetail, { task: taskWithSession as never, controller, now: 1_000 }))
+    await new Promise(r => setTimeout(r, 10))
+
+    // 1. Initial state: archive move button is rendered
+    const archBtn = host.querySelector<HTMLButtonElement>('.dsh-atb-movebtn[data-to="archived"]')!
+    expect(archBtn).not.toBeNull()
+
+    // 2. Click archive button: should NOT move directly; instead shows confirm prompt with session ID
+    archBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(moves).toHaveLength(0)
+
+    const confirmLabel = host.querySelector('.dsh-atb-confirm-label')!
+    expect(confirmLabel.textContent).toContain('s1234567')
+
+    const btns = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-confirm .dsh-atb-btn'))
+    const withSessionBtn = btns.find(b => b.textContent === '连同会话归档')!
+    const cardOnlyBtn = btns.find(b => b.textContent!.includes('仅归档卡片') || b.textContent!.includes('Card only'))!
+    const cancelBtn = btns.find(b => b.textContent!.includes('取消') || b.textContent!.includes('Cancel'))!
+
+    expect(withSessionBtn).not.toBeNull()
+    expect(withSessionBtn.dataset.primary).toBeUndefined()
+    expect(host.textContent).toContain('session-taskboard-s1234567')
+    expect(cardOnlyBtn).not.toBeNull()
+    expect(cancelBtn).not.toBeNull()
+
+    // 3. Test cancel button
+    cancelBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(moves).toHaveLength(0)
+    expect(host.querySelector('.dsh-atb-confirm')).toBeNull()
+
+    // 4. Click archive again, then choose "仅归档卡片"
+    const archBtn2 = host.querySelector<HTMLButtonElement>('.dsh-atb-movebtn[data-to="archived"]')!
+    archBtn2.click()
+    await new Promise(r => setTimeout(r, 10))
+
+    const cardOnlyBtn2 = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-confirm .dsh-atb-btn'))
+      .find(b => b.textContent!.includes('仅归档卡片') || b.textContent!.includes('Card only'))!
+    cardOnlyBtn2.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(moves).toEqual([{ id: 't-arch-1', body: { ifVersion: 5, status: 'archived', archiveSessions: false } }])
+
+    // 5. Click archive again, then choose "连同会话归档"
+    moves.length = 0
+    const archBtn3 = host.querySelector<HTMLButtonElement>('.dsh-atb-movebtn[data-to="archived"]')!
+    archBtn3.click()
+    await new Promise(r => setTimeout(r, 10))
+
+    const withSessionBtn3 = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-confirm .dsh-atb-btn')).find(b => b.textContent === '连同会话归档')!
+    withSessionBtn3.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(moves).toEqual([{ id: 't-arch-1', body: { ifVersion: 5, status: 'archived', archiveSessions: true } }])
+
+    root.render(React.createElement(TaskDetail, { task: { ...taskWithSession, status: 'archived' } as never, controller, now: 1_000 }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(host.textContent).toContain('disk failure')
+    const retry = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent!.includes('重试归档'))!
+    retry.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(controller.getSnapshot().sessionArchive?.result.failed).toEqual([])
+    expect(host.textContent).not.toContain('disk failure')
+    expect(moves).toHaveLength(1) // retry never repeats the terminal transition
+
+    archiveSupported = false
+    await controller.refresh()
+    root.render(React.createElement(TaskDetail, { task: taskWithSession as never, controller, now: 1_000 }))
+    await new Promise(r => setTimeout(r, 10))
+    host.querySelector<HTMLButtonElement>('.dsh-atb-movebtn[data-to="archived"]')!.click()
+    await new Promise(r => setTimeout(r, 10))
+    const unsupported = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent === '连同会话归档')!
+    expect(unsupported.disabled).toBe(true)
+    expect(unsupported.title).toContain('不支持')
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('new-task menu lists templates and manages them; 存为模板 carries task fields', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskBoard } = await import('../src/client/board/TaskBoard.tsx')
+
+    const templateList = [
+      { id: 'tpl-1', name: 'Bug 修复', task: { urgency: 'urgent', checklist: ['复现'] }, builtin: true, createdAt: 0, updatedAt: 0 },
+      { id: 'tpl-2', name: '我的模板', category: '服务', task: { title: '自定义' }, createdAt: 0, updatedAt: 0 },
+    ]
+    const upserts: unknown[] = []
+    const deletes: string[] = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      templates: async () => ({ templates: templateList }),
+      templateUpsert: async (body: unknown) => { upserts.push(body); return body as never },
+      templateDelete: async (id: string) => { deletes.push(id); return { deleted: true } },
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskBoard, { controller }))
+    await new Promise(r => setTimeout(r, 10))
+
+    // Open the + 新建任务 ▼ dropdown: templates listed, grouped by category
+    // (0.8.8) with the default bucket (uncategorized) last.
+    const menuBtn = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-newmenu > .dsh-atb-btn')).find(b => b.textContent!.includes('新建任务'))!
+    menuBtn.click()
+    await new Promise(r => setTimeout(r, 20))
+    const options = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-newmenu-opt')).map(b => b.textContent)
+    expect(options).toContain('空白任务')
+    expect(options).toContain('Bug 修复')
+    expect(options).toContain('我的模板')
+    expect(options.some(o => o!.includes('管理模板'))).toBe(true)
+    const menuCats = Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-newmenu-cat')).map(el => el.textContent)
+    expect(menuCats).toEqual(['服务 (1)', '其他 (1)'])
+
+    // Picking a template opens the composer prefilled from it.
+    ;(Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-newmenu-opt')).find(b => b.textContent === '我的模板'))!.click()
+    await new Promise(r => setTimeout(r, 10))
+    const snap = controller.getSnapshot()
+    expect(snap.composerOpen).toBe(true)
+    expect(snap.templatePrefill).toMatchObject({ title: '自定义' })
+    controller.closeForm()
+
+    // Manager modal: rename save + delete flow reach the client.
+    controller.openTemplateManager()
+    await new Promise(r => setTimeout(r, 20))
+    // Groups mirror the menu; built-in rows show a read-only category.
+    const tplmCats = Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-tplm-cathead')).map(el => el.textContent)
+    expect(tplmCats).toEqual(['▍服务 (1)', '▍其他 (1)'])
+    expect(host.querySelectorAll('.dsh-atb-tplm-category').length).toBe(1)
+    expect(host.querySelector<HTMLElement>('.dsh-atb-tplm-catstatic')!.textContent).toBe('其他')
+
+    const nameInput = host.querySelector<HTMLInputElement>('.dsh-atb-tplm-name')!
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(nameInput, '改名模板')
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    // First row is now tpl-2 (the 服务 group sorts before the default bucket).
+    ;(Array.from(nameInput.closest('.dsh-atb-tplm-row')!.querySelectorAll<HTMLButtonElement>('.dsh-atb-btn')).find(b => b.textContent === '改名'))!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(upserts[0]).toMatchObject({ id: 'tpl-2', name: '改名模板' })
+
+    // Category suggestions: focusing the input opens the FULL list (0.8.8;
+    // React 18 delegates onFocus through bubbling focusin, which jsdom does
+    // not emit on .focus() — dispatch it explicitly).
+    const catInput = host.querySelector<HTMLInputElement>('.dsh-atb-tplm-category')!
+    catInput.dispatchEvent(new Event('focusin', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    const catOptions = (): string[] => Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-tplm-catopt')).map(b => b.textContent!)
+    expect(catOptions()).toEqual(['服务'])
+    // Typing must NOT filter the suggestion list.
+    setter?.call(catInput, '服务B')
+    catInput.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(catOptions()).toEqual(['服务'])
+    // Picking a suggestion fills the input verbatim (and closes the list).
+    ;(host.querySelector<HTMLElement>('.dsh-atb-tplm-catopt')!).dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(catInput.value).toBe('服务')
+
+    // Refocus with a mocked geometry where the modal body has no room below
+    // the input: the dropdown flips above (dsh-atb-tplm-catpop-up).
+    const catWrap = catInput.closest<HTMLElement>('.dsh-atb-tplm-catwrap')!
+    const modalBody = host.querySelector<HTMLElement>('.dsh-atb-modal-body')!
+    catWrap.getBoundingClientRect = (): DOMRect => ({ top: 660, bottom: 700, left: 0, right: 110, width: 110, height: 40, x: 0, y: 660, toJSON: () => ({}) })
+    modalBody.getBoundingClientRect = (): DOMRect => ({ top: 100, bottom: 720, left: 0, right: 600, width: 600, height: 620, x: 0, y: 100, toJSON: () => ({}) })
+    catInput.dispatchEvent(new Event('focusin', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(host.querySelector('.dsh-atb-tplm-catpop-up')).not.toBeNull()
+    expect(catOptions()).toEqual(['服务'])
+
+    // Keep editing after the pick; the save reaches the upsert with the label.
+    setter?.call(catInput, '服务B')
+    catInput.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    ;(Array.from(catInput.closest('.dsh-atb-tplm-row')!.querySelectorAll<HTMLButtonElement>('.dsh-atb-btn')).find(b => b.textContent === '改名'))!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(upserts[1]).toMatchObject({ id: 'tpl-2', name: '我的模板', category: '服务B' })
+    controller.closeTemplateManager()
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('task form: 存为模板 saves the current form contents as a template', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskFormModal } = await import('../src/client/board/TaskFormModal.tsx')
+
+    const upserts: unknown[] = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      templates: async () => ({ templates: [] }),
+      templateUpsert: async (body: unknown) => { upserts.push(body); return body as never },
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+    controller.setComposer(true)
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskFormModal, { controller }))
+    await new Promise(r => setTimeout(r, 20))
+
+    const saveTpl = (): HTMLButtonElement =>
+      (Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-modal-footbtns .dsh-atb-btn')).find(b => b.textContent!.includes('存为模板')))!
+    // Empty title → no template name → button disabled.
+    expect(saveTpl().disabled).toBe(true)
+
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    const titleInput = host.querySelector<HTMLInputElement>('input[maxlength="200"]')!
+    setter?.call(titleInput, '我的新模板')
+    titleInput.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(saveTpl().disabled).toBe(false)
+    saveTpl().click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(upserts[0]).toMatchObject({ name: '我的新模板', task: { title: '我的新模板', urgency: 'normal', execution: { mode: 'claim' } } })
+
+    // The form stays open after saving the template; creating still works.
+    expect(controller.getSnapshot().composerOpen).toBe(true)
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('import modal: file → preview plan → merge commit; replace demands double confirmation', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { ImportModal } = await import('../src/client/board/ImportModal.tsx')
+
+    const file = {
+      schemaVersion: 1,
+      tasks: [
+        { id: 't-new1', title: '导入新', workspaceId: 'ws-a', urgency: 'normal', comments: [], executions: [] },
+        { id: 't-live', title: '覆盖', workspaceId: 'ws-a', urgency: 'normal', comments: [], executions: [] },
+      ],
+    }
+    const previews: unknown[] = []
+    const commits: Array<{ mode: string }> = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      importPreview: async (f: unknown) => {
+        previews.push(f)
+        return { plan: {
+          create: [{ id: 't-new1', title: '导入新', status: 'todo' }],
+          overwrite: [{ id: 't-live', title: '覆盖', status: 'todo' }],
+          invalid: [],
+        } }
+      },
+      importCommit: async (mode: 'merge' | 'replace') => {
+        commits.push({ mode })
+        return mode === 'replace'
+          ? { mode, created: 1, overwritten: 0, replacedTotal: 5, backupFile: '/x/backup.json' }
+          : { mode, created: 1, overwritten: 1 }
+      },
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+    controller.openImport()
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(ImportModal, { controller }))
+    await new Promise(r => setTimeout(r, 10))
+
+    // Pick the file through the input: jsdom lacks DataTransfer/FileList
+    // constructors, so the FileList-shaped property is defined directly.
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]')!
+    // jsdom's File lacks .text() in this version — patch it on the instance.
+    const chosen = new File([JSON.stringify(file)], 'backup.json', { type: 'application/json' })
+    Object.defineProperty(chosen, 'text', { value: async () => JSON.stringify(file) })
+    Object.defineProperty(input, 'files', { value: [chosen], configurable: true })
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 20))
+
+    // The preview stats render.
+    expect(host.querySelector('.dsh-atb-imp-stats')!.textContent).toContain('1')
+    expect(host.querySelector('.dsh-atb-imp-sec h4')!.textContent).toContain('新增任务')
+
+    // Merge: one click commits.
+    ;(Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-modal-footbtns .dsh-atb-btn')).find(b => b.textContent === '执行导入'))!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(commits).toEqual([{ mode: 'merge' }])
+    expect(host.querySelector('.dsh-atb-imp-result')!.textContent).toContain('合并完成')
+
+    // Replace mode: first click arms the double confirmation, second commits.
+    const replaceOpt = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-mode-opt')).find(b => b.textContent!.includes('整册替换'))!
+    replaceOpt.click()
+    await new Promise(r => setTimeout(r, 10))
+    const commitBtn = () => Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-modal-footbtns .dsh-atb-btn'))
+      .find(b => b.textContent === '执行导入' || b.textContent === '确认整册替换')!
+    commitBtn()!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(commits).toHaveLength(1) // armed, not committed yet
+    expect(host.querySelector('.dsh-atb-modal-hint')!.textContent).toContain('再次点击确认')
+    commitBtn()!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(commits[1]).toEqual({ mode: 'replace' })
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('detail diff viewer: commit click lazy-loads the patch; dirty file click too', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskDetail } = await import('../src/client/board/TaskDetail.tsx')
+
+    const task = {
+      id: 't-diff', title: 'Diff', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'in_review' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 2, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      branch: 'task/Diff+t-diff',
+      comments: [], executions: [{
+        id: 'e-1', trigger: 'manual' as const, startedAt: 0, endedAt: 9, outcome: 'succeeded' as const,
+        isolation: 'worktree' as const, branch: 'task/Diff+t-diff',
+        worktreePath: '/p/a/.dsh-worktrees/t-diff', baseCommit: 'aaaa0000', headCommit: 'bbbb1111',
+        commits: [{ hash: 'bbbb1111', subject: 'feat: change' }],
+        dirtyFiles: [' M src/a.ts'],
+      }],
+    }
+    const diffCalls: Array<{ execution: string; commit?: string; path?: string }> = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [task] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      diff: async (_id: string, query: { execution: string; commit?: string; path?: string }) => {
+        diffCalls.push(query)
+        return { diff: `+patch for ${query.commit ?? query.path}`, truncated: false }
+      },
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskDetail, { task: task as never, controller, now: 1_000 }))
+    await new Promise(r => setTimeout(r, 10))
+
+    // Click the commit row → the diff loads inline.
+    const commitBtn = host.querySelector<HTMLButtonElement>('.dsh-atb-iso-commit-btn')!
+    commitBtn.click()
+    await new Promise(r => setTimeout(r, 20))
+    expect(diffCalls[0]).toEqual({ execution: 'e-1', commit: 'bbbb1111' })
+    expect(host.querySelector('.dsh-atb-diffview-pre')!.textContent).toContain('+patch for bbbb1111')
+
+    // Dirty files: expand the list, click the file → path diff.
+    const dirtyToggle = host.querySelector<HTMLButtonElement>('.dsh-atb-iso-dirty-toggle')!
+    dirtyToggle.click()
+    await new Promise(r => setTimeout(r, 10))
+    const fileBtn = host.querySelector<HTMLButtonElement>('.dsh-atb-iso-dirty-file')!
+    expect(fileBtn.textContent).toContain('src/a.ts')
+    fileBtn.click()
+    await new Promise(r => setTimeout(r, 20))
+    expect(diffCalls[1]).toEqual({ execution: 'e-1', path: 'src/a.ts' })
+    // The commit diff collapses; the path diff renders in its place.
+    const pres = Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-diffview-pre'))
+    expect(pres).toHaveLength(1)
+    expect(pres[0]!.textContent).toContain('+patch for src/a.ts')
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('SSE 帧对账：hello/change 按 api.ts 的 revision 规则触发 onGap/onChange', async () => {
+    localStorage.clear()
+    vi.stubGlobal('EventSource', EventSourceMock as unknown as typeof EventSource)
+    const { createClient } = await import('../src/client/api.ts')
+    const onChange = vi.fn()
+    const onGap = vi.fn()
+    const stop = createClient().stream(onChange, onGap)
+    const es = EventSourceMock.instances.at(-1)!
+
+    // First hello establishes the baseline revision — never a gap.
+    es.dispatch('hello', { revision: 5 })
+    expect(onGap).not.toHaveBeenCalled()
+    // In-order change (5 → 6): the normal path — onChange only, no onGap.
+    es.dispatch('change', { revision: 6, kind: 'task-updated', tasks: [] })
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onGap).not.toHaveBeenCalled()
+    // Duplicate frame (6 again): revision did not advance by 1 → gap.
+    es.dispatch('change', { revision: 6, kind: 'task-updated', tasks: [] })
+    expect(onGap).toHaveBeenCalledTimes(1)
+    // Regressed frame (6 → 4): gap again.
+    es.dispatch('change', { revision: 4, kind: 'task-updated', tasks: [] })
+    expect(onGap).toHaveBeenCalledTimes(2)
+    expect(onChange).toHaveBeenCalledTimes(3)
+    // Reconnect hello at the SAME revision: nothing missed → stays quiet.
+    es.dispatch('hello', { revision: 4 })
+    expect(onGap).toHaveBeenCalledTimes(2)
+    // Reconnect hello after missed frames (4 → 9): gap → full refetch.
+    es.dispatch('hello', { revision: 9 })
+    expect(onGap).toHaveBeenCalledTimes(3)
+    // Disposing the subscription closes the stream.
+    stop()
+    expect(es.closed).toBe(true)
+  })
+
+  it('SSE 帧驱动控制器：in-order change 恰好一次 state refetch；重复 hello 不再拉取', async () => {
+    localStorage.clear()
+    let revision = 3
+    let stateFetches = 0
+    const dynFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input)
+      if (path === '/dsh-vt-taskboard/state') {
+        stateFetches += 1
+        return new Response(JSON.stringify({ ok: true, value: { schemaVersion: 1, revision, tasks: [] } }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      if (path === '/dsh-vt-taskboard/workspaces') {
+        return new Response(JSON.stringify({ ok: true, value: [] }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      throw new Error(`unexpected fetch ${path}`)
+    })
+    vi.stubGlobal('fetch', dynFetch)
+    vi.stubGlobal('EventSource', EventSourceMock as unknown as typeof EventSource)
+    const { createClient } = await import('../src/client/api.ts')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const controller = new BoardController(createClient())
+    controller.start()
+    const es = EventSourceMock.instances.at(-1)!
+    await waitFor(() => stateFetches === 1)
+
+    // Reconnect hello echoing the current revision: nothing was missed —
+    // the controller does NOT refetch.
+    es.dispatch('hello', { revision: 3 })
+    await new Promise(r => setTimeout(r, 30))
+    expect(stateFetches).toBe(1)
+
+    // In-order change frame: exactly ONE refetch lands (no gap duplicate).
+    revision = 4
+    es.dispatch('change', { revision: 4, kind: 'task-updated', tasks: [] })
+    await waitFor(() => stateFetches === 2)
+    await new Promise(r => setTimeout(r, 30))
+    expect(stateFetches).toBe(2)
+    expect(controller.getSnapshot().ledger.revision).toBe(4)
+
+    // Duplicate frame (revision did not advance): the gap path fires — one
+    // deduped (in-flight) reconciliation refetch, not a storm.
+    es.dispatch('change', { revision: 4, kind: 'task-updated', tasks: [] })
+    await waitFor(() => stateFetches === 3)
+    await new Promise(r => setTimeout(r, 30))
+    expect(stateFetches).toBe(3)
+
+    controller.dispose()
+    expect(es.closed).toBe(true)
+  })
+
+  it('编辑模式不预选部署默认 preset：任务自身的 preset 选择不被改写', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskFormModal } = await import('../src/client/board/TaskFormModal.tsx')
+
+    const updates: unknown[] = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+      update: async (_id: string, body: unknown) => { updates.push(body); return { id: 't' } },
+    }
+    const controller = new BoardController(client as never)
+    controller.installPresetRoster(async () => ({
+      presets: [{ id: 'standard', name: '标准模式' }, { id: 'liangshen', name: '梁神模式' }],
+      defaultId: 'standard',
+    }))
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    const mkTask = (presetId?: string) => ({
+      id: 't-edit', title: '编辑我', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'todo' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 4, createdAt: 0, updatedAt: 0,
+      ...(presetId !== undefined ? { presetId } : {}),
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    })
+    const presetSelectOf = (host: HTMLElement) => Array.from(host.querySelectorAll<HTMLSelectElement>('select'))
+      .find(s => Array.from(s.options).some(o => o.value === 'standard'))!
+
+    // Follow-default task (no presetId): the roster's deployment default must
+    // NOT be pre-selected in edit mode — the select stays on 跟随部署默认.
+    let host = document.createElement('div')
+    document.body.append(host)
+    let root = createRoot(host)
+    root.render(React.createElement(TaskFormModal, { controller, task: mkTask() as never }))
+    await new Promise(r => setTimeout(r, 30))
+    expect(presetSelectOf(host).value).toBe('')
+    // Saving keeps following the deployment default (presetId: null).
+    ;(Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-modal-footbtns .dsh-atb-btn')).find(b => b.textContent === '保存修改'))!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(updates[0]).toMatchObject({ presetId: null })
+    root.unmount()
+    host.remove()
+
+    // Pinned task (presetId 'liangshen'): the pinned choice survives the
+    // roster load instead of being flipped to the deployment default.
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    root.render(React.createElement(TaskFormModal, { controller, task: mkTask('liangshen') as never }))
+    await new Promise(r => setTimeout(r, 30))
+    expect(presetSelectOf(host).value).toBe('liangshen')
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('duplicate()：200 字标题截断到 196 再加（副本），create payload 不超 200 字', async () => {
+    localStorage.clear()
+    const { BoardController } = await import('../src/client/controller.ts')
+    const creates: unknown[] = []
+    const task = {
+      id: 't-dup', title: '标'.repeat(200), description: '跟随描述', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'todo' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [task] }),
+      workspaces: async () => [],
+      stream: () => () => {},
+      create: async (body: unknown) => { creates.push(body); return { id: 't-new' } },
+    }
+    const controller = new BoardController(client as never)
+    await controller.duplicate(task as never)
+    expect(creates).toHaveLength(1)
+    const payload = creates[0] as { title: string; workspaceId: string }
+    // 196 chars + （副本）(4 chars) = exactly the host's 200-char cap.
+    expect(payload.title.length).toBeLessThanOrEqual(200)
+    expect(payload.title.endsWith('（副本）')).toBe(true)
+    expect(payload.title.length).toBe(200)
+    expect(payload.workspaceId).toBe('ws-a')
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('TaskCard & TaskDetail: one-click session jump for executed/running tasks', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskCard } = await import('../src/client/board/TaskCard.tsx')
+    const { TaskDetail } = await import('../src/client/board/TaskDetail.tsx')
+    const { createSessionJumper } = await import('../src/client/session-jump.ts')
+
+    const taskLive = {
+      id: 't-live', title: 'Live task', description: 'desc', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'in_progress' as const, blocked: false,
+      claimedBy: 'session-taskboard-t-live-11112222',
+      execution: { mode: 'claim' as const }, version: 2, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [{
+        id: 'e-1', trigger: 'manual' as const, startedAt: 0, outcome: 'running' as const,
+        sessionId: 'session-taskboard-t-live-11112222',
+      }],
+    }
+    const taskArchived = {
+      id: 't-arch', title: 'Archived task', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'done' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 3, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [{
+        id: 'e-2', trigger: 'manual' as const, startedAt: 0, endedAt: 10, outcome: 'succeeded' as const,
+        sessionId: 'session-taskboard-t-arch-33334444',
+      }],
+    }
+    const taskNoSession = {
+      id: 't-none', title: 'No session task', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'todo' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [taskLive, taskArchived, taskNoSession] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+    }
+    const controller = new BoardController(client as never)
+    const closePanel = vi.fn()
+    controller.installCloseRequester(closePanel)
+
+    const opened: string[] = []
+    const sessions = {
+      open: (id: string) => { opened.push(id) },
+      refresh: async () => {},
+      list: { getSnapshot: () => ({ byId: { 'session-taskboard-t-live-11112222': {}, 'session-taskboard-t-arch-33334444': {} } }) },
+    }
+    const workspaces = { list: { getSnapshot: () => ({ archivedSessionIds: ['session-taskboard-t-arch-33334444'] }) } }
+
+    controller.installSessionJumper(createSessionJumper({
+      getSessions: () => sessions as never,
+      getWorkspaces: () => workspaces as never,
+    }))
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    // 1. TaskCard without executions has NO session jump button
+    let host = document.createElement('div')
+    document.body.append(host)
+    let root = createRoot(host)
+    root.render(React.createElement(TaskCard, { task: taskNoSession as never, controller }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(host.querySelector('.dsh-atb-card-session')).toBeNull()
+    root.unmount()
+    host.remove()
+
+    // 2. TaskCard does NOT render .dsh-atb-card-session button anymore (double-click replaces it)
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    closePanel.mockClear()
+    const alerts: string[] = []
+    root.render(React.createElement(TaskCard, {
+      task: taskLive as never,
+      controller,
+      onAlert: (msg: string) => alerts.push(msg),
+    }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(host.querySelector('.dsh-atb-card-session')).toBeNull()
+
+    // Double-click jumps to session
+    const cardEl = host.querySelector<HTMLElement>('.dsh-atb-card')!
+    cardEl.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    await new Promise(r => setTimeout(r, 20))
+    expect(opened).toEqual(['session-taskboard-t-live-11112222'])
+    expect(closePanel).toHaveBeenCalledTimes(1)
+    root.unmount()
+    host.remove()
+
+    // 3. TaskCard with archived session alerts on double-click
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    closePanel.mockClear()
+    root.render(React.createElement(TaskCard, {
+      task: taskArchived as never,
+      controller,
+      onAlert: (msg: string) => alerts.push(msg),
+    }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(host.querySelector('.dsh-atb-card-session')).toBeNull()
+    const archCard = host.querySelector<HTMLElement>('.dsh-atb-card')!
+    archCard.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    await new Promise(r => setTimeout(r, 20))
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0]).toContain('该会话已归档')
+    expect(closePanel).not.toHaveBeenCalled()
+    root.unmount()
+    host.remove()
+
+    // 4. TaskDetail renders top session button and clickable holder chip
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    closePanel.mockClear()
+    root.render(React.createElement(TaskDetail, {
+      task: taskLive as never,
+      controller,
+      now: 1_000,
+    }))
+    await new Promise(r => setTimeout(r, 10))
+
+    const topSessionBtn = host.querySelector<HTMLButtonElement>('.dsh-atb-detail-session')!
+    expect(topSessionBtn).not.toBeNull()
+    expect(topSessionBtn.textContent).toContain('跳转会话')
+
+    const holderChipBtn = host.querySelector<HTMLButtonElement>('button.dsh-atb-chip-btn')!
+    expect(holderChipBtn).not.toBeNull()
+    expect(holderChipBtn.textContent).toContain('t-live-1')
+
+    // Click top session button in TaskDetail
+    topSessionBtn.click()
+    await new Promise(r => setTimeout(r, 20))
+    expect(opened).toEqual(['session-taskboard-t-live-11112222', 'session-taskboard-t-live-11112222'])
+    expect(closePanel).toHaveBeenCalledTimes(1)
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('TaskCard: double-clicking a card directly jumps to the associated session', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskCard } = await import('../src/client/board/TaskCard.tsx')
+    const { createSessionJumper } = await import('../src/client/session-jump.ts')
+
+    const taskLive = {
+      id: 't-dbl', title: 'Double click task', description: 'desc', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'in_progress' as const, blocked: false,
+      claimedBy: 'session-taskboard-t-dbl-1234',
+      execution: { mode: 'claim' as const }, version: 2, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [{
+        id: 'e-dbl', trigger: 'manual' as const, startedAt: 0, outcome: 'running' as const,
+        sessionId: 'session-taskboard-t-dbl-1234',
+      }],
+    }
+
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [taskLive] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+    }
+    const controller = new BoardController(client as never)
+    const closePanel = vi.fn()
+    controller.installCloseRequester(closePanel)
+
+    const opened: string[] = []
+    const sessions = {
+      open: (id: string) => { opened.push(id) },
+      refresh: async () => {},
+      list: { getSnapshot: () => ({ byId: { 'session-taskboard-t-dbl-1234': {} } }) },
+    }
+    const workspaces = { list: { getSnapshot: () => ({ archivedSessionIds: [] as string[] }) } }
+
+    controller.installSessionJumper(createSessionJumper({
+      getSessions: () => sessions as never,
+      getWorkspaces: () => workspaces as never,
+    }))
+    controller.start()
+    closePanel.mockClear()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskCard, { task: taskLive as never, controller }))
+    await new Promise(r => setTimeout(r, 10))
+
+    const card = host.querySelector<HTMLElement>('.dsh-atb-card')!
+    expect(card).not.toBeNull()
+
+    // Trigger real browser sequence: click followed immediately by dblclick
+    card.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    card.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    await new Promise(r => setTimeout(r, 300))
+
+    expect(opened).toEqual(['session-taskboard-t-dbl-1234'])
+    expect(closePanel).toHaveBeenCalledTimes(1)
+    // Detail was NOT open previously, and double-click must NOT open it
+    expect(controller.getSnapshot().selectedId).toBeUndefined()
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('TaskFormModal: remembers last chosen model and supports reasoningEffort', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskFormModal, LAST_MODEL_KEY, saveLastModel } = await import('../src/client/board/TaskFormModal.tsx')
+
+    // 1. Pre-seed localStorage with last model
+    saveLastModel({ provider: 'deepseek', model: 'deepseek-reasoner', reasoningEffort: 'high' })
+
+    const createdPayloads: unknown[] = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      create: async (body: unknown) => {
+        createdPayloads.push(body)
+        return { id: 't-new', version: 1 }
+      },
+      stream: () => () => {},
+    }
+    const controller = new BoardController(client as never)
+    controller.installModelCatalog(async () => [
+      {
+        provider: 'deepseek',
+        model: 'deepseek-reasoner',
+        name: 'DeepSeek Reasoner',
+        reasoning: {
+          efforts: [
+            { id: 'low', name: '低 (Low)' },
+            { id: 'medium', name: '中 (Medium)' },
+            { id: 'high', name: '高 (High)' },
+          ],
+          defaultEffort: 'medium',
+        },
+      },
+      {
+        provider: 'openai',
+        model: 'gpt-4o',
+        name: 'GPT-4o',
+      },
+    ])
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    // 2. Open TaskFormModal in create mode
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    controller.setComposer(true)
+    root.render(React.createElement(TaskFormModal, { controller }))
+    await new Promise(r => setTimeout(r, 50))
+
+    // Verify Title input and pre-filled Model & Reasoning select
+    const titleInput = host.querySelector<HTMLInputElement>('input[placeholder="一句话说清要做什么"]')!
+    expect(titleInput).not.toBeNull()
+    const selects = host.querySelectorAll('select')
+    // Select 0: Workspace, Select 1: Model, Select 2: Reasoning Effort
+    const modelSelect = selects[1] as HTMLSelectElement
+    expect(modelSelect.value).toBe(JSON.stringify({ provider: 'deepseek', model: 'deepseek-reasoner' }))
+
+    const effortSelect = selects[2] as HTMLSelectElement
+    expect(effortSelect).not.toBeNull()
+    expect(effortSelect.value).toBe('high')
+
+    // Change Title and Submit
+    const titleSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    titleSetter?.call(titleInput, 'My new reasoning task')
+    titleInput.dispatchEvent(new Event('input', { bubbles: true }))
+    titleInput.dispatchEvent(new Event('change', { bubbles: true }))
+
+    // Change effort to 'low'
+    const selectSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
+    selectSetter?.call(effortSelect, 'low')
+    effortSelect.dispatchEvent(new Event('change', { bubbles: true }))
+
+    await new Promise(r => setTimeout(r, 20))
+
+    // Click submit button (创建任务)
+    const submitBtn = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-modal-footbtns .dsh-atb-btn'))
+      .find(b => b.textContent === '创建任务')!
+    expect(submitBtn).not.toBeNull()
+    expect(submitBtn.disabled).toBe(false)
+    submitBtn.click()
+    await new Promise(r => setTimeout(r, 30))
+
+    expect(createdPayloads).toHaveLength(1)
+    const payload = createdPayloads[0] as { title: string; model?: { provider: string; model: string; reasoningEffort?: string } }
+    expect(payload.title).toBe('My new reasoning task')
+    expect(payload.model).toEqual({
+      provider: 'deepseek',
+      model: 'deepseek-reasoner',
+      reasoningEffort: 'low',
+    })
+
+    // Verify localStorage was updated to the new choice
+    expect(JSON.parse(localStorage.getItem(LAST_MODEL_KEY)!)).toEqual({
+      provider: 'deepseek',
+      model: 'deepseek-reasoner',
+      reasoningEffort: 'low',
+    })
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('TaskFormModal: submits urgency and permission selects with SlashPromptInput', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskFormModal } = await import('../src/client/board/TaskFormModal.tsx')
+
+    const createdPayloads: unknown[] = []
+    const clientFake = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/proj/a', title: 'A', gitAvailable: true }],
+      create: async (body: unknown) => {
+        createdPayloads.push(body)
+        return { id: 't-perm', title: 'Task with permission', workspaceId: 'ws-a', status: 'todo', version: 1, createdAt: 0, updatedAt: 0 }
+      },
+      update: async () => ({ ok: true }),
+      stream: () => () => {},
+      promptCompletions: async () => ({
+        commands: [{ name: 'goal', kind: 'command' as const, description: '自主完成长期目标' }],
+        skills: [{ name: 'frontend-ui-engineering', kind: 'skill' as const, description: '前端UI工程' }],
+      }),
+      modelCatalog: async () => ({ models: [], presets: [] }),
+    }
+
+    const controller = new BoardController(clientFake as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    controller.setComposer(true)
+    root.render(React.createElement(TaskFormModal, { controller }))
+    await new Promise(r => setTimeout(r, 50))
+
+    // Check title input
+    const titleInput = host.querySelector<HTMLInputElement>('input[placeholder="一句话说清要做什么"]')!
+    expect(titleInput).not.toBeNull()
+    const titleSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    titleSetter?.call(titleInput, 'Task with read-only permission')
+    titleInput.dispatchEvent(new Event('input', { bubbles: true }))
+    titleInput.dispatchEvent(new Event('change', { bubbles: true }))
+
+    // Check permission options: default is workspace-write
+    const permissionSelect = host.querySelector<HTMLSelectElement>('.dsh-atb-permission-select')!
+    const permOpts = Array.from(permissionSelect.options)
+    expect(permOpts.length).toBe(3)
+    expect(permOpts[0]!.textContent).toContain('可写入工作区')
+    expect(permOpts[1]!.textContent).toContain('仅可查看')
+    expect(permOpts[2]!.textContent).toContain('完全权限')
+    expect(permissionSelect.value).toBe('workspace-write')
+
+    // Select '仅可查看' (read-only) and urgent priority.
+    permissionSelect.value = 'read-only'
+    permissionSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    const urgencySelect = host.querySelector<HTMLSelectElement>('.dsh-atb-urgency-select')!
+    expect(urgencySelect.value).toBe('normal')
+    urgencySelect.value = 'urgent'
+    urgencySelect.dispatchEvent(new Event('change', { bubbles: true }))
+    await new Promise(r => setTimeout(r, 20))
+    expect(permissionSelect.value).toBe('read-only')
+    expect(urgencySelect.value).toBe('urgent')
+
+    // Find description textarea (SlashPromptInput)
+    const textareas = host.querySelectorAll('textarea')
+    expect(textareas.length).toBe(2)
+    const descTextarea = textareas[0] as HTMLTextAreaElement
+    const textareaSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    textareaSetter?.call(descTextarea, '使用 /goal 完成任务并按规范交付')
+    descTextarea.dispatchEvent(new Event('input', { bubbles: true }))
+    descTextarea.dispatchEvent(new Event('change', { bubbles: true }))
+
+    await new Promise(r => setTimeout(r, 20))
+
+    // Submit
+    const submitBtn = Array.from(host.querySelectorAll<HTMLButtonElement>('.dsh-atb-modal-footbtns .dsh-atb-btn'))
+      .find(b => b.textContent === '创建任务')!
+    submitBtn.click()
+    await new Promise(r => setTimeout(r, 30))
+
+    expect(createdPayloads).toHaveLength(1)
+    const payload = createdPayloads[0] as { title: string; permission?: string; urgency?: string; description?: string }
+    expect(payload.title).toBe('Task with read-only permission')
+    expect(payload.permission).toBe('read-only')
+    expect(payload.urgency).toBe('urgent')
+    expect(payload.description).toBe('使用 /goal 完成任务并按规范交付')
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('controller.fetchModelCatalog & fetchPresetCatalog fallback to client endpoint (0.5.5)', async () => {
+    const { BoardController } = await import('../src/client/controller.ts')
+    const clientFake = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [],
+      modelCatalog: async () => ({
+        models: [{ provider: 'fallback-prov', model: 'fallback-model', name: 'Fallback Model' }],
+        presets: [{ id: 'standard', name: '标准模式' }],
+        defaultPresetId: 'standard',
+      }),
+      stream: () => () => {},
+    }
+
+    const controller = new BoardController(clientFake as never)
+    const models = await controller.fetchModelCatalog()
+    expect(models).toEqual([{ provider: 'fallback-prov', model: 'fallback-model', name: 'Fallback Model' }])
+
+    const presets = await controller.fetchPresetCatalog()
+    expect(presets).toEqual({
+      presets: [{ id: 'standard', name: '标准模式' }],
+      defaultId: 'standard',
+    })
+  })
+
+  it('TaskBoard: clicking outside the detail panel dismisses it', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskBoard } = await import('../src/client/board/TaskBoard.tsx')
+
+    const task1 = {
+      id: 't-1', title: 'Task 1', description: 'desc 1', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'todo' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+    const task2 = {
+      id: 't-2', title: 'Task 2', description: 'desc 2', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'todo' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [task1, task2] }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      stream: () => () => {},
+    }
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskBoard, { controller }))
+    await new Promise(r => setTimeout(r, 10))
+
+    // 1. Initially no task selected
+    expect(host.querySelector('.dsh-atb-detailpanel')).toBeNull()
+
+    // 2. Select task 1 -> detail panel opens
+    controller.select('t-1')
+    await new Promise(r => setTimeout(r, 10))
+    const detailPanel = host.querySelector<HTMLElement>('.dsh-atb-detailpanel')!
+    expect(detailPanel).not.toBeNull()
+    expect(controller.getSnapshot().selectedId).toBe('t-1')
+
+    // 3. Pointerdown INSIDE the detail panel -> stays open
+    detailPanel.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(controller.getSnapshot().selectedId).toBe('t-1')
+
+    // 4. Pointerdown on another task card -> card click switches selection
+    const cards = host.querySelectorAll<HTMLElement>('.dsh-atb-card')
+    expect(cards.length).toBeGreaterThanOrEqual(2)
+    cards[1]!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }))
+    cards[1]!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(controller.getSnapshot().selectedId).toBe('t-2')
+
+    // 5. Pointerdown OUTSIDE (e.g. on toolbar) -> closes the detail panel
+    const toolbar = host.querySelector<HTMLElement>('.dsh-atb-toolbar')!
+    toolbar.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }))
+    await new Promise(r => setTimeout(r, 10))
+    expect(controller.getSnapshot().selectedId).toBeUndefined()
+    expect(host.querySelector('.dsh-atb-detailpanel')).toBeNull()
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('TaskBoard: done column collapse toggle and collapsed vertical bar rendering', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskBoard } = await import('../src/client/board/TaskBoard.tsx')
+
+    const taskReview = {
+      id: 't-review', title: 'Task Review', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'in_review' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+    const taskDone = {
+      id: 't-done', title: 'Task Done', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'done' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+
+    let movedTo: string | undefined
+    const client = {
+      state: async (opts?: { excludeDone?: boolean }) => ({
+        schemaVersion: 1,
+        revision: 1,
+        tasks: opts?.excludeDone ? [taskReview] : [taskReview, taskDone],
+        doneCount: 1,
+      }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      move: async (id: string, body: any) => {
+        movedTo = body.status
+        return { task: { ...taskReview, status: body.status } }
+      },
+      stream: () => () => {},
+    }
+
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 10))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskBoard, { controller }))
+    await new Promise(r => setTimeout(r, 10))
+
+    // 1. 默认展开状态：已完成列有卡片，且没有 data-collapsed
+    let collapsedCol = host.querySelector('.dsh-atb-column[data-collapsed="true"]')
+    expect(collapsedCol).toBeNull()
+
+    // 找到已完成列的收起按钮并点击
+    const foldBtns = host.querySelectorAll<HTMLButtonElement>('.dsh-atb-colfoldbtn')
+    expect(foldBtns.length).toBeGreaterThan(0)
+    const doneFoldBtn = Array.from(foldBtns).find(btn => btn.title.includes('已完成')) ?? foldBtns[foldBtns.length - 1]!
+    doneFoldBtn.click()
+    await new Promise(r => setTimeout(r, 10))
+
+    // 2. 收起状态：渲染 data-collapsed="true" 竖条，展示总数
+    expect(controller.getSnapshot().doneCollapsed).toBe(true)
+    collapsedCol = host.querySelector('.dsh-atb-column[data-collapsed="true"]')
+    expect(collapsedCol).not.toBeNull()
+    const countEl = collapsedCol!.querySelector('.dsh-atb-colcount')
+    expect(countEl?.textContent).toBe('1')
+
+    // 3. 测试向收起竖条 dragover 与 drop，流转为 done
+    const dragData: Record<string, string> = { 'application/x-dsh-atb-task': 't-review' }
+    const dt = {
+      types: ['application/x-dsh-atb-task'],
+      getData: (k: string) => dragData[k] ?? '',
+      dropEffect: 'none',
+    }
+    const dragOverEvt = new Event('dragover', { bubbles: true, cancelable: true })
+    Object.defineProperty(dragOverEvt, 'dataTransfer', { value: dt })
+    collapsedCol!.dispatchEvent(dragOverEvt)
+    expect(dragOverEvt.defaultPrevented).toBe(true)
+
+    let dropFired = false
+    collapsedCol!.addEventListener('drop', (e: any) => {
+      dropFired = true
+      const id = e.dataTransfer?.getData('application/x-dsh-atb-task')
+      expect(id).toBe('t-review')
+    })
+
+    const dropEvt = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(dropEvt, 'dataTransfer', { value: dt })
+    collapsedCol!.dispatchEvent(dropEvt)
+    expect(dropFired).toBe(true)
+    await new Promise(r => setTimeout(r, 50))
+    expect(movedTo).toBe('done')
+
+    // 4. 点击展开按钮恢复展开
+    const expandBtn = collapsedCol!.querySelector<HTMLButtonElement>('.dsh-atb-colfoldbtn')
+    expect(expandBtn).not.toBeNull()
+    expandBtn!.click()
+    await new Promise(r => setTimeout(r, 10))
+    expect(controller.getSnapshot().doneCollapsed).toBe(false)
+    expect(host.querySelector('.dsh-atb-column[data-collapsed="true"]')).toBeNull()
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('TaskBoard: backlog column collapse toggle, rendering, drag and drop, and edge cases', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskBoard } = await import('../src/client/board/TaskBoard.tsx')
+
+    const taskB1 = {
+      id: 't-b1', title: 'Backlog Task 1', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'backlog' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+    const taskB2 = {
+      id: 't-b2', title: 'Backlog Task 2', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'backlog' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+    const taskB3 = {
+      id: 't-b3', title: 'Backlog Task 3 special', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'backlog' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+    const taskTodo = {
+      id: 't-todo', title: 'Todo Task', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'todo' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+    const taskReview = {
+      id: 't-rev', title: 'Review Task', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'in_review' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+    const taskDone = {
+      id: 't-done', title: 'Done Task', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'done' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+
+    let moveCalls: Array<{ id: string; version: number; status: string }> = []
+    let moveShouldReject: Error | null = null
+
+    const initialTasks = [taskB1, taskB2, taskB3, taskTodo, taskReview, taskDone]
+    let currentTasks = [...initialTasks]
+
+    const client = {
+      state: async () => ({
+        schemaVersion: 1,
+        revision: 1,
+        tasks: currentTasks,
+        doneCount: 1,
+      }),
+      workspaces: async () => [{ id: 'ws-a', path: '/p/a', title: 'A', sessionCount: 0 }],
+      move: async (id: string, body: any) => {
+        if (moveShouldReject) {
+          throw moveShouldReject
+        }
+        moveCalls.push({ id, version: body.ifVersion, status: body.status })
+        const target = currentTasks.find(t => t.id === id)
+        const updated = target ? { ...target, status: body.status, version: body.ifVersion + 1 } : taskTodo
+        currentTasks = currentTasks.map(t => t.id === id ? updated : t)
+        return { task: updated }
+      },
+      stream: () => () => {},
+    }
+
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 20))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskBoard, { controller }))
+    await new Promise(r => setTimeout(r, 20))
+
+    // @tc TC-FUNC-006
+    // 待规划列处于展开态时，列头渲染收起按钮 .dsh-atb-colfoldbtn，其 title 为收起「待规划」列，内嵌 svg
+    const cols = host.querySelectorAll('.dsh-atb-column')
+    expect(cols.length).toBeGreaterThan(0)
+    const backlogCol = cols[0]!
+    const colHead = backlogCol.querySelector('.dsh-atb-colhead')!
+    expect(colHead).not.toBeNull()
+    const collapseBtn = colHead.querySelector<HTMLButtonElement>('.dsh-atb-colfoldbtn')
+    expect(collapseBtn).not.toBeNull()
+    expect(collapseBtn!.getAttribute('title')).toBe('收起「待规划」列')
+    expect(collapseBtn!.querySelector('svg')).not.toBeNull()
+
+    // @tc TC-FUNC-007
+    // 点击待规划列头收起按钮，触发 controller.setBacklogCollapsed(true)
+    collapseBtn!.click()
+    await new Promise(r => setTimeout(r, 20))
+    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
+
+    // @tc TC-FUNC-008
+    // 收起态紧凑条渲染为 .dsh-atb-column[data-collapsed="true"]，包含 .dsh-atb-col-collapsed-bar
+    const collapsedBacklogCol = host.querySelector('.dsh-atb-column[data-collapsed="true"]')!
+    expect(collapsedBacklogCol).not.toBeNull()
+    const bar = collapsedBacklogCol.querySelector('.dsh-atb-col-collapsed-bar')!
+    expect(bar).not.toBeNull()
+
+    // @tc TC-FUNC-009
+    // 收起态元素完整性：展开按钮、圆点、竖排文字、数量徽章
+    const expandBtn = bar.querySelector<HTMLButtonElement>('.dsh-atb-colfoldbtn')!
+    expect(expandBtn).not.toBeNull()
+    expect(expandBtn.getAttribute('title')).toBe('展开「待规划」列')
+    const dot = bar.querySelector('.dsh-atb-dot[data-status="backlog"]')!
+    expect(dot).not.toBeNull()
+    const vertText = bar.querySelector('.dsh-atb-col-collapsed-text')!
+    expect(vertText).not.toBeNull()
+    expect(vertText.textContent).toBe('待规划')
+    const countBadge = bar.querySelector('.dsh-atb-colcount')!
+    expect(countBadge).not.toBeNull()
+    expect(countBadge.textContent).toBe('3')
+
+    // @tc TC-FUNC-010
+    // 点击收起态展开按钮，恢复展开态，且 stopPropagation 避免冒泡触发外层
+    const collapseCalls: boolean[] = []
+    const origSetBacklogCollapsed = controller.setBacklogCollapsed.bind(controller)
+    controller.setBacklogCollapsed = (val: boolean) => {
+      collapseCalls.push(val)
+      origSetBacklogCollapsed(val)
+    }
+    expandBtn.click()
+    await new Promise(r => setTimeout(r, 20))
+    expect(controller.getSnapshot().backlogCollapsed).toBe(false)
+    expect(collapseCalls).toEqual([false]) // 恰好调用 1 次，验证 stopPropagation 阻止向父节点冒泡
+    controller.setBacklogCollapsed = origSetBacklogCollapsed
+
+    // @tc TC-FUNC-011
+    // 再次收起，然后测试点击收起条空白区域触发展开
+    controller.setBacklogCollapsed(true)
+    await new Promise(r => setTimeout(r, 20))
+    const bar2 = host.querySelector('.dsh-atb-col-collapsed-bar')!
+    bar2.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await new Promise(r => setTimeout(r, 20))
+    expect(controller.getSnapshot().backlogCollapsed).toBe(false)
+
+    // 重新切为收起状态供后续拖拽与边界测试使用
+    controller.setBacklogCollapsed(true)
+    await new Promise(r => setTimeout(r, 20))
+    const colCollapsed = host.querySelector('.dsh-atb-column[data-collapsed="true"]')!
+
+    // @tc TC-FUNC-012
+    // 收起态拖拽悬浮交互：dragover 设置 dropEffect='move' 与 data-dragover="true"
+    const dragData: Record<string, string> = { 'application/x-dsh-atb-task': 't-todo' }
+    const dt = {
+      types: ['application/x-dsh-atb-task'],
+      getData: (k: string) => dragData[k] ?? '',
+      dropEffect: 'none',
+    }
+    const dragOverEvt = new Event('dragover', { bubbles: true, cancelable: true })
+    Object.defineProperty(dragOverEvt, 'dataTransfer', { value: dt })
+    colCollapsed.dispatchEvent(dragOverEvt)
+    expect(dragOverEvt.defaultPrevented).toBe(true)
+    expect(dt.dropEffect).toBe('move')
+    expect(colCollapsed.getAttribute('data-dragover')).toBe('true')
+
+    const dragLeaveEvt = new Event('dragleave', { bubbles: true, cancelable: true })
+    colCollapsed.dispatchEvent(dragLeaveEvt)
+    expect(colCollapsed.getAttribute('data-dragover')).toBeNull()
+
+    // @tc TC-FUNC-013
+    // 拖拽放置与流转：将 todo 状态的 t-todo 放置到待规划收起条，触发 controller.move
+    moveCalls = []
+    const dropEvt = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(dropEvt, 'dataTransfer', { value: dt })
+    colCollapsed.dispatchEvent(dropEvt)
+    await new Promise(r => setTimeout(r, 20))
+    expect(moveCalls).toEqual([{ id: 't-todo', version: 1, status: 'backlog' }])
+
+    // @tc TC-ERR-003
+    // 非法流转守卫（RT-002）：不能直接转为 backlog 的任务（如 in_review）拖入时，提示 forbidden 并不调用 move
+    moveCalls = []
+    const dtReview = {
+      types: ['application/x-dsh-atb-task'],
+      getData: () => 't-rev',
+      dropEffect: 'none',
+    }
+    const dropRevEvt = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(dropRevEvt, 'dataTransfer', { value: dtReview })
+    colCollapsed.dispatchEvent(dropRevEvt)
+    await new Promise(r => setTimeout(r, 20))
+    expect(moveCalls).toHaveLength(0) // 被拦截，未调用 move
+    const alertModal = host.querySelector('.dsh-atb-alert')
+    expect(alertModal).not.toBeNull()
+    const alertCloseBtn = alertModal!.querySelector<HTMLButtonElement>('.dsh-atb-btn')
+    alertCloseBtn?.click() // 关闭弹窗
+    await new Promise(r => setTimeout(r, 10))
+
+    // @tc TC-ERR-004
+    // 拖拽携带空白数据或非目标类型时安全返回，不调用 move
+    moveCalls = []
+    const dtEmpty = {
+      types: ['application/x-dsh-atb-task'],
+      getData: () => '',
+      dropEffect: 'none',
+    }
+    const dropEmptyEvt = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(dropEmptyEvt, 'dataTransfer', { value: dtEmpty })
+    colCollapsed.dispatchEvent(dropEmptyEvt)
+    await new Promise(r => setTimeout(r, 20))
+    expect(moveCalls).toHaveLength(0)
+
+    // @tc TC-ERR-005
+    // 拖拽目标卡片不存在于 ledger 中时安全退出，不调用 move
+    moveCalls = []
+    const dtGhost = {
+      types: ['application/x-dsh-atb-task'],
+      getData: () => 't-ghost',
+      dropEffect: 'none',
+    }
+    const dropGhostEvt = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(dropGhostEvt, 'dataTransfer', { value: dtGhost })
+    colCollapsed.dispatchEvent(dropGhostEvt)
+    await new Promise(r => setTimeout(r, 20))
+    expect(moveCalls).toHaveLength(0)
+
+    // @tc TC-ERR-006
+    // 拖拽同状态卡片防重：卡片原本就处于 backlog 状态时忽略，不调用 move
+    moveCalls = []
+    const dtSame = {
+      types: ['application/x-dsh-atb-task'],
+      getData: () => 't-b1',
+      dropEffect: 'none',
+    }
+    const dropSameEvt = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(dropSameEvt, 'dataTransfer', { value: dtSame })
+    colCollapsed.dispatchEvent(dropSameEvt)
+    await new Promise(r => setTimeout(r, 20))
+    expect(moveCalls).toHaveLength(0)
+
+    // @tc TC-EDGE-005
+    // 零容量集合边界：当 backlog 任务数为 0 时，徽标显示 "0" (RT-004)
+    currentTasks = [taskTodo, taskDone]
+    await controller.refresh()
+    await new Promise(r => setTimeout(r, 20))
+    let curCountEl = host.querySelector('.dsh-atb-column[data-collapsed="true"] .dsh-atb-colcount')!
+    expect(curCountEl.textContent).toBe('0')
+
+    // @tc TC-EDGE-006
+    // 大数值徽标排版边界：当有 999 个 backlog 任务时，徽标显示 "999"
+    const manyTasks = Array.from({ length: 999 }, (_, i) => ({
+      ...taskB1,
+      id: `t-b-many-${i}`,
+    }))
+    currentTasks = manyTasks
+    await controller.refresh()
+    await new Promise(r => setTimeout(r, 20))
+    curCountEl = host.querySelector('.dsh-atb-column[data-collapsed="true"] .dsh-atb-colcount')!
+    expect(curCountEl.textContent).toBe('999')
+
+    // 恢复正常任务列表
+    currentTasks = [...initialTasks]
+    await controller.refresh()
+    await new Promise(r => setTimeout(r, 20))
+
+    // @tc TC-EDGE-007
+    // 双端折叠共存布局边界：backlogCollapsed 与 doneCollapsed 同时为 true
+    controller.setDoneCollapsed(true)
+    await new Promise(r => setTimeout(r, 20))
+    const collapsedCols = host.querySelectorAll('.dsh-atb-column[data-collapsed="true"]')
+    expect(collapsedCols.length).toBe(2) // 首尾两列均折叠
+    // 中间三列依然存在
+    const allColumns = host.querySelectorAll('.dsh-atb-column')
+    expect(allColumns.length).toBe(5)
+    controller.setDoneCollapsed(false)
+    await new Promise(r => setTimeout(r, 20))
+
+    // @tc TC-EDGE-008
+    // 视图过滤与搜索联动：搜索只匹配特定 backlog 任务时，徽标数量同步更新
+    controller.setSearch('special')
+    await new Promise(r => setTimeout(r, 20))
+    curCountEl = host.querySelector('.dsh-atb-column[data-collapsed="true"] .dsh-atb-colcount')!
+    expect(curCountEl.textContent).toBe('1') // 只有 taskB3 匹配
+    controller.setSearch('')
+    await new Promise(r => setTimeout(r, 20))
+    curCountEl = host.querySelector('.dsh-atb-column[data-collapsed="true"] .dsh-atb-colcount')!
+    expect(curCountEl.textContent).toBe('3')
+
+    // @tc TC-CONC-002
+    // 刷新任务后，收起栏徽标更新为 4 且保持收起状态。
+    const taskB4 = { ...taskB1, id: 't-b4', title: 'Backlog 4' }
+    currentTasks = [...initialTasks, taskB4]
+    await controller.refresh()
+    await new Promise(r => setTimeout(r, 20))
+    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
+    curCountEl = host.querySelector('.dsh-atb-column[data-collapsed="true"] .dsh-atb-colcount')!
+    expect(curCountEl.textContent).toBe('4')
+
+    // @tc TC-CONC-003
+    // 拖拽移动与后端并发修改产生版本冲突（409）：视图保持收起不崩溃，控制器捕获错误
+    moveShouldReject = new Error('409 Conflict: version mismatch')
+    const dtConflict = {
+      types: ['application/x-dsh-atb-task'],
+      getData: () => 't-todo',
+      dropEffect: 'none',
+    }
+    const dropConflictEvt = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(dropConflictEvt, 'dataTransfer', { value: dtConflict })
+    const colNow = host.querySelector('.dsh-atb-column[data-collapsed="true"]')!
+    colNow.dispatchEvent(dropConflictEvt)
+    await new Promise(r => setTimeout(r, 30))
+    expect(controller.getSnapshot().backlogCollapsed).toBe(true)
+    expect(host.querySelector('.dsh-atb-column[data-collapsed="true"]')).not.toBeNull()
+
+    // ── 待办 (todo) 列折叠交互与拖拽验证 ───────────────────────
+    // 先恢复 backlog 展开
+    controller.setBacklogCollapsed(false)
+    await new Promise(r => setTimeout(r, 20))
+    expect(controller.getSnapshot().todoCollapsed).toBe(false)
+
+    // 待办列头具备收起按钮
+    const todoCol = host.querySelectorAll('.dsh-atb-column')[1]!
+    const todoHead = todoCol.querySelector('.dsh-atb-colhead')!
+    const todoCollapseBtn = todoHead.querySelector<HTMLButtonElement>('.dsh-atb-colfoldbtn')!
+    expect(todoCollapseBtn).not.toBeNull()
+    expect(todoCollapseBtn.getAttribute('title')).toBe('收起「待办」列')
+
+    // 点击收起待办列
+    todoCollapseBtn.click()
+    await new Promise(r => setTimeout(r, 20))
+    expect(controller.getSnapshot().todoCollapsed).toBe(true)
+
+    // 收起态紧凑条验证
+    const collapsedTodoCol = host.querySelector('.dsh-atb-column[data-collapsed="true"]')!
+    expect(collapsedTodoCol).not.toBeNull()
+    const todoBar = collapsedTodoCol.querySelector('.dsh-atb-col-collapsed-bar')!
+    expect(todoBar).not.toBeNull()
+    expect(todoBar.querySelector('.dsh-atb-col-collapsed-text')!.textContent).toBe('待办')
+    expect(todoBar.querySelector('.dsh-atb-colcount')!.textContent).toBe('1')
+
+    // 点击展开按钮恢复展开
+    const todoExpandBtn = todoBar.querySelector<HTMLButtonElement>('.dsh-atb-colfoldbtn')!
+    expect(todoExpandBtn.getAttribute('title')).toBe('展开「待办」列')
+    todoExpandBtn.click()
+    await new Promise(r => setTimeout(r, 20))
+    expect(controller.getSnapshot().todoCollapsed).toBe(false)
+
+    // 再次收起并测试拖拽卡片放入待办列
+    controller.setTodoCollapsed(true)
+    await new Promise(r => setTimeout(r, 20))
+    moveCalls.length = 0
+    moveShouldReject = null
+    const dtTodo = {
+      types: ['application/x-dsh-atb-task'],
+      getData: (t: string) => (t === 'application/x-dsh-atb-task' ? 't-b1' : ''),
+      dropEffect: 'none',
+    }
+    const dropTodoEvt = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(dropTodoEvt, 'dataTransfer', { value: dtTodo })
+    const targetTodoBar = host.querySelector('.dsh-atb-column[data-collapsed="true"]')!
+    targetTodoBar.dispatchEvent(dropTodoEvt)
+    await new Promise(r => setTimeout(r, 20))
+    expect(moveCalls).toEqual([{ id: 't-b1', version: 1, status: 'todo' }])
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('workspace grouping and sorting: groupAndSortTasksByWorkspace groups and sorts by workspace name', async () => {
+    const { groupAndSortTasksByWorkspace, resolveWorkspaceName } = await import('../src/client/board/TaskBoard.tsx')
+
+    const workspaces = [
+      { id: 'ws-z', title: 'Zebra Project', path: '/home/code/zebra' },
+      { id: 'ws-a', title: 'Alpha Project', path: '/home/code/alpha' },
+      { id: 'ws-p', title: '', path: '/home/code/path-only-project' },
+    ]
+
+    expect(resolveWorkspaceName('ws-a', workspaces, '未分配')).toBe('Alpha Project')
+    expect(resolveWorkspaceName('ws-p', workspaces, '未分配')).toBe('path-only-project')
+    expect(resolveWorkspaceName('ws-unknown', workspaces, '未分配')).toBe('ws-unkno')
+    expect(resolveWorkspaceName(undefined, workspaces, '未分配')).toBe('未分配')
+
+    const tasks = [
+      { id: 't-z1', workspaceId: 'ws-z', title: 'Z1' } as any,
+      { id: 't-a1', workspaceId: 'ws-a', title: 'A1' } as any,
+      { id: 't-none', workspaceId: undefined, title: 'None' } as any,
+      { id: 't-a2', workspaceId: 'ws-a', title: 'A2' } as any,
+      { id: 't-p1', workspaceId: 'ws-p', title: 'P1' } as any,
+    ]
+
+    const groups = groupAndSortTasksByWorkspace(tasks, workspaces, '未分配工作区')
+    expect(groups.map(g => g.workspaceName)).toEqual([
+      'Alpha Project',
+      'path-only-project',
+      'Zebra Project',
+      '未分配工作区',
+    ])
+
+    // Preserves order within each group
+    expect(groups[0]!.tasks.map(t => t.id)).toEqual(['t-a1', 't-a2'])
+    expect(groups[1]!.tasks.map(t => t.id)).toEqual(['t-p1'])
+    expect(groups[2]!.tasks.map(t => t.id)).toEqual(['t-z1'])
+    expect(groups[3]!.tasks.map(t => t.id)).toEqual(['t-none'])
+  })
+
+  it('session identification & card badge: resolves session and renders badge with jump on click', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskCard, resolveTaskSessionId } = await import('../src/client/board/TaskCard.tsx')
+    const { createSessionJumper } = await import('../src/client/session-jump.ts')
+
+    // 1. resolveTaskSessionId checks various sources
+    const tRunning = { executions: [{ outcome: 'running', sessionId: 's-running' }] } as any
+    expect(resolveTaskSessionId(tRunning)).toBe('s-running')
+
+    const tRecent = { executions: [{ outcome: 'succeeded', sessionId: 's-old' }, { outcome: 'failed', sessionId: 's-recent' }] } as any
+    expect(resolveTaskSessionId(tRecent)).toBe('s-recent')
+
+    const tClaimed = { executions: [], claimedBy: 'session-claimed-123' } as any
+    expect(resolveTaskSessionId(tClaimed)).toBe('session-claimed-123')
+
+    const tAutoReuse = { executions: [], execution: { autoReuseSessionId: 's-autoreuse' }, createdBy: { kind: 'user' } } as any
+    expect(resolveTaskSessionId(tAutoReuse)).toBe('s-autoreuse')
+
+    const tAgentCreated = { executions: [], execution: {}, createdBy: { kind: 'agent', sessionId: 's-agent-creator' } } as any
+    expect(resolveTaskSessionId(tAgentCreated)).toBe('s-agent-creator')
+
+    const tNone = { executions: [], execution: {}, createdBy: { kind: 'user' } } as any
+    expect(resolveTaskSessionId(tNone)).toBeUndefined()
+
+    // 2. TaskCard renders session badge and clicking it jumps to session
+    const opened: string[] = []
+    const client = {
+      state: async () => ({ schemaVersion: 1, revision: 1, tasks: [] }),
+      workspaces: async () => [],
+      stream: () => () => {},
+    }
+    const controller = new BoardController(client as never)
+    controller.installSessionTitles(() => ({
+      'session-taskboard-9f0d99': { displayTitle: '优化展示会话' },
+    }))
+    controller.installSessionJumper(createSessionJumper({
+      getSessions: () => ({
+        open: (id: string) => { opened.push(id) },
+        refresh: async () => {},
+        list: { getSnapshot: () => ({ byId: { 'session-taskboard-9f0d99': {} } }) },
+      } as never),
+      getWorkspaces: () => ({ list: { getSnapshot: () => ({ archivedSessionIds: [] }) } } as never),
+    }))
+
+    const taskWithSession = {
+      id: 't-card-sess', title: 'Task with session', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'normal' as const, status: 'in_progress' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'agent' as const, sessionId: 'session-taskboard-9f0d99' },
+      updatedBy: { kind: 'agent' as const, sessionId: 'session-taskboard-9f0d99' },
+      comments: [], executions: [],
+    }
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskCard, { task: taskWithSession, controller }))
+    await new Promise(r => setTimeout(r, 10))
+
+    const sessionBadge = host.querySelector<HTMLElement>('.dsh-atb-badge[data-kind="session"]')
+    expect(sessionBadge).not.toBeNull()
+    expect(sessionBadge?.textContent).toContain('9f0d99')
+    expect(sessionBadge?.getAttribute('title')).toContain('优化展示会话')
+    expect(sessionBadge?.getAttribute('title')).toContain('session-taskboard-9f0d99')
+
+    // Click on badge directly opens session
+    sessionBadge!.click()
+    await new Promise(r => setTimeout(r, 20))
+    expect(opened).toEqual(['session-taskboard-9f0d99'])
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+
+  it('TaskBoard renders workspace groups with headers in status columns', async () => {
+    localStorage.clear()
+    const React = await import('react')
+    const { createRoot } = await import('react-dom/client')
+    const { BoardController } = await import('../src/client/controller.ts')
+    const { TaskBoard } = await import('../src/client/board/TaskBoard.tsx')
+
+    const taskA1 = {
+      id: 't-a1', title: 'Task A1', description: '', prompt: '', workspaceId: 'ws-b',
+      urgency: 'normal' as const, status: 'todo' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+    const taskA2 = {
+      id: 't-a2', title: 'Task A2', description: '', prompt: '', workspaceId: 'ws-a',
+      urgency: 'urgent' as const, status: 'todo' as const, blocked: false,
+      execution: { mode: 'claim' as const }, version: 1, createdAt: 0, updatedAt: 0,
+      createdBy: { kind: 'user' as const }, updatedBy: { kind: 'user' as const },
+      comments: [], executions: [],
+    }
+
+    const client = {
+      state: async () => ({
+        schemaVersion: 1, revision: 1,
+        tasks: [taskA1, taskA2],
+      }),
+      workspaces: async () => [
+        { id: 'ws-b', title: 'Beta Repo', path: '/p/b', sessionCount: 0 },
+        { id: 'ws-a', title: 'Alpha Repo', path: '/p/a', sessionCount: 0 },
+      ],
+      stream: () => () => {},
+    }
+
+    const controller = new BoardController(client as never)
+    controller.start()
+    await new Promise(r => setTimeout(r, 20))
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    root.render(React.createElement(TaskBoard, { controller }))
+    await new Promise(r => setTimeout(r, 20))
+
+    // Todo column should contain 2 workspace groups: Alpha Repo, Beta Repo (sorted alphabetically)
+    const todoCol = host.querySelectorAll('.dsh-atb-column')[1]!
+    const groupHeads = todoCol.querySelectorAll('.dsh-atb-ws-group-head')
+    expect(groupHeads.length).toBe(2)
+    expect(groupHeads[0]!.querySelector('.dsh-atb-ws-group-name')?.textContent).toBe('Alpha Repo')
+    expect(groupHeads[1]!.querySelector('.dsh-atb-ws-group-name')?.textContent).toBe('Beta Repo')
+
+    root.unmount()
+    host.remove()
+    controller.dispose()
+    localStorage.clear()
+  })
+})

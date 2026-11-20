@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+*.log
+
+# 本地截图验收用的隔离实例（不入库）
+.preview/
+
+# lib/ 是构建产物，必须入库（docs/plugin-conventions.md §5）——不要在这里忽略它。
