@@ -148,7 +148,7 @@ export const ru: TaskboardDict = {
   // ── board toolbar & columns (TaskBoard) ───────────────────────────
   'board.title': 'Доска задач агента',
   'board.count.tasks': '{n} задач · ред. {rev}',
-  'board.action.newTask': '+ Новая задача',
+  'board.action.newTask': 'Новая задача',
   'board.action.blankTask': 'Пустая задача',
   'board.action.manageTemplates': 'Управление шаблонами…',
   'board.search.placeholder': 'Поиск по названию / ID…',

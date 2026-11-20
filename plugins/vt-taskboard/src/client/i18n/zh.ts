@@ -149,7 +149,7 @@ export const zh = {
   // ── board toolbar & columns (TaskBoard) ───────────────────────────
   'board.title': 'Agent 任务看板',
   'board.count.tasks': '{n} 任务 · rev {rev}',
-  'board.action.newTask': '+ 新建任务',
+  'board.action.newTask': '新建任务',
   'board.action.blankTask': '空白任务',
   'board.action.manageTemplates': '管理模板…',
   'board.search.placeholder': '搜索标题 / ID…',

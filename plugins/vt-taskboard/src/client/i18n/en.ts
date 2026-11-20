@@ -147,7 +147,7 @@ export const en: TaskboardDict = {
   // ── board toolbar & columns (TaskBoard) ───────────────────────────
   'board.title': 'Agent Task Board',
   'board.count.tasks': '{n} tasks · rev {rev}',
-  'board.action.newTask': '+ New Task',
+  'board.action.newTask': 'New Task',
   'board.action.blankTask': 'Blank task',
   'board.action.manageTemplates': 'Manage templates…',
   'board.search.placeholder': 'Search title / ID…',
