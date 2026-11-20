@@ -573,11 +573,11 @@
       "versions": [
         {
           "version": "1.0.0",
-          "publishTimestamp": 1795155296,
+          "publishTimestamp": 1795156112,
           "source": {
             "type": "git",
             "url": "https://github.com/Vontean/vt-dsh-plugin",
-            "commit": "d3a3cf4c56a2d96ac31d715a01fdaf4a1b814a67",
+            "commit": "7b52b2161f24a82cf7e1e995f1bc263436a2039e",
             "path": "plugins/vt-taskboard"
           },
           "engines": {
