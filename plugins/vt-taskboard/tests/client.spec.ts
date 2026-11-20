@@ -150,7 +150,7 @@ describe('client half', () => {
     expect(css).toContain('.dsh-atb-toolbar { padding-right: 62px; }')
   })
 
-  it('board columns wear status dots before their labels', async () => {
+  it('board columns label their status with text only, no decorative dots', async () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.stubGlobal('EventSource', EventSourceMock as unknown as typeof EventSource)
     const React = await import('react')
@@ -189,24 +189,20 @@ describe('client half', () => {
     // Let the refresh land and React commit outside act().
     await new Promise(r => setTimeout(r, 20))
 
-    // Main view: one column head per main status, each starting with its
-    // status dot placed before the label text.
+    // 列头不再放装饰性状态圆点：状态由列名文字表达，列之间靠分隔线区分。
     const heads = () => Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-colhead'))
     expect(heads().length).toBe(MAIN_STATUSES.length)
     for (const head of heads()) {
-      const dot = head.querySelector<HTMLElement>('.dsh-atb-dot')
-      expect(dot).not.toBeNull()
-      expect(head.firstChild).toBe(dot)
+      expect(head.querySelector('.dsh-atb-dot'), 'column head must not carry a status dot').toBeNull()
+      expect((head.textContent ?? '').trim().length).toBeGreaterThan(0)
     }
-    const dotStatuses = heads().map(h => h.querySelector<HTMLElement>('.dsh-atb-dot')!.dataset.status)
-    expect(dotStatuses).toEqual([...MAIN_STATUSES])
 
-    // Secondary tab: canceled / archived / trashed groups wear their dots too.
+    // 其它任务视图同样只用文字分组，不补圆点。
     controller.toggleSecondary()
     await new Promise(r => setTimeout(r, 20))
     for (const key of ['canceled', 'archived', 'trashed']) {
-      const dot = host.querySelector<HTMLElement>(`.dsh-atb-colhead .dsh-atb-dot[data-status="${key}"]`)
-      expect(dot, `secondary dot for ${key}`).not.toBeNull()
+      const headsNow = Array.from(host.querySelectorAll<HTMLElement>('.dsh-atb-colhead'))
+      for (const head of headsNow) expect(head.querySelector('.dsh-atb-dot')).toBeNull()
     }
 
     root.unmount()
@@ -2826,8 +2822,8 @@ describe('client half', () => {
     const expandBtn = bar.querySelector<HTMLButtonElement>('.dsh-atb-colfoldbtn')!
     expect(expandBtn).not.toBeNull()
     expect(expandBtn.getAttribute('title')).toBe('展开「待规划」列')
-    const dot = bar.querySelector('.dsh-atb-dot[data-status="backlog"]')!
-    expect(dot).not.toBeNull()
+    // 收起态同样不画状态圆点，只用竖排文字 + 数量
+    expect(bar.querySelector('.dsh-atb-dot')).toBeNull()
     const vertText = bar.querySelector('.dsh-atb-col-collapsed-text')!
     expect(vertText).not.toBeNull()
     expect(vertText.textContent).toBe('待规划')

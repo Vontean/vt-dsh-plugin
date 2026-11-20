@@ -213,7 +213,7 @@ export function TaskCard({ task, controller, draggable = false, now, onAlert }: 
       )}
 
       <div className="dsh-atb-card-meta">
-        <span className="dsh-atb-badge">{t(URGENCY_KEYS[task.urgency])}</span>
+        <span className="dsh-atb-badge" data-urgency={task.urgency}>{t(URGENCY_KEYS[task.urgency])}</span>
         {task.blocked && <span className="dsh-atb-badge" data-kind="blocked">{t('shared.blocked')}</span>}
         {waiting.length > 0 && <span className="dsh-atb-badge" data-kind="blocked" title={waiting.map(d => `${d.title} (${d.id}, ${d.status})`).join(', ')}>{t('dependency.waiting')} {waiting.map(d => d.title).join(', ')}</span>}
         {stale && <span className="dsh-atb-badge" data-kind="stale">{t('card.badge.stale')}</span>}

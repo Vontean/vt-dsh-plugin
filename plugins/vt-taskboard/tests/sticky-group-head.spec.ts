@@ -192,9 +192,9 @@ describe('sticky project group headers', () => {
 
     expect(body).toContain('position: sticky')
     expect(body).toContain('top: 0')
-    // 不透明底色：卡片滑过标签时不能透字。--vtb-paper-2 是纸张令牌里的
-    // 实色值（不是 rgba 半透明），因此满足「完全不透明」这一意图。
-    expect(body).toContain('var(--vtb-paper-2)')
+    // 不透明底色：卡片滑过标签时不能透字。--vtb-column 是「墨色 3% 混进宿主底色」
+    // 的不透明结果，与列底色同值，因此分组头不会透出下面的卡片。
+    expect(body).toContain('var(--vtb-column)')
     expect(body).not.toMatch(/background:\s*(transparent|none)\s*;/)
   })
 })

@@ -8,7 +8,6 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { BoardController, ControllerState } from '../controller.ts'
 import type { TaskRecord, TaskStatus, Urgency } from '../../shared/protocol.ts'
 import { MAIN_STATUSES, canTransition, completedDisplayLimitOf } from '../../shared/protocol.ts'
-import { PLUGIN_VERSION } from '../../shared/version.ts'
 import { COLUMN_KEYS, URGENCY_KEYS } from './labels.ts'
 import { useT } from '../i18n/runtime.ts'
 import { localizeBuiltinName, localizeBuiltinTask } from '../i18n/templates.ts'
@@ -216,52 +215,6 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
         <div className="dsh-atb-toolbar-row">
         <h2 className="dsh-atb-title">{t('board.title')}</h2>
         <span className="dsh-atb-count">{t('board.count.tasks', { n: live.length, rev: state.ledger.revision })}</span>
-        <div className="dsh-atb-newmenu">
-          <button
-            type="button"
-            className="dsh-atb-btn"
-            data-primary="true"
-            onClick={() => {
-              const next = !newMenuOpen
-              setNewMenuOpen(next)
-              if (next) controller.prepareTemplateMenu()
-            }}
-          >
-            <Icon name="plus" />
-            {t('board.action.newTask')}
-            <Icon name="chevron-down" size={12} />
-          </button>
-          {newMenuOpen && (
-            <>
-              <div className="dsh-atb-newmenu-backdrop" onClick={closeMenu} />
-              <div className="dsh-atb-newmenu-list">
-                <button type="button" className="dsh-atb-newmenu-opt" onClick={() => { closeMenu(); controller.setComposer(true) }}>{t('board.action.blankTask')}</button>
-                {groupTemplatesByCategory(state.templates).map(group => (
-                  <div key={group.category ?? '\u0000'} className="dsh-atb-newmenu-catgroup">
-                    <div className="dsh-atb-newmenu-cat">{categoryLabel(group.category, t)} ({group.templates.length})</div>
-                    {group.templates.map(tpl => {
-                      const name = localizeBuiltinName(tpl)
-                      const spec = localizeBuiltinTask(tpl)
-                      return (
-                        <button
-                          key={tpl.id}
-                          type="button"
-                          className="dsh-atb-newmenu-opt"
-                          title={spec.description !== undefined && spec.description.length > 0 ? spec.description.slice(0, 120) : name}
-                          onClick={() => { closeMenu(); controller.newFromTemplate(spec) }}
-                        >
-                          {name}
-                        </button>
-                      )
-                    })}
-                  </div>
-                ))}
-                <div className="dsh-atb-newmenu-sep" />
-                <button type="button" className="dsh-atb-newmenu-opt" onClick={() => { closeMenu(); controller.openTemplateManager() }}>{t('board.action.manageTemplates')}</button>
-              </div>
-            </>
-          )}
-        </div>
         <div className="dsh-atb-spacer" />
         <div className="dsh-atb-newmenu" data-align="end">
           <button
@@ -329,15 +282,53 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
             </>
           )}
         </div>
-        <a
-          className="dsh-atb-ver"
-          href="https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-taskboard"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          V{PLUGIN_VERSION}
-        </a>
+<div className="dsh-atb-newmenu">
+          <button
+            type="button"
+            className="dsh-atb-btn"
+            data-primary="true"
+            onClick={() => {
+              const next = !newMenuOpen
+              setNewMenuOpen(next)
+              if (next) controller.prepareTemplateMenu()
+            }}
+          >
+            <Icon name="plus" />
+            {t('board.action.newTask')}
+            <Icon name="chevron-down" size={12} />
+          </button>
+          {newMenuOpen && (
+            <>
+              <div className="dsh-atb-newmenu-backdrop" onClick={closeMenu} />
+              <div className="dsh-atb-newmenu-list">
+                <button type="button" className="dsh-atb-newmenu-opt" onClick={() => { closeMenu(); controller.setComposer(true) }}>{t('board.action.blankTask')}</button>
+                {groupTemplatesByCategory(state.templates).map(group => (
+                  <div key={group.category ?? '\u0000'} className="dsh-atb-newmenu-catgroup">
+                    <div className="dsh-atb-newmenu-cat">{categoryLabel(group.category, t)} ({group.templates.length})</div>
+                    {group.templates.map(tpl => {
+                      const name = localizeBuiltinName(tpl)
+                      const spec = localizeBuiltinTask(tpl)
+                      return (
+                        <button
+                          key={tpl.id}
+                          type="button"
+                          className="dsh-atb-newmenu-opt"
+                          title={spec.description !== undefined && spec.description.length > 0 ? spec.description.slice(0, 120) : name}
+                          onClick={() => { closeMenu(); controller.newFromTemplate(spec) }}
+                        >
+                          {name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))}
+                <div className="dsh-atb-newmenu-sep" />
+                <button type="button" className="dsh-atb-newmenu-opt" onClick={() => { closeMenu(); controller.openTemplateManager() }}>{t('board.action.manageTemplates')}</button>
+              </div>
+            </>
+          )}
         </div>
+                </div>
         <div className="dsh-atb-toolbar-row">
         <div className="dsh-atb-searchbox">
           <Icon name="search" size={13} />
@@ -485,7 +476,6 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                         </svg>
                       </button>
                       <div className="dsh-atb-col-collapsed-title">
-                        <span className="dsh-atb-dot" data-status={status} />
                         <span className="dsh-atb-col-collapsed-text">{t(COLUMN_KEYS[status])}</span>
                       </div>
                       <span className="dsh-atb-colcount">{count}</span>
@@ -521,7 +511,6 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
                   onDrop={onDrop}
                 >
                   <div className="dsh-atb-colhead">
-                    <span className="dsh-atb-dot" data-status={status} />
                     {t(COLUMN_KEYS[status])}
                     <span className="dsh-atb-colcount">{columnTasks.length}</span>
                     {status === 'in_progress' && (
@@ -868,7 +857,6 @@ function SecondaryTab({ controller, tasks }: { controller: BoardController; task
         return (
         <div className="dsh-atb-column" key={group.label}>
           <div className="dsh-atb-colhead">
-            <span className="dsh-atb-dot" data-status={group.dot} />
             {group.label}
             <span className="dsh-atb-colcount">{group.rows.length}</span>
             {group.action && group.rows.length > 0 && (
