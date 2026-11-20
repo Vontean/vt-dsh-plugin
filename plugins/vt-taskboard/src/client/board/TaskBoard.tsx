@@ -368,9 +368,10 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
             className="dsh-atb-chip"
             data-urgency={u}
             data-on={state.filters.urgencies.includes(u)}
+            aria-pressed={state.filters.urgencies.includes(u)}
             onClick={() => controller.toggleUrgency(u)}
           >
-            <span className="dsh-atb-dot" data-urgency={u} />
+            <span className="dsh-atb-chiplead"><span className="dsh-atb-dot" data-urgency={u} /></span>
             {t(URGENCY_KEYS[u])}
           </button>
         ))}
@@ -386,10 +387,17 @@ export function TaskBoard({ controller }: { controller: BoardController }) {
             setOnlyNeedsHuman(!onlyNeedsHuman)
           }}
         >
-          <Icon name="inbox" size={12} />
+          <span className="dsh-atb-chiplead"><Icon name="inbox" size={12} /></span>
           {t('board.filter.needsHuman')} {needsHumanCount > 0 ? `(${needsHumanCount})` : ''}
         </button>
-        <button type="button" className="dsh-atb-btn" onClick={() => controller.toggleSecondary()}>
+        <button
+          type="button"
+          className="dsh-atb-chip"
+          data-on={state.secondaryOpen}
+          aria-pressed={state.secondaryOpen}
+          onClick={() => controller.toggleSecondary()}
+        >
+          <span className="dsh-atb-chiplead"><Icon name={state.secondaryOpen ? 'kanban' : 'package'} size={12} /></span>
           {state.secondaryOpen ? t('board.action.backToBoard') : t('board.action.otherTasks')}
         </button>
         </div>

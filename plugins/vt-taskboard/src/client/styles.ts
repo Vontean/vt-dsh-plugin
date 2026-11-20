@@ -202,21 +202,29 @@ body[data-ds-dark-theme] .dsh-atb-btn[data-primary="true"] { background: var(--v
   width: 100%; box-sizing: border-box;
 }
 
+/* 筛选条的唯一按钮形态：四个筛选项与「其它任务」共用，前导图形走同一槽位 */
 .dsh-atb-chip {
-  display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; gap: 6px;
   font: inherit; font-family: var(--vtb-font); font-size: 12px; font-weight: 500;
-  height: 26px; padding: 0 9px; border-radius: 999px; corner-shape: round; cursor: pointer;
+  height: 28px; padding: 0 11px; border-radius: 999px; corner-shape: round; cursor: pointer;
   border: 1px solid var(--vtb-line); background: var(--vtb-surface); color: var(--vtb-ink-2);
   white-space: nowrap;
   transition: background var(--vtb-dur) var(--vtb-ease), border-color var(--vtb-dur) var(--vtb-ease),
     color var(--vtb-dur) var(--vtb-ease);
 }
+/* 前导槽位固定 12px：7px 圆点与 12px 图标都在同一盒里居中，文字左缘才对得齐 */
+.dsh-atb-chiplead {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 12px; height: 12px; flex: none;
+}
 .dsh-atb-chip:hover { border-color: var(--vtb-line-strong); color: var(--vtb-ink); }
-.dsh-atb-chip[data-on="true"] { font-weight: 600; }
-.dsh-atb-chip[data-urgency="urgent"][data-on="true"] { background: var(--vtb-red-soft); border-color: color-mix(in srgb, var(--vtb-red) 35%, transparent); color: var(--vtb-red); }
-.dsh-atb-chip[data-urgency="normal"][data-on="true"] { background: var(--vtb-hover); border-color: var(--vtb-line-strong); color: var(--vtb-ink); }
-.dsh-atb-chip[data-urgency="relaxed"][data-on="true"] { background: transparent; border-color: var(--vtb-line-strong); color: var(--vtb-ink-2); }
-.dsh-atb-chip[data-kind="needs-human-filter"][data-on="true"] { background: var(--vtb-yellow-soft); border-color: transparent; color: var(--vtb-yellow); }
+/* 选中态只有一种：浅底 + 加深描边 + 加粗。语义色由圆点承担，不染整块底 */
+.dsh-atb-chip[data-on="true"] {
+  background: var(--vtb-hover);
+  border-color: color-mix(in srgb, var(--vtb-ink) 22%, transparent);
+  color: var(--vtb-ink); font-weight: 600;
+}
+.dsh-atb-chip[data-on="true"]:hover { border-color: color-mix(in srgb, var(--vtb-ink) 32%, transparent); }
 .dsh-atb-chip:focus-visible, .dsh-atb-btn:focus-visible, .dsh-atb-colfoldbtn:focus-visible,
 .dsh-atb-quickbtn:focus-visible, .dsh-atb-movebtn:focus-visible, .dsh-atb-cron-preset:focus-visible,
 .dsh-atb-mode-opt:focus-visible, .dsh-atb-perm-opt:focus-visible, .dsh-atb-newmenu-opt:focus-visible,

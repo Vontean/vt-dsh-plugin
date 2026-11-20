@@ -22,6 +22,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('../src/client/styles.ts', import.meta.url), 'utf8')
+/** Comments would otherwise be captured as part of the following selector. */
+const css = source.replace(/\/\*[\s\S]*?\*\//g, '')
 
 /** Innermost rule blocks: `selector { declarations }` (skips @media/@supports wrappers). */
 function rules(css: string): Array<{ selector: string; body: string }> {
@@ -36,7 +38,7 @@ const FULL_ROUND = /border-radius:\s*(?:50%|999px)\s*(?:;|$)/
 
 describe('corner geometry', () => {
   it('pairs every full-round radius with corner-shape: round', () => {
-    const unpaired = rules(source)
+    const unpaired = rules(css)
       .filter(rule => FULL_ROUND.test(rule.body))
       .filter(rule => !/corner-shape:\s*round/.test(rule.body))
       .map(rule => rule.selector)
@@ -44,12 +46,12 @@ describe('corner geometry', () => {
   })
 
   it('lets the host smooth rounded rectangles (no own superellipse/squircle)', () => {
-    expect(source).not.toMatch(/corner-shape:\s*(?:squircle|superellipse)/)
+    expect(css).not.toMatch(/corner-shape:\s*(?:squircle|superellipse)/)
   })
 
   it('covers the full-round rules the board actually renders', () => {
     // Guards against the regex above silently matching nothing after a refactor.
-    const fullRound = rules(source).filter(rule => FULL_ROUND.test(rule.body))
+    const fullRound = rules(css).filter(rule => FULL_ROUND.test(rule.body))
     expect(fullRound.length).toBeGreaterThanOrEqual(10)
     for (const selector of ['.dsh-atb-dot', '.dsh-atb-exec-dot', '.dsh-atb-statuspill', '.dsh-atb-chip']) {
       expect(fullRound.some(rule => rule.selector.split(',').map(s => s.trim()).includes(selector))).toBe(true)
