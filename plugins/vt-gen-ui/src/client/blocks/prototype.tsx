@@ -14,6 +14,8 @@
  */
 import { useId, useState, type ReactNode } from 'react'
 import css from './Prototype.module.css'
+import { IconGlyph } from './icon.tsx'
+import { isKnownIcon } from '../icons/icon-lazy.ts'
 import { renderInline } from '../inline.ts'
 import { t } from '../i18n/index.ts'
 import { useScreenNavigation } from '../screen-navigation.tsx'
@@ -30,6 +32,40 @@ export interface PrototypeRenderProps<N> {
   readonly renderChildren: RenderPrototypeChildren
   /** Dispatch depth; 0 means a root node of the block/screen. */
   readonly depth?: number
+}
+
+/**
+ * An icon-capable string field: `list-row.media`, `nav.items[].icon`,
+ * `empty.icon`.
+ *
+ * A catalogue name becomes a real glyph — these fields used to print the
+ * NAME, so `media: "Cube"` read as the five letters "Cube". Anything else
+ * stays text on purpose: an emoji, an initial ("王") or a one-character
+ * placeholder is a legitimate media value and the sketch keeps showing it.
+ *
+ * One implementation for all three slots: the earlier defect was the same
+ * "is this an icon?" decision made in one place and not in another.
+ *
+ * The wrapper carries `data-genui-icon-field`, a contract hook: the geometry
+ * audit can assert "every marked icon field renders an svg" generically
+ * instead of hard-coding field names per component (the H9 switch problem).
+ * It is set from the NAME being a catalogue entry, not from the glyph being
+ * downloaded, so a missing lazy asset fails the audit instead of hiding.
+ */
+function renderIconField(
+  value: string | undefined,
+  field: 'media' | 'nav-icon' | 'empty-icon',
+  size: number,
+): ReactNode {
+  if (value === undefined) return null
+  const text = value.trim()
+  if (text === '') return null
+  if (!isKnownIcon(text)) return text
+  return (
+    <span data-genui-icon-field={field}>
+      <IconGlyph name={text} size={size} />
+    </span>
+  )
 }
 
 /**
@@ -130,7 +166,11 @@ export function NavNode({ node }: PrototypeRenderProps<GenuiNav>): ReactNode {
           {...(active ? { 'aria-current': 'page' as const } : {})}
           onClick={() => setSelected(index)}
         >
-          {item.icon !== undefined && <span className={css.navIcon} aria-hidden="true">{item.icon}</span>}
+          {item.icon !== undefined && (
+            <span className={css.navIcon} aria-hidden="true">
+              {renderIconField(item.icon, 'nav-icon', variant === 'tabs' ? 20 : 16)}
+            </span>
+          )}
           <span>{renderInline(item.label, false)}</span>
         </button>
       </li>
@@ -179,7 +219,11 @@ export function ListRowNode({ node, path, renderChildren }: PrototypeRenderProps
       data-lines={twoLine ? '2' : '1'}
       aria-label={name}
     >
-      {node.media !== undefined && <div className={css.rowMedia} aria-hidden="true">{node.media}</div>}
+      {node.media !== undefined && (
+        <div className={css.rowMedia} aria-hidden="true">
+          {renderIconField(node.media, 'media', 20)}
+        </div>
+      )}
       <div className={css.rowContent}>
         <div className={css.rowTitle}>{renderInline(node.title)}</div>
         {node.desc !== undefined && <div className={css.rowDesc}>{renderInline(node.desc)}</div>}
@@ -253,7 +297,9 @@ export function EmptyNode({ node, path, renderChildren }: PrototypeRenderProps<G
   return (
     <div className={css.empty} data-genui="empty" role="group" aria-labelledby={headingId}>
       {node.icon !== undefined && node.icon !== '' && (
-        <div className={css.emptyMedia} aria-hidden="true">{node.icon}</div>
+        <div className={css.emptyMedia} aria-hidden="true">
+          {renderIconField(node.icon, 'empty-icon', 24)}
+        </div>
       )}
       <h3 className={css.emptyTitle} id={headingId}>{renderInline(node.title)}</h3>
       {node.desc !== undefined && node.desc !== '' && (

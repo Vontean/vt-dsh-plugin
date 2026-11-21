@@ -163,6 +163,30 @@ describe('nav', () => {
     const fallback = render(<NavNode path="items[0]" renderChildren={renderChildren} node={node} />)
     expect(fallback.querySelector('nav')!.getAttribute('data-bleed')).toBe('inline block-start')
   })
+
+  test('an icon NAME becomes a glyph, not five letters', () => {
+    // `Cube` used to print as the word "Cube". A catalogue name is an icon
+    // field: it renders an svg and carries the audit hook.
+    const root = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'nav', items: [{ label: '资源', icon: 'Cube', active: true }],
+    }} />)
+    const slot = root.querySelector('[data-genui-icon-field]')!
+    expect(slot.getAttribute('data-genui-icon-field')).toBe('nav-icon')
+    expect(slot.querySelector('svg')).not.toBeNull()
+    // The glyph is decorative next to the label; it must not double-announce.
+    expect(slot.closest('[aria-hidden="true"]')).not.toBeNull()
+  })
+
+  test('a non-catalogue string stays text', () => {
+    // Emoji and initials are legitimate media values; they are not icons and
+    // must not be swallowed by the glyph path.
+    const root = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'nav', items: [{ label: '收藏', icon: '★' }],
+    }} />)
+    expect(root.querySelector('[data-genui-icon-field]')).toBeNull()
+    expect(root.querySelector('svg')).toBeNull()
+    expect(root.querySelector('nav')!.textContent).toContain('★')
+  })
 })
 
 describe('list-row', () => {
@@ -194,6 +218,24 @@ describe('list-row', () => {
     expect(two.querySelector('[data-genui="list-row"]')!.getAttribute('data-lines')).toBe('2')
     const one = render(<ListRowNode path="items[0]" renderChildren={renderChildren} node={{ type: 'list-row', title: '单行' }} />)
     expect(one.querySelector('[data-genui="list-row"]')!.getAttribute('data-lines')).toBe('1')
+  })
+
+  test('media accepts a glyph name or literal text', () => {
+    // Both shapes are valid sketch values; the difference is resolved once,
+    // in `renderIconField`, so the three icon slots cannot drift apart.
+    const glyph = render(<ListRowNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'list-row', title: '资源', media: 'Cube',
+    }} />)
+    const slot = glyph.querySelector('[data-genui-icon-field]')!
+    expect(slot.getAttribute('data-genui-icon-field')).toBe('media')
+    expect(slot.querySelector('svg')).not.toBeNull()
+    expect(glyph.querySelector('[data-genui="list-row"]')!.textContent).not.toContain('Cube')
+
+    const initial = render(<ListRowNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'list-row', title: '王小鲸', media: '王',
+    }} />)
+    expect(initial.querySelector('[data-genui-icon-field]')).toBeNull()
+    expect(initial.querySelector('[data-genui="list-row"]')!.textContent).toContain('王')
   })
 
   test('rows bleed inline only, so hover and separators span the frame', () => {
@@ -350,6 +392,16 @@ describe('empty', () => {
     // The graphic slot is decoration: it must never be the only carrier.
     expect(empty.querySelector('[class*="emptyMedia"]')!.getAttribute('aria-hidden')).toBe('true')
     expect(empty.querySelector('[data-stub="button"]')).not.toBeNull()
+  })
+
+  test('the graphic slot renders a glyph name as an svg', () => {
+    const root = render(<EmptyNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'empty', icon: 'Cube', title: '还没有资源',
+    }} />)
+    const slot = root.querySelector('[data-genui-icon-field]')!
+    expect(slot.getAttribute('data-genui-icon-field')).toBe('empty-icon')
+    expect(slot.querySelector('svg')).not.toBeNull()
+    expect(root.textContent).not.toContain('Cube')
   })
 
   test('a graphic slot is optional', () => {
