@@ -53,7 +53,7 @@
 | 路径 | 内容 | 变更影响面 |
 | --- | --- | --- |
 | `plugins/vt-gen-ui/src/shared/catalog/model.ts` | catalog 元类型：`ComponentSchema` / `ComponentRecordSchema` / `ComponentFieldKind` / 规则类型 | 全链路（提示词、校验、渲染都吃它） |
-| `plugins/vt-gen-ui/src/shared/catalog/definitions.ts` | 枚举域、25+ 常量、50 个 `COMPONENT_SCHEMAS`、`GENUI_SPEC_SCHEMA`、`PROTOTYPE_TYPES` | 提示词 + 校验 + 渲染注册 key 集合 |
+| `plugins/vt-gen-ui/src/shared/catalog/definitions.ts` | 枚举域、25+ 常量、58 个 `COMPONENT_SCHEMAS`、`GENUI_SPEC_SCHEMA`、`PROTOTYPE_TYPES` | 提示词 + 校验 + 渲染注册 key 集合 |
 | `plugins/vt-gen-ui/src/shared/catalog/docs.ts` | 分类表 `CATALOG_CATEGORIES`、文档表 `CATALOG_DOCS`（summary / promptInline / quickRef / gotcha / usage）、`SCREEN_SPEC_DOC` | 提示词与 skill 的模型可读文本 |
 | `plugins/vt-gen-ui/src/shared/catalog/derive.ts` | 派生函数 + 加载期一致性校验 `assertCatalogCoherence()` | 系统提示词、skill 正文 |
 | `plugins/vt-gen-ui/src/shared/catalog/index.ts` | 目录出口（`export *` 四项） | 导入路径稳定性 |
@@ -221,7 +221,7 @@
 **字段级红线**
 
 - 既有 50 型的 `type` 名、`required` 名称与顺序、既有字段的 `kind`：**永不修改**。
-- 新字段只能是 **optional**，且必须进 `catalog.test.ts` 的「新增可选字段台账」（当前：`['goto']`）。注意这是**字段台账**，与决定 D 的**类型清单** `catalog-additions.json` 是两件事：前者记既有 50 型上新增的字段，后者记新增的 type。
+- 新字段只能是 **optional**，且必须进 `catalog.test.ts` 的「新增可选字段台账」（当前：`['close','goto']`）。注意这是**字段台账**，与决定 D 的**类型清单** `catalog-additions.json` 是两件事：前者记既有 50 型上新增的字段，后者记新增的 type。
 - 别名（`aliases` / `valueAliases`）只允许「新增旧写法 → 新写法」的映射，不允许删除已有别名。
 
 ### 2.2 派生输出（五个导出 + 一个类型出口）

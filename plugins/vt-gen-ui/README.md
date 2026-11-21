@@ -1,15 +1,15 @@
 # dsh-vt-gen-ui · VT GenUI 生成式界面
 
 DeepSeek Harness（DSH）的生成式界面插件：模型在**回答正文**里写一段 ` ```dsh-ui ` 围栏，
-渲染器把它画成可点、可填、可拖动的真实界面。协议与 50 个组件词汇沿用上游，视觉层按
-「宿主正文的延伸」重做——关闭插件即回到普通 Markdown 代码块，会话不受影响。
+渲染器把它画成可点、可填、可拖动的真实界面。协议沿用上游 50 个组件词汇并扩展到 58 个，
+视觉层按「宿主正文的延伸」重做——关闭插件即回到普通 Markdown 代码块，会话不受影响。
 
 ## 它能做什么
 
 - **四种渲染通道**：正文内联围栏（边流边渲染，组件 JSON 闭合一个上屏一个）、常驻面板
   （`panel: true` 或 `/panel` 命令，原地更新、可调高度、支持追加）、工具卡 `render_ui`、
   以及直接安全渲染的 ` ```svg ` 围栏。
-- **50 个白名单组件**：标题/stat/表格/列表/图表/流程图/时间线/树/代码/JSON/diff/测验…
+- **58 个白名单组件**：标题/stat/表格/列表/图表/流程图/时间线/树/代码/JSON/diff/测验…
   共 33 项资源上限；JSON 坏了或插件不在时**退回代码块**，不会破坏会话。
 - **图表与图形**：bars / line / donut、ECharts、mermaid 流程图、公式绘图（可拖拽缩放、
   参数滑杆与动画）、3D 场景。
@@ -42,16 +42,16 @@ https://vontean.github.io/vt-dsh-plugin/index.json
 **npm**
 
 ```bash
-dsh plugin --profile <profile> add dsh-vt-gen-ui@1.1.0
+dsh plugin --profile <profile> add dsh-vt-gen-ui@1.2.0
 ```
 
 **Release tarball**
 
 到 [Releases](https://github.com/Vontean/vt-dsh-plugin/releases) 下载
-`dsh-vt-gen-ui-1.1.0.tgz`，然后：
+`dsh-vt-gen-ui-1.2.0.tgz`，然后：
 
 ```bash
-dsh plugin --profile <profile> add /绝对路径/dsh-vt-gen-ui-1.1.0.tgz
+dsh plugin --profile <profile> add /绝对路径/dsh-vt-gen-ui-1.2.0.tgz
 ```
 
 **与上游共存时的切换顺序**（顺序不能反，否则重复注册抛错）：先在插件页停用上游，或在 profile 里
@@ -60,7 +60,7 @@ dsh plugin --profile <profile> add /绝对路径/dsh-vt-gen-ui-1.1.0.tgz
 ```bash
 # 装本插件前：先去掉上游
 dsh plugin --profile <profile> remove @changfenhuang/dsh-genui
-dsh plugin --profile <profile> add dsh-vt-gen-ui@1.1.0
+dsh plugin --profile <profile> add dsh-vt-gen-ui@1.2.0
 
 # 回滚：先去掉本插件，再装回上游
 dsh plugin --profile <profile> remove dsh-vt-gen-ui
