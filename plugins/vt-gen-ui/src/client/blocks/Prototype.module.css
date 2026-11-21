@@ -18,15 +18,18 @@
 .nav,
 .row,
 .fieldGroup {
-  --proto-line-rule: var(--dsl-g-border);
-  --proto-line-frame: var(--dsl-g-border-strong);
+  --proto-line-rule: var(--dsl-g-border);          /* l1 · 分隔 */
+  --proto-line-frame: var(--dsl-g-border-strong);  /* l2 · 容器/结构 */
+  --proto-line-button: var(--dsw-alias-border-l3); /* l3 · 按钮（宿主档） */
+  --proto-line-control: var(--dsw-alias-border-l4);/* l4 · 输入控件（宿主档） */
   --proto-surface-card: var(--dsw-alias-bg-layer-2, var(--dsl-g-surface));
   --proto-surface-inset: var(--dsw-alias-markdown-code-block, var(--dsl-g-surface));
   --proto-fill-placeholder: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);
   --proto-surface-float: var(--dsw-alias-bg-layer-3, var(--dsl-g-surface));
-  /* The scrim must darken in BOTH themes: label/bg tokens flip, so it uses a
-   * static near-black. In dark, label-primary would lighten the page instead. */
-  --proto-scrim: color-mix(in srgb, var(--dsw-static-neutral-bluish-1000) 48%, transparent);
+  /* Host-owned mask: 24% in light, 50% in dark. Never a hand-picked
+   * percentage — `label`/`bg` tokens flip with the theme, and a fixed 48%
+   * over-darkened light mode. */
+  --proto-scrim: var(--dsw-alias-bg-mask-1);
   --proto-radius-page: var(--dsl-g-radius-surface);
   --proto-radius-control: var(--dsl-g-radius-control);
   --proto-radius-sm: var(--dsl-g-radius-sm);
@@ -64,10 +67,17 @@
   gap: 0;
   min-width: 0;
   background: var(--proto-surface-card);
-  border: 1px dashed var(--proto-line-frame);
+  /* Only the outermost page is a simulated screen and gets the dashed frame;
+   * a nested page is a region inside that screen and stays solid (§12.4 B2).
+   * Depth is decided by the renderer (`data-frame`), not by CSS nesting. */
+  border: 1px solid var(--proto-line-frame);
   border-radius: var(--proto-radius-page);
   overflow: clip;
   color: var(--dsw-alias-label-primary);
+}
+
+.page[data-frame='dashed'] {
+  border-style: dashed;
 }
 
 .pageHeader {
@@ -110,18 +120,21 @@
   flex: 0 0 auto;
 }
 
+/* The page content column is the ONLY source of horizontal inset (§12.3).
+ * Components never add page-level padding on top of it — that is how 24 + 24
+ * accidents happen. */
 .pageBody {
   display: flex;
   flex-direction: column;
   gap: 0;
   min-width: 0;
+  padding-inline: var(--proto-pad-x);
 }
 
-/* A bare field group sits directly in the content flow, so the page content
- * area supplies its horizontal inset (there is no `section` type in slice 1).
- * Rows and nav opt out by carrying their own padding. */
-.pageBody > .fieldGroup {
-  padding-inline: var(--proto-pad-x);
+/* Edge-to-edge components cancel the page inset so their hover surface and
+ * separators span the full frame; they carry their own inner padding. */
+.pageBody > [data-bleed='true'] {
+  margin-inline: calc(-1 * var(--proto-pad-x));
 }
 
 /* ---- nav ---------------------------------------------------------------- */
@@ -224,10 +237,14 @@
   width: 200px;
   max-width: 100%;
   flex: 0 0 auto;
-  margin: 16px var(--proto-pad-x) 0;
+  /* The page content column already insets this block; adding a margin here
+   * would double the inset (§12.3). */
+  margin: 16px 0 0;
   padding: 8px;
   background: var(--proto-surface-inset);
-  border: 1px solid var(--proto-line-rule);
+  /* l2, not l1: a 4% line on the inset surface differs by 4/255 and reads as
+   * no border at all (§9.2 #17, §12.2 #21). */
+  border: 1px solid var(--proto-line-frame);
   border-radius: var(--proto-radius-control);
 }
 
@@ -416,12 +433,12 @@
   min-width: 0;
 }
 
-/* Control outline is a structural line (border-l2): l1 is ~4% in light and
- * makes the input read as plain text with no edge. */
+/* Control outline is the host's input tier (l4): l2 is two steps lighter and
+ * makes an input read as plain text with no edge in light mode. */
 .fieldControl :is(input:not([type='checkbox']):not([type='radio']), select) {
   height: 32px;
   padding: 0 8px;
-  border-color: var(--proto-line-frame);
+  border-color: var(--proto-line-control);
   border-radius: var(--proto-radius-control);
   font-size: 13px;
   line-height: 20px;
@@ -447,6 +464,15 @@
  * The label keeps its normal colour so the field name never carries the error. */
 .fieldGroup[data-invalid='true'] .fieldControl :is(input:not([type='checkbox']):not([type='radio']), select) {
   border-color: var(--dsw-alias-state-error-primary);
+}
+
+/* Disabled controls keep a boundary (l2), one step below the active l4 —
+ * not the lightest line: "disabled" must still read as a control. */
+.fieldGroup[data-disabled='true'] .fieldControl :is(input:not([type='checkbox']):not([type='radio']), select) {
+  border-color: var(--proto-line-frame);
+  background: var(--proto-surface-inset);
+  color: var(--dsw-alias-label-tertiary);
+  cursor: not-allowed;
 }
 
 /* ---- screen frame + corner badge (§3.1) --------------------------------- */
@@ -498,7 +524,7 @@
   align-items: center;
   text-align: center;
   gap: 8px;
-  padding: 24px var(--proto-pad-x);
+  padding: 24px 0;
   min-width: 0;
   color: var(--dsw-alias-label-primary);
 }
@@ -545,12 +571,12 @@
 /* ---- loading (§6.6) ----------------------------------------------------- */
 
 .loading {
-  padding: 16px var(--proto-pad-x);
+  padding: 16px 0;
   min-width: 0;
 }
 
 .loading[data-orientation='row'] {
-  padding: 8px var(--proto-pad-x);
+  padding: 8px 0;
 }
 
 .skeleton {
@@ -638,7 +664,7 @@
  * would read as a link in a sketch. */
 .modalTriggerRow {
   display: flex;
-  padding: 0 var(--proto-pad-x);
+  padding: 0;
   min-width: 0;
 }
 
@@ -648,7 +674,8 @@
   justify-content: center;
   height: 32px;
   padding: 0 12px;
-  border: 1px solid var(--proto-line-frame);
+  /* Buttons use the host button tier (l3), controls use l4. */
+  border: 1px solid var(--proto-line-button);
   border-radius: var(--proto-radius-control);
   background: transparent;
   color: var(--dsw-alias-label-primary);
@@ -743,9 +770,9 @@
 
 .modalTitle {
   margin: 0;
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 600;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
   letter-spacing: 0;
   color: var(--dsw-alias-label-primary);
 }
@@ -765,6 +792,12 @@
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+
+/* The action row is rendered by the shared button component; inside the
+ * prototype panel it follows the prototype button tier (l3). */
+.modalActions :is(button, a) {
+  border-color: var(--proto-line-button);
 }
 
 /* Narrow container: the dialog only tightens its padding and STAYS centred.

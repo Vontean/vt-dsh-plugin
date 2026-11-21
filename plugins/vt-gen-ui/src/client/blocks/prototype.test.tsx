@@ -86,6 +86,27 @@ describe('page', () => {
     }} />)
     expect(root.querySelector('[data-genui="page"] header')).toBeNull()
   })
+
+  test('only the outermost page draws the dashed sketch frame', () => {
+    // §12.4 B2: the dashed edge marks "this is a simulated screen". A nested
+    // page is a region inside that screen and must stay solid.
+    const outer = render(<PageNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'page', title: '外层', items: [],
+    }} />)
+    expect(outer.querySelector('[data-genui="page"]')!.getAttribute('data-frame')).toBe('dashed')
+    const inner = render(<PageNode depth={1} path="items[0].items[0]" renderChildren={renderChildren} node={{
+      type: 'page', title: '内层', items: [],
+    }} />)
+    expect(inner.querySelector('[data-genui="page"]')!.getAttribute('data-frame')).toBe('solid')
+  })
+
+  test('the content column carries the page inset hook', () => {
+    // The probe page and the style contract both look this up; keep the hook.
+    const root = render(<PageNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'page', items: [{ type: 'text', content: '正文' }],
+    }} />)
+    expect(root.querySelector('[data-page-body]')).not.toBeNull()
+  })
 })
 
 describe('nav', () => {
@@ -126,6 +147,19 @@ describe('nav', () => {
     expect(buttons[1]!.getAttribute('aria-current')).toBeNull()
     expect(root.querySelector('nav')!.getAttribute('data-orientation')).toBe('top')
   })
+
+  test('edge-to-edge bars cancel the page inset; the side block does not', () => {
+    // §12.3: the top bar and bottom tabs run their rule across the frame, so
+    // they opt out of the page column inset. The side nav is a surface and
+    // stays inside the column — it is not an exception.
+    const node = { type: 'nav' as const, items: [{ label: '概览' }] }
+    const tabs = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{ ...node, variant: 'tabs' }} />)
+    expect(tabs.querySelector('nav')!.getAttribute('data-bleed')).toBe('true')
+    const top = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{ ...node, variant: 'top' }} />)
+    expect(top.querySelector('nav')!.getAttribute('data-bleed')).toBe('true')
+    const side = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{ ...node, variant: 'side' }} />)
+    expect(side.querySelector('nav')!.getAttribute('data-bleed')).toBeNull()
+  })
 })
 
 describe('list-row', () => {
@@ -157,6 +191,13 @@ describe('list-row', () => {
     expect(two.querySelector('[data-genui="list-row"]')!.getAttribute('data-lines')).toBe('2')
     const one = render(<ListRowNode path="items[0]" renderChildren={renderChildren} node={{ type: 'list-row', title: '单行' }} />)
     expect(one.querySelector('[data-genui="list-row"]')!.getAttribute('data-lines')).toBe('1')
+  })
+
+  test('rows are edge-to-edge so hover and separators span the frame', () => {
+    // §12.3: the row is one of the two allowed bleeds; it restores the inset
+    // as its own padding after cancelling the column margin.
+    const root = render(<ListRowNode path="items[0]" renderChildren={renderChildren} node={{ type: 'list-row', title: '贴边行' }} />)
+    expect(root.querySelector('[data-genui="list-row"]')!.getAttribute('data-bleed')).toBe('true')
   })
 })
 
@@ -370,5 +411,33 @@ describe('style contract (no draft signals, one line width)', () => {
     const badge = section('.pageLabel {', '/* ---- empty')
     expect(badge).toContain('z-index: 2')
     expect(section('.page {', '.pageHeader')).toContain('position: relative')
+  })
+
+  test('the page column is the only source of page-level horizontal inset', () => {
+    // §12.3 rule A: components never decide their own page indent. The two
+    // edge-to-edge exceptions cancel the column margin and restore the inset
+    // as their own padding.
+    expect(section('.pageBody {', '/* ---- nav')).toContain('padding-inline: var(--proto-pad-x)')
+    expect(cssSource).toContain('margin-inline: calc(-1 * var(--proto-pad-x))')
+    // Blocks that used to carry their own page inset now sit flush.
+    expect(section('/* ---- empty', '/* ---- split')).not.toContain('var(--proto-pad-x)')
+    expect(cssSource).not.toContain('.pageBody > .fieldGroup')
+  })
+
+  test('the sketch frame is solid unless the renderer marks the screen root', () => {
+    // §12.4 B2: depth is a renderer decision (`data-frame`), not a CSS
+    // descendant selector — a split pane is nested but must not go dashed.
+    const page = section('.page {', '.pageHeader')
+    expect(page).toContain('border: 1px solid var(--proto-line-frame)')
+    expect(page).toContain("[data-frame='dashed']")
+    expect(page).toContain('border-style: dashed')
+  })
+
+  test('controls and buttons use the host line tiers, not the structural one', () => {
+    // l4 reads as an input edge, l3 as a button edge; l2 is for containers.
+    expect(section('.fieldControl :is', '.fieldControl:focus')).toContain('border-color: var(--proto-line-control)')
+    expect(section('.modalTrigger {', '.modalTrigger:hover')).toContain('border: 1px solid var(--proto-line-button)')
+    expect(cssSource).toContain('--proto-line-button: var(--dsw-alias-border-l3)')
+    expect(cssSource).toContain('--proto-line-control: var(--dsw-alias-border-l4)')
   })
 })

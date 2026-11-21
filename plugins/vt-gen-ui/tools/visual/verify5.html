@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · 切片 5 取值核对</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  html, body { margin: 0; background: var(--dsw-alias-bg-base); }
+  #root { max-width: 780px; margin: 0 auto; padding: 24px 20px 40px; }
+  #verify { font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="verify"></div>
+<script>
+  // 一个页面里同时放：输入控件、侧栏块、嵌套 page、静态展开的 modal。
+  // 只用于 getComputedStyle 抽查，不是视觉基线。
+  window.__SPEC__ = {
+    items: [{
+      type: 'page', title: '取值核对', subtitle: '切片 5', items: [
+        { type: 'field-group', label: '名称', items: [{ type: 'input', id: 'verify-input', value: '任务' }] },
+        { type: 'field-group', label: '角色', items: [{ type: 'select', id: 'verify-select', options: ['设计', '工程'] }] },
+        { type: 'nav', variant: 'side', items: [{ label: '常规', active: true }, { label: '权限' }] },
+        { type: 'split', items: [
+          { type: 'page', title: '方案 A', items: [{ type: 'text', content: '左栏' }] },
+          { type: 'page', title: '方案 B', items: [{ type: 'text', content: '右栏' }] }
+        ] },
+        { type: 'modal', open: true, trigger: '删除任务', title: '删除这个任务？', items: [
+          { type: 'text', content: '删除后无法恢复。' }
+        ], actions: [
+          { type: 'button', label: '取消', close: true },
+          { type: 'button', label: '删除', close: true }
+        ] }
+      ]
+    }]
+  };
+</script>
+<script src="../../lib/assets/standalone-runtime.js"></script>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+  window.__GenuiStandalone__.mount(document.getElementById('root'), {
+    format: 'dsh-genui',
+    version: 1,
+    spec: window.__SPEC__,
+    presentation: { locale: 'zh', theme }
+  });
+
+  setTimeout(() => {
+    const page = document.querySelector('[data-genui="page"]');
+    const style = element => element === null ? null : getComputedStyle(element);
+    const box = element => {
+      const computed = style(element);
+      return computed === null ? 'missing' : `${computed.borderTopWidth} ${computed.borderTopColor}`;
+    };
+    const input = document.querySelector('[data-genui="page"] input');
+    const select = document.querySelector('[data-genui="page"] select');
+    const trigger = document.querySelector('button[aria-haspopup="dialog"]');
+    const overlay = document.querySelector('[data-genui="modal"]');
+    const title = document.querySelector('[role="dialog"] h3');
+    const nested = document.querySelector('[data-genui="page"] [data-genui="page"]');
+    const sideRail = document.querySelector('nav[data-orientation="side"]');
+    const pageBody = document.querySelector('[data-page-body]');
+    const titleStyle = style(title);
+    const report = {
+      theme,
+      input: box(input),
+      select: box(select),
+      trigger: box(trigger),
+      scrim: overlay === null ? 'missing' : style(overlay).backgroundColor,
+      title: titleStyle === null ? 'missing'
+        : `${titleStyle.fontSize}/${titleStyle.lineHeight}/${titleStyle.fontWeight}`,
+      rootFrame: style(page).borderTopStyle,
+      nestedFrame: style(nested).borderTopStyle,
+      sideRail: box(sideRail),
+      pageBodyPad: style(pageBody).paddingLeft,
+    };
+    const out = document.getElementById('verify');
+    out.setAttribute('data-verify', JSON.stringify(report));
+    out.textContent = JSON.stringify(report, null, 2);
+  }, 800);
+</script>
+</body>
+</html>

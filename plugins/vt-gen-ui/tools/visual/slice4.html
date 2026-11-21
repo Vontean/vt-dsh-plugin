@@ -50,8 +50,13 @@
     ] }
   ]);
 
+  // 页面留够高度：静态展开的 sheet 贴底铺满整页时，上一屏内容仍要露出可见的一截，
+  // 否则面板会顶掉标题，看起来像被裁。
   window.__SPEC_SHEET__ = page('任务详情', '底部面板', [
     { type: 'list-row', title: '整理原型通道验收记录', desc: '王小鲸 · 今天 09:20', media: '王' },
+    { type: 'list-row', title: '补充低保真交互原型', desc: '卡尺 · 昨天 18:40', media: '卡' },
+    { type: 'list-row', title: '复核四个组件的双主题', desc: '画师 · 昨天 16:05', media: '画' },
+    { type: 'text', content: '面板打开时，上一屏内容透过遮罩仍然可辨。' },
     { type: 'modal', open: true, variant: 'sheet', trigger: '指派负责人', title: '指派负责人', items: [
       { type: 'text', content: '选择一位成员接手这个任务。' }
     ], actions: [

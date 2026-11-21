@@ -244,9 +244,11 @@ describe('visual contract (§6.8)', () => {
     cssSource.slice(cssSource.indexOf('/* ---- modal'), cssSource.indexOf('/* ---- container queries'))
   const stripComments = (text: string): string => text.replace(/\/\*[\s\S]*?\*\//g, '')
 
-  test('the scrim is a static near-black wash in both themes', () => {
-    expect(cssSource).toContain('--proto-scrim: color-mix(in srgb, var(--dsw-static-neutral-bluish-1000) 48%, transparent)')
-    // label/bg tokens flip with the theme; using them would lighten dark mode.
+  test('the scrim comes from the host mask token, not a hand-picked percentage', () => {
+    // The host owns the two theme values (24% light / 50% dark); a fixed
+    // percentage over-darkens light mode and cannot follow the theme.
+    expect(cssSource).toContain('--proto-scrim: var(--dsw-alias-bg-mask-1)')
+    expect(cssSource).not.toMatch(/--proto-scrim:[^;]*color-mix/)
     expect(cssSource).not.toMatch(/--proto-scrim:[^;]*label-primary/)
   })
 

@@ -61,6 +61,7 @@ export function PageNode({ node, path, renderChildren, depth = 0 }: PrototypeRen
       className={css.page}
       data-genui="page"
       data-orientation="vertical"
+      data-frame={depth === 0 ? 'dashed' : 'solid'}
       {...(hasHeader ? { 'aria-labelledby': headingId } : {})}
     >
       {hasHeader && (
@@ -76,7 +77,7 @@ export function PageNode({ node, path, renderChildren, depth = 0 }: PrototypeRen
           )}
         </header>
       )}
-      <div className={css.pageBody}>
+      <div className={css.pageBody} data-page-body="">
         {renderChildren(node.items, `${path}.items`)}
       </div>
     </section>
@@ -130,10 +131,13 @@ export function NavNode({ node }: PrototypeRenderProps<GenuiNav>): ReactNode {
     )
   })
   return (
+    // Top bars and bottom tabs run their rule edge to edge; the standalone
+    // side block is a surface and stays inside the page column (§12.3).
     <nav
       className={css.nav}
       data-genui="nav"
       data-orientation={variant}
+      {...(variant === 'side' ? {} : { 'data-bleed': 'true' })}
       aria-label={node.label ?? t('prototype.nav')}
     >
       <ul className={css.navList}>{items}</ul>
@@ -158,6 +162,7 @@ export function ListRowNode({ node, path, renderChildren }: PrototypeRenderProps
       className={css.row}
       data-genui="list-row"
       role="listitem"
+      data-bleed="true"
       data-state={interactive ? 'interactive' : 'default'}
       data-lines={twoLine ? '2' : '1'}
       aria-label={name}
