@@ -90,7 +90,7 @@ export const CATALOG_DOCS: Readonly<Record<string, CatalogDoc>> = {
     summary: '页面容器：可选标题栏（标题/副标题/尾部操作）与内容区，原型的根节点。',
     promptInline: '（页面容器：标题栏 + 内容区）',
     quickRef: '{"type":"page","title","items":[...]}',
-    usage: '窄容器下内边距自动收紧；标题栏只在写 title/subtitle/actions 时出现。',
+    usage: '窄容器下内边距自动收紧；标题栏只在写 title/subtitle/actions 时出现。`label` 是并排方案的角标（≤12 字，超出省略）：顶层 page 优先用它，未写才用自动「屏 N · 标题」，两者不同时显示；嵌套 page 只有写了 label 才显示。',
   },
   nav: {
     category: 'layout',
@@ -252,7 +252,7 @@ export const CATALOG_DOCS: Readonly<Record<string, CatalogDoc>> = {
  * assertions describe the same contract.
  */
 export const SCREEN_SPEC_DOC = {
-  prompt: `**多屏原型**（可选）：spec 根可写 \`{"screens":{"home":[...],"detail":[...]},"initial":"home"}\` 代替 \`items\`；可交互节点（当前为 \`button\`）加 \`"goto":"detail"\` 在本地切屏，不发 action、不请求模型。块头部出现「返回」；未声明的屏 id 被忽略，表单值与当前屏随块持久化。`,
+  prompt: `**多屏原型**（可选）：spec 根可写 \`{"screens":{"home":[...],"detail":[...]},"initial":"home"}\` 代替 \`items\`；可交互节点（当前为 \`button\`）加 \`"goto":"detail"\` 在本地切屏，不发 action、不请求模型。块头部出现「返回」；未声明的屏 id 被忽略，表单值与当前屏随块持久化。并排比较方案时给顶层 \`page\` 写 \`label\`（≤12 字）作角标，优先于自动「屏 N · 标题」。`,
   reference: `### 多屏原型（根级字段，不是组件）
 
 - 根字段 \`screens\`（屏 id → 节点数组，最多 12 屏）与 \`initial\`（起始屏，缺省取第一个声明的屏）；与 \`items\` 二选一。

@@ -69,6 +69,10 @@ describe('catalog coherence', () => {
     // Additive changes update this ledger deliberately, keeping them reviewable.
     // `close` (button) and `goto` (layout hint) are the deliberate additive
     // fields; anything else is a protocol change and must be reviewed.
+    // NOTE: this ledger only covers the 50 baseline types. Types added after
+    // the baseline (page/nav/list-row/field-group/empty/loading/split) are not
+    // iterated here, so their optional fields (e.g. page.label) never appear —
+    // tracking those is still an open gap, see module-interfaces.md §2.1.
     expect([...added].sort()).toEqual(['close', 'goto'])
   })
 })

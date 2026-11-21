@@ -368,6 +368,9 @@ export const COMPONENT_SCHEMAS: Readonly<Record<string, ComponentSchema>> = {
     ...nodeFields,
     title: 'string',
     subtitle: 'string',
+    // 并排方案的角标：顶层 page 优先用它，未写才回落到自动「屏 N · 标题」；
+    // 嵌套 page 只有写了才显示。渲染期按 12 字省略，数据保留完整文本。
+    label: 'string',
     actions: 'nodes',
     items: 'nodes',
   }, { heading: 'title', content: 'items' }),

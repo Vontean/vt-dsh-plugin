@@ -94,12 +94,19 @@ describe('parse and guard', () => {
     expect(result.errors.join('\n')).toContain('goto')
   })
 
-  test('screen count is capped', () => {
+  test('screen count is capped by design, not by an error', () => {
     const screens: Record<string, unknown[]> = {}
     for (let i = 0; i <= GENUI_LIMITS.maxScreens; i += 1) screens[`s${i}`] = [{ type: 'text', content: 'x' }]
-    const result = validateGenuiSpec({ screens })
-    expect(result.ok).toBe(false)
-    expect(result.errors.join('\n')).toContain('screens exceeds')
+    // 按设计截断：超出的屏被丢，围栏照常渲染，所以校验不得把它算成 error，
+    // 否则正常的长原型会整块退回代码块（契约 D4）。
+    const validation = validateGenuiSpec({ screens })
+    expect(validation.ok).toBe(true)
+    const processed = processGenuiSpec({ screens })
+    expect(processed.repaired?.screens).toBeDefined()
+    expect(Object.keys(processed.repaired!.screens!).length).toBe(GENUI_LIMITS.maxScreens)
+    expect(processed.warnings.some(warning =>
+      warning.kind === 'truncated' && warning.code === 'screen-budget',
+    )).toBe(true)
   })
 
   test('unknown fields inside a screen are diagnosed', () => {

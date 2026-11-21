@@ -3,11 +3,22 @@ import { COMPONENT_SCHEMAS, GENUI_SPEC_SCHEMA } from './schema.ts'
 import { isComponentRoot } from '../spec.ts'
 import type { ComponentRecordSchema, ComponentSchema } from './schema.ts'
 import { isTableDetailReachable } from '../table-details.ts'
+import { isReachableModal } from './modal-contract.ts'
+
+/** 原型通道诊断的稳定标识：判定读 code，不读 message 文案。 */
+export type GenuiDiagnosticCode =
+  | 'unknown-goto-target'
+  | 'modal-unreachable'
+  | 'nested-modal'
+  | 'screen-budget'
+  | 'unknown-initial'
 
 export interface GenuiDiagnostic {
-  readonly kind: 'alias' | 'unknown-field' | 'truncated' | 'dropped'
+  readonly kind: 'alias' | 'unknown-field' | 'truncated' | 'dropped' | 'invalid'
   readonly path: string
   readonly message: string
+  /** 语义标识。新诊断必须带 code；旧诊断按需补齐。 */
+  readonly code?: GenuiDiagnosticCode
   readonly type?: string
   readonly field?: string
   readonly canonical?: string
@@ -195,6 +206,28 @@ export function diagnoseUnknownGenuiFields(value: unknown): GenuiDiagnostic[] {
   return warnings
 }
 
+/** Visit every declared native node, in items then screens declaration order. */
+function visitSpecNodes(
+  value: unknown,
+  visit: (node: Record<string, unknown>, path: string, schema: ComponentSchema, inModal: boolean) => void,
+): void {
+  const root = record(value)
+  if (root === undefined) return
+  if (isComponentRoot(root)) {
+    visitNativeNodes(root, 'spec', visit)
+    return
+  }
+  if (Array.isArray(root.items)) {
+    root.items.forEach((item, index) => visitNativeNodes(item, `items[${index}]`, visit))
+  }
+  const screens = record(root.screens)
+  if (screens === undefined) return
+  for (const [screenId, nodes] of Object.entries(screens)) {
+    if (!Array.isArray(nodes)) continue
+    nodes.forEach((item, index) => visitNativeNodes(item, `screens.${screenId}[${index}]`, visit))
+  }
+}
+
 /**
  * Report modals nested inside a modal. Repair drops them (a focus trap inside
  * a focus trap is unreachable), so without this diagnostic the model would
@@ -202,33 +235,100 @@ export function diagnoseUnknownGenuiFields(value: unknown): GenuiDiagnostic[] {
  */
 export function diagnoseNestedModals(value: unknown): GenuiDiagnostic[] {
   const warnings: GenuiDiagnostic[] = []
-  const root = record(value)
-  if (root === undefined) return warnings
-  const visit = (
-    node: Record<string, unknown>,
-    path: string,
-    _definition: ComponentSchema,
-    inModal: boolean,
-  ): void => {
+  visitSpecNodes(value, (node, path, _definition, inModal) => {
     if (node.type !== 'modal' || !inModal) return
     warnings.push({
       kind: 'dropped',
+      code: 'nested-modal',
       path,
       message: `${path}: 弹层不能嵌套，内层 modal 已丢弃（只保留最外层）`,
       type: 'modal',
     })
-  }
-  if (Array.isArray(root.items) && !isComponentRoot(root)) {
-    root.items.forEach((item, index) => visitNativeNodes(item, `items[${index}]`, visit))
-  } else if (typeof root.type === 'string') {
-    visitNativeNodes(root, 'spec', visit)
-  }
+  })
+  return warnings
+}
+
+/**
+ * Report modals that can never open: neither a `trigger` nor `open: true`.
+ * Repair drops the dead node; this makes the drop visible instead of silent.
+ */
+export function diagnoseUnreachableModals(value: unknown): GenuiDiagnostic[] {
+  const warnings: GenuiDiagnostic[] = []
+  visitSpecNodes(value, (node, path) => {
+    if (node.type !== 'modal' || isReachableModal(node)) return
+    warnings.push({
+      kind: 'dropped',
+      code: 'modal-unreachable',
+      path,
+      message: `${path}: modal needs a non-empty 'trigger' or 'open': true`,
+      type: 'modal',
+      field: 'trigger',
+    })
+  })
+  return warnings
+}
+
+/** Declared screens of a spec-like value: ids whose value is a node array. */
+function declaredScreens(value: unknown): { entries: string[], nodes: Readonly<Record<string, unknown>> } | null {
+  const root = record(value)
+  if (root === undefined || isComponentRoot(root)) return null
   const screens = record(root.screens)
-  if (screens !== undefined && !isComponentRoot(root)) {
-    for (const [screenId, nodes] of Object.entries(screens)) {
-      if (!Array.isArray(nodes)) continue
-      nodes.forEach((item, index) => visitNativeNodes(item, `screens.${screenId}[${index}]`, visit))
-    }
+  if (screens === undefined) return null
+  const entries = Object.keys(screens).filter(id => Array.isArray(screens[id]))
+  return entries.length === 0 ? null : { entries, nodes: screens }
+}
+
+/**
+ * Screen contract diagnostics: `goto` pointing at an undeclared screen, more
+ * screens than the cap, and an `initial` naming no declared screen.
+ *
+ * None of these block rendering: repair deletes the dead `goto`, drops trailing
+ * screens, and falls back to the first screen respectively.
+ */
+export function diagnoseScreenContract(
+  value: unknown,
+  limits: { readonly maxScreens: number },
+): GenuiDiagnostic[] {
+  const declared = declaredScreens(value)
+  if (declared === null) return []
+  const warnings: GenuiDiagnostic[] = []
+  const ids = new Set(declared.entries)
+  visitSpecNodes(value, (node, path) => {
+    const target = typeof node.goto === 'string' ? node.goto.trim() : ''
+    if (target === '' || ids.has(target)) return
+    warnings.push({
+      kind: 'invalid',
+      code: 'unknown-goto-target',
+      path: `${path}.goto`,
+      message: `${path}.goto: unknown screen '${target}' (declared: ${declared.entries.join(', ')})`,
+      ...(typeof node.type === 'string' ? { type: node.type } : {}),
+      field: 'goto',
+      canonical: target,
+    })
+  })
+  if (declared.entries.length > limits.maxScreens) {
+    const kept = declared.entries.slice(0, limits.maxScreens)
+    const firstDropped = declared.entries[limits.maxScreens]
+    warnings.push({
+      kind: 'truncated',
+      code: 'screen-budget',
+      path: 'screens',
+      message: `screens: ${declared.entries.length} declared, ${kept.length} kept ('${firstDropped}' onward not rendered)`,
+      field: 'screens',
+    })
+  }
+  const root = record(value)
+  const initial = root !== undefined && typeof root.initial === 'string' ? root.initial : undefined
+  const first = declared.entries[0] ?? ''
+  if (initial !== undefined && !ids.has(initial)) {
+    warnings.push({
+      kind: 'invalid',
+      code: 'unknown-initial',
+      path: 'initial',
+      message: `initial: unknown screen '${initial}', fell back to '${first}'`,
+      field: 'initial',
+      canonical: first,
+    })
   }
   return warnings
 }

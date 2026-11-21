@@ -28,7 +28,8 @@ import {
 } from './genui-runtime/schema.ts'
 import type { ComponentFieldKind, ComponentRecordSchema, ComponentSchema } from './genui-runtime/schema.ts'
 import { normalizeGenuiSpec } from './genui-runtime/normalize.ts'
-import { diagnoseNestedModals, diagnoseUnknownGenuiFields } from './genui-runtime/diagnostics.ts'
+import { diagnoseNestedModals, diagnoseScreenContract, diagnoseUnknownGenuiFields, diagnoseUnreachableModals } from './genui-runtime/diagnostics.ts'
+import { isReachableModal } from './genui-runtime/modal-contract.ts'
 import type { GenuiDiagnostic } from './genui-runtime/diagnostics.ts'
 import { GENUI_LIMITS } from './genui-runtime/limits.ts'
 import { analyzeSubmissionRegistry } from './submission-registry.ts'
@@ -213,6 +214,9 @@ interface RepairCtx {
   remaining: number
   /** How many modals we are currently inside: nested modals are dropped. */
   modalDepth: number
+  /** Declared screen ids; undefined for legacy single-page specs. A `goto`
+   *  naming a screen outside this set is deleted during repair (D1). */
+  screenIds?: ReadonlySet<string>
 }
 
 /** Walk `list` with the shared node budget; drops invalid entries. */
@@ -263,7 +267,11 @@ function repairNode(value: unknown, ctx: RepairCtx, depth: number): GenuiNode | 
   // `goto` is a cross-cutting layout hint, not a per-type field: preserve it
   // here so every repaired node keeps its screen target without a hand-written
   // copy in 50 repair cases.
-  const goto = str(source?.goto, GENUI_LIMITS.maxScreenId)
+  const rawGoto = str(source?.goto, GENUI_LIMITS.maxScreenId)
+  // 多屏语境下，指向未声明屏的 goto 是死指针：删字段、留节点（D1）。
+  const goto = rawGoto !== undefined && ctx.screenIds !== undefined && !ctx.screenIds.has(rawGoto)
+    ? undefined
+    : rawGoto
   if (span === undefined && goto === undefined) return node
   return {
     ...node,
@@ -391,6 +399,8 @@ function repairNodeFields(value: unknown, ctx: RepairCtx, depth: number): GenuiN
         items: repairItems(v.items, ctx, depth + 1),
         ...opt('title', str(v.title, GENUI_LIMITS.maxString)),
         ...opt('subtitle', str(v.subtitle, GENUI_LIMITS.maxString)),
+        // 展示期按 12 字省略，数据不截断：完整文本还能进 tooltip。
+        ...opt('label', str(v.label, 120)),
         ...opt('actions', Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : undefined),
       }
     }
@@ -444,13 +454,17 @@ function repairNodeFields(value: unknown, ctx: RepairCtx, depth: number): GenuiN
       if (ctx.modalDepth > 0) return null
       const title = str(v.title, GENUI_LIMITS.maxString)
       if (title === undefined) return null
+      // 既没有 trigger 又不是 open:true → 永远打不开，按死节点丢弃（D2）。
+      const trigger = str(v.trigger, 120)
+      const triggerText = trigger?.trim() ?? ''
+      if (!isReachableModal(v)) return null
       ctx.modalDepth += 1
       const items = Array.isArray(v.items) ? repairItems(v.items, ctx, depth + 1) : undefined
       const actions = Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : undefined
       ctx.modalDepth -= 1
       return {
         type: 'modal', title,
-        ...opt('trigger', str(v.trigger, 120)),
+        ...(triggerText === '' ? {} : { trigger: triggerText }),
         ...opt('variant', enu(v.variant, MODAL_VARIANTS)),
         ...opt('open', v.open === true ? true : undefined),
         // Only `false` is meaningful; absence means dismissible (default true).
@@ -1404,7 +1418,21 @@ function repairCanonicalGenuiSpec(value: unknown): GenuiSpec | null {
   const hasItems = Array.isArray(v.items)
   const rawScreens = obj(v.screens)
   if (!hasItems && rawScreens === undefined) return null
-  const ctx: RepairCtx = { remaining: GENUI_LIMITS.maxNodes, modalDepth: 0 }
+  // 先算出「声明且是数组」的屏 id（与下面 repair 的取舍口径一致），
+  // 让 repairNode 能识别死 goto；没有 screens 的 legacy spec 保持原行为。
+  const declaredScreenIds = rawScreens === undefined
+    ? undefined
+    : new Set(Object.entries(rawScreens)
+      .slice(0, GENUI_LIMITS.maxScreens)
+      .flatMap(([id, nodes]) => {
+        const screenId = Array.isArray(nodes) ? str(id, GENUI_LIMITS.maxScreenId) : undefined
+        return screenId === undefined ? [] : [screenId]
+      }))
+  const ctx: RepairCtx = {
+    remaining: GENUI_LIMITS.maxNodes,
+    modalDepth: 0,
+    ...(declaredScreenIds === undefined || declaredScreenIds.size === 0 ? {} : { screenIds: declaredScreenIds }),
+  }
   // Screen trees share the block's node budget: repairing them sequentially
   // against the same `ctx` keeps the total at maxNodes, not maxNodes per screen.
   let screens: Record<string, GenuiNode[]> | undefined
@@ -1566,6 +1594,9 @@ function visitDeclaredGenuiNodes(
     const v = obj(item)
     if (v === undefined) return
     if (v.type === 'modal' && modalDepth > 0) return
+    // 不可达 modal 由 repair 按设计丢弃（D2）；计入 declared 会变成
+    // `repair dropped` 错误，把整块围栏打到代码块。
+    if (v.type === 'modal' && !isReachableModal(v)) return
     count += 1
     visit(v, at)
     if (v.type === 'tabs' && Array.isArray(v.tabs)) {
@@ -1619,7 +1650,11 @@ function visitDeclaredGenuiNodes(
     walk(root.items, 'items')
     const screens = obj(root.screens)
     if (screens !== undefined) {
-      for (const [screenId, nodes] of Object.entries(screens)) walk(nodes, `screens.${screenId}`)
+      // 超出屏数上限的尾部屏由 repair 按设计丢弃（D4），不计入 declared，
+      // 口径与 repair 的 slice 保持一致。
+      for (const [screenId, nodes] of Object.entries(screens).slice(0, GENUI_LIMITS.maxScreens)) {
+        walk(nodes, `screens.${screenId}`)
+      }
     }
   }
   return count
@@ -1713,10 +1748,9 @@ export function validateCanonicalGenuiSpec(value: unknown): GenuiValidation {
   if (screens !== undefined) {
     let screenCount = 0
     for (const [screenId, nodes] of Object.entries(screens)) {
-      if (screenCount >= GENUI_LIMITS.maxScreens) {
-        errors.push(`spec.screens exceeds ${GENUI_LIMITS.maxScreens} screens; tail elided`)
-        break
-      }
+      // 超出屏数上限是按设计截断，不是错误：repair 丢掉尾部屏，
+      // diagnoseScreenContract 给 truncated 警告（D4），围栏照常渲染。
+      if (screenCount >= GENUI_LIMITS.maxScreens) break
       screenCount += 1
       if (!Array.isArray(nodes)) {
         errors.push(`spec.screens.${screenId} must be an array`)
@@ -1809,7 +1843,20 @@ export function processGenuiSpec(value: unknown): GenuiProcessResult {
     ...normalized.warnings,
     ...diagnoseUnknownGenuiFields(normalized.value),
     ...diagnoseNestedModals(normalized.value),
+    ...diagnoseUnreachableModals(normalized.value),
+    ...diagnoseScreenContract(normalized.value, { maxScreens: GENUI_LIMITS.maxScreens }),
   ]
+  // 跨屏共享节点预算：声明的原生节点被截到 maxNodes 时，补一条截断警告。
+  // declaredNativeCount 的计数上限是 maxNodes+1，所以只说「≥」不说确切值。
+  if (repaired !== null && renderedNativeCount >= GENUI_LIMITS.maxNodes && declaredNativeCount > renderedNativeCount) {
+    warnings.push({
+      kind: 'truncated',
+      code: 'screen-budget',
+      path: 'spec',
+      message: `nodes ≥ ${declaredNativeCount} declared, ${GENUI_LIMITS.maxNodes} rendered (screens share one node budget)`,
+      field: 'items',
+    })
+  }
   if (uncappedDeclaredCount > declaredNativeCount) {
     warnings.push({
       kind: 'truncated',
@@ -1836,10 +1883,12 @@ export function processGenuiSpec(value: unknown): GenuiProcessResult {
 
 /** Return whether the only process errors describe an intentional budget tail cut. */
 export function isIntentionalBudgetCut(processed: GenuiProcessResult): boolean {
+  // 只要错误全部是预算类、且修复结果正好填满 maxNodes，就是「按设计截断」：
+  // 多余的尾巴被丢掉，剩下的照常渲染。多屏共享同一预算时这条同样成立，
+  // 因此不再要求 declared 恰好是 maxNodes + 1（D4）。
   return processed.errors.length > 0
     && processed.errors.every(error => error.startsWith('spec exceeds ') || error.startsWith('repair dropped '))
     && processed.renderedNativeCount === GENUI_LIMITS.maxNodes
-    && processed.declaredNativeCount === GENUI_LIMITS.maxNodes + 1
 }
 
 /** Decide whether a repaired spec is safe to expose to any GenUI renderer. */
@@ -2306,7 +2355,7 @@ function validateNode(value: unknown, depth: number, at: string, errors: string[
       } else if (Array.isArray(v.actions)) {
         walk(v.actions, depth + 1, `${at}.actions`)
       }
-      isStr('title'); isStr('subtitle')
+      isStr('title'); isStr('subtitle'); isStr('label')
       break
     case 'nav':
       if (!Array.isArray(v.items)) errors.push(`${at}: type 'nav' requires items (array)`)

@@ -163,7 +163,7 @@ describe('modal fields (slice 4)', () => {
   test('a nested modal is dropped whole and diagnosed, without failing the fence', () => {
     const result = processGenuiSpec({
       items: [{
-        type: 'modal', title: '外层',
+        type: 'modal', title: '外层', trigger: '打开',
         items: [
           { type: 'text', content: '外层正文' },
           { type: 'modal', title: '内层', items: [{ type: 'text', content: '不该出现' }] },
@@ -184,12 +184,12 @@ describe('modal fields (slice 4)', () => {
     const result = processGenuiSpec({
       items: [{
         type: 'page', title: '页', items: [
-          { type: 'modal', title: '弹层', actions: [{ type: 'button', label: '取消', close: true }] },
+          { type: 'modal', title: '弹层', open: true, actions: [{ type: 'button', label: '取消', close: true }] },
         ],
       }],
     })
     expect(result.errors).toEqual([])
-    expect(result.warnings.some(warning => warning.kind === 'dropped')).toBe(false)
+    expect(result.warnings.some(warning => warning.code === 'nested-modal')).toBe(false)
   })
 
   test('unknown fields inside a modal body are diagnosed', () => {
