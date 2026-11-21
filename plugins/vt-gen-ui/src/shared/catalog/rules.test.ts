@@ -20,21 +20,21 @@ const toolLine = CATALOG_RULES.find(rule => rule.requiresTool === true)?.section
 
 describe('rules render byte-stable', () => {
   test('the default block matches the approved golden', () => {
-    expect(`Rules:\n${rulesPrompt()}`).toBe(golden)
+    // rulesPrompt renders the whole block, header included.
+    expect(rulesPrompt()).toBe(golden)
   })
 
   test('renderUiTool:false drops exactly the tool-channel rule', () => {
     expect(toolLine).toBeDefined()
-    const withoutTool = `Rules:\n${rulesPrompt({ renderUiTool: false })}`
-    expect(withoutTool).toBe(golden.replace(`\n- ${toolLine}`, ''))
+    expect(rulesPrompt({ renderUiTool: false })).toBe(golden.replace(`\n- ${toolLine}`, ''))
   })
 
-  test('one line per rule, each a bullet, no trailing newline', () => {
-    const block = rulesPrompt()
-    const lines = block.split('\n')
-    expect(lines).toHaveLength(CATALOG_RULES.length)
-    for (const line of lines) expect(line.startsWith('- ')).toBe(true)
-    expect(block.endsWith('\n')).toBe(false)
+  test('header, one bullet per rule, no trailing newline', () => {
+    const lines = rulesPrompt().split('\n')
+    expect(lines[0]).toBe('Rules:')
+    expect(lines.slice(1)).toHaveLength(CATALOG_RULES.length)
+    for (const line of lines.slice(1)) expect(line.startsWith('- ')).toBe(true)
+    expect(rulesPrompt().endsWith('\n')).toBe(false)
   })
 
   test('rule ids are unique and keep prompt order', () => {
