@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · 结构规则对照（运行时）</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  html, body { margin: 0; background: var(--dsw-alias-bg-base); }
+  #root { max-width: 780px; margin: 0 auto; padding: 24px 20px 40px; }
+  #verify { font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="verify"></div>
+<script>
+  // 画师 structures.html 的屏 8 翻成 spec：单左边缘 + 嵌套 page + A/B 角标。
+  // 只用于量计算值，不是视觉基线；基线仍以 docs/visual/structures-rules-*.png 为准。
+  window.__SPEC__ = {
+    initial: 'main',
+    screens: {
+      main: [{
+        type: 'page', title: '我的一天', subtitle: '标题、直排 text、字段标签共用一条左边缘', items: [
+          { type: 'text', content: '直排 text 不再贴外框：左右缩进只由页面内容列提供，组件不各自决定。' },
+          { type: 'field-group', label: '截止时间', items: [
+            { type: 'input', id: 'due', placeholder: '选择日期' }
+          ] },
+          { type: 'list-row', title: '行是贴边型', desc: '内容仍对齐 24，靠负外边距把盒子拉回外框', media: '王' },
+          { type: 'split', items: [
+            { type: 'page', label: '方案 A', title: '空态', items: [{ type: 'empty', title: '还没有内容' }] },
+            { type: 'page', label: '方案 B', title: '列表', items: [{ type: 'list-row', title: '嵌套区域用实线' }] }
+          ] }
+        ]
+      }]
+    }
+  };
+</script>
+<script src="../../lib/assets/standalone-runtime.js"></script>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+  window.__GenuiStandalone__.mount(document.getElementById('root'), {
+    format: 'dsh-genui',
+    version: 1,
+    spec: window.__SPEC__,
+    presentation: { locale: 'zh', theme }
+  });
+
+  setTimeout(() => {
+    const root = document.getElementById('root');
+    const left = element => element === null ? null : Math.round(element.getBoundingClientRect().left * 10) / 10;
+    const style = element => element === null ? null : getComputedStyle(element);
+
+    const page = root.querySelector('[data-genui="page"]');
+    const body = root.querySelector('[data-page-body]');
+    const split = root.querySelector('[data-genui="split"]');
+    const nestedPages = [...root.querySelectorAll('[data-genui="page"] [data-genui="page"]')];
+
+    // 规则 A：同一内容列里的元素左边必须同一条线。
+    const columnEdges = {
+      pageTitle: left(root.querySelector('[data-genui="page"] h2')),
+      text: left(body?.querySelector(':scope > div') ?? null),
+      fieldLabel: left(root.querySelector('[data-genui="field-group"] [class*="fieldLabel"]')),
+      input: left(root.querySelector('[data-genui="field-group"] input')),
+      rowMedia: left(root.querySelector('[data-genui="list-row"]')?.firstElementChild ?? null),
+      pageBodyBox: left(body),
+    };
+    // `pageBodyBox` is the column itself (box left = content left − inset);
+    // only the content edges belong in the deviation.
+    const values = Object.entries(columnEdges)
+      .filter(([key, value]) => key !== 'pageBodyBox' && value !== null)
+      .map(([, value]) => value);
+    const deviation = values.length === 0 ? null : Math.round((Math.max(...values) - Math.min(...values)) * 10) / 10;
+
+    // 规则 B：只有屏幕虚线，嵌套区域实线。
+    const frame = element => {
+      const computed = style(element);
+      return computed === null ? 'missing' : `${computed.borderTopStyle} ${computed.borderTopWidth} ${computed.borderTopColor}`;
+    };
+
+    // 角标：label 与自动屏号不同时出现。
+    const badges = [...root.querySelectorAll('[class*="pageLabel"]')].map(badge => badge.textContent);
+    const badgeBgs = [...root.querySelectorAll('[class*="pageLabel"]')].map(badge => getComputedStyle(badge).backgroundColor);
+
+    // 嵌套 page 的内容列相对 pane 左边还差多少（规则 A 的边界）。
+    const pane = split === null ? null : split.firstElementChild;
+    const nestedBody = nestedPages[0]?.querySelector('[data-page-body]') ?? null;
+
+    const report = {
+      theme,
+      columnEdges,
+      deviation,
+      rootFrame: frame(page),
+      nestedFrame: nestedPages.map(frame),
+      badges,
+      badgeBgs,
+      paneLeft: left(pane),
+      nestedBodyBox: left(nestedBody),
+      nestedContent: left(nestedBody?.querySelector(':scope > *') ?? null),
+      nestedInset: pane === null || nestedBody === null
+        ? null
+        : Math.round((nestedBody.getBoundingClientRect().left - pane.getBoundingClientRect().left) * 10) / 10,
+    };
+    const out = document.getElementById('verify');
+    out.setAttribute('data-verify', JSON.stringify(report));
+    out.textContent = JSON.stringify(report, null, 2);
+  }, 800);
+</script>
+</body>
+</html>

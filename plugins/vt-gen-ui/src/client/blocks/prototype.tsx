@@ -84,14 +84,20 @@ export function PageNode({ node, path, renderChildren, depth = 0 }: PrototypeRen
   )
   // Screen chrome (§3.1): the corner badge says "this rectangle is a
   // simulated screen". It lives OUTSIDE the page because the page clips its
-  // own overflow and owns no padding the badge could sit in; only the root
-  // page of a screen-based block carries one (split panes would all repeat
-  // the same label).
-  const frameLabel = depth === 0 && navigation?.screenIndex !== undefined
+  // own overflow and owns no padding the badge could sit in.
+  // `page.label` is the comparison badge for side-by-side options and wins
+  // over the automatic "屏 N · 标题" — the two never show together. A nested
+  // page gets a badge only when `label` is written (split panes would
+  // otherwise all repeat the outer screen's number).
+  const customLabel = typeof node.label === 'string' && node.label.trim() !== ''
+    ? node.label.trim()
+    : undefined
+  const autoLabel = depth === 0 && navigation?.screenIndex !== undefined
     ? [t('screens.frame', { n: navigation.screenIndex + 1 }), node.title ?? navigation.screenId]
       .filter((part): part is string => part !== undefined && part !== '')
       .join(' · ')
     : undefined
+  const frameLabel = customLabel ?? autoLabel
   if (frameLabel === undefined) return section
   return (
     <div className={css.pageFrame} data-genui-page-frame>

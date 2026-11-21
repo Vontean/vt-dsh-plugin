@@ -282,6 +282,44 @@ describe('page screen chrome', () => {
     expect(root.querySelector('[data-genui-page-frame]')).toBeNull()
   })
 
+  test('a custom label replaces the automatic screen number, never adds to it', () => {
+    // §12.4: `label` is the comparison badge. "屏 1 · 方案 A" would say two
+    // different things at once, so the automatic name is dropped entirely.
+    const root = render(
+      <ScreenNavigationContext.Provider value={screen}>
+        <PageNode depth={0} path="items[0]" renderChildren={renderChildren} node={{
+          type: 'page', title: '收件箱', label: '方案 A', items: [],
+        }} />
+      </ScreenNavigationContext.Provider>,
+    )
+    const badge = root.querySelector('[data-genui-page-frame] [class*="pageLabel"]')!
+    expect(badge.textContent).toBe('方案 A')
+  })
+
+  test('a nested page shows a badge only when it carries a label', () => {
+    const root = render(
+      <ScreenNavigationContext.Provider value={screen}>
+        <PageNode depth={1} path="items[0].items[0]" renderChildren={renderChildren} node={{
+          type: 'page', title: '并排方案', label: '方案 B', items: [],
+        }} />
+      </ScreenNavigationContext.Provider>,
+    )
+    const badge = root.querySelector('[data-genui-page-frame] [class*="pageLabel"]')!
+    // Nested pages never get the screen number, label or not.
+    expect(badge.textContent).toBe('方案 B')
+  })
+
+  test('a blank label falls back to the automatic screen name', () => {
+    const root = render(
+      <ScreenNavigationContext.Provider value={screen}>
+        <PageNode depth={0} path="items[0]" renderChildren={renderChildren} node={{
+          type: 'page', title: '收件箱', label: '   ', items: [],
+        }} />
+      </ScreenNavigationContext.Provider>,
+    )
+    expect(root.querySelector('[class*="pageLabel"]')!.textContent).toBe('屏 1 · 收件箱')
+  })
+
   test('legacy pages render no screen chrome at all', () => {
     const root = render(<PageNode path="items[0]" renderChildren={renderChildren} node={{
       type: 'page', title: '普通页面', items: [],
@@ -411,6 +449,16 @@ describe('style contract (no draft signals, one line width)', () => {
     const badge = section('.pageLabel {', '/* ---- empty')
     expect(badge).toContain('z-index: 2')
     expect(section('.page {', '.pageHeader')).toContain('position: relative')
+  })
+
+  test('the badge backdrop follows the surface behind its line', () => {
+    // §12.4 B3: a nested badge sits on the card surface and would show the
+    // conversation base as a wrong-coloured chip if the fallback were used.
+    expect(section('.page {', '.pageHeader')).toContain('--proto-badge-bg: var(--proto-surface-card)')
+    expect(section('.pageLabel {', '/* ---- empty'))
+      .toContain('background: var(--proto-badge-bg, var(--dsw-alias-bg-base))')
+    // §12.4 B4: only a framed page reserves the 9px the badge sits in.
+    expect(section('.pageFrame {', '.pageLabel {')).toContain('padding-top: 9px')
   })
 
   test('the page column is the only source of page-level horizontal inset', () => {

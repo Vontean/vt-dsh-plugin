@@ -62,6 +62,11 @@
    * this box precisely because the page clips its own overflow. */
   position: relative;
   z-index: 0;
+  /* §12.4 B3: a badge punches a hole in the line it sits on, so its backdrop
+   * must be the surface BEHIND that line. A nested badge inherits this from
+   * the enclosing page (card surface); the root badge lives outside its page,
+   * inherits nothing, and falls back to the conversation base. */
+  --proto-badge-bg: var(--proto-surface-card);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -500,10 +505,15 @@
    * the frame line — and with it the badge — gets covered. */
   z-index: 2;
   height: 18px;
+  /* `label` is capped at 12 characters by the contract, but data keeps the
+   * full text: ellipsize rather than widen a split pane's badge. */
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0 6px;
   border-radius: var(--proto-radius-sm);
   /* The surface behind the line, so the dashes do not run through the text. */
-  background: var(--dsw-alias-bg-base);
+  background: var(--proto-badge-bg, var(--dsw-alias-bg-base));
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
