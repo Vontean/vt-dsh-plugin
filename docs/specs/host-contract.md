@@ -251,7 +251,7 @@ tsdown 的 8 个 target：
 | `lib/assets/echarts-full.js` | 1,044,488 | 懒加载：图表全量 |
 | `lib/assets/icons.js` | 969,070 | 懒加载：图标目录 |
 | `lib/assets/standalone-runtime.js` | 1,183,504 | 导出单文件 HTML 用 |
-| `lib/types/**` | — | 120 个 `.d.ts`（`lib` 合计 126 个入库文件） |
+| `lib/types/**` | — | 121 个 `.d.ts`（`lib` 合计 129 个入库文件） |
 
 懒加载设计的收益：主 bundle 不再背 ~9 MB 引擎，只有 spec 真的用到 mermaid/3D/图表时才拉对应资产。
 
@@ -288,7 +288,7 @@ window.__ModuleLoader__.load({ id: "dsh-vt-gen-ui", factory: (require) => {
 **产物入库。** `lib/` 必须提交（根 `docs/plugin-conventions.md` §5）：git 子目录安装与 Release tarball
 直接读产物、不执行构建脚本。插件自己的 `.gitignore` 里有一行显式说明「`lib/` 是构建产物，必须入库——不要在这里忽略它」；
 根 `.gitignore` 只忽略 `dist/`，并对 `plugins/*/webview/dist/` 开了例外。
-实测：`git ls-files plugins/vt-gen-ui/lib` = **126 个文件**，全部在版本控制里。
+实测：`git ls-files plugins/vt-gen-ui/lib` = **129 个文件**，全部在版本控制里。
 
 **提交规则。** 改源码必须**同一次提交**带上重建后的产物；否则发布出去的是旧包。
 禁止手工编辑 `lib/` 里的任何文件（它是生成的，而且 minified）。
@@ -570,7 +570,7 @@ git status --porcelain plugins/vt-gen-ui/lib   # 必须输出为空
 | H1 | **工具链版本浮动**：`tsdown ^0.22.2`、`lightningcss ^1.25.0`、`typescript ^5.6.0`，实际解析 0.22.14 / 1.33.0 / 5.9.3 | `package.json` devDeps；`pnpm-lock.yaml` | 换机/重装可能换到别的 rolldown，minify 输出变化 → 整包产物大 diff、无法判断「视觉有没有改」；`scaffold.md` §4.4 明确要求精确锁 | **已排期**：下一个统一构建窗口里去掉 `^`、干净重建、整批提交产物（同窗口还做 R3 四项核对） |
 | H2 | **node shim 与 tsconfig 口径矛盾**：shim 注释称 `types: []`、无 `@types/node`，实际 `tsconfig` 有 `types:["node"]` + devDep | `src/plugin/node-shims.d.ts:1-8` vs `tsconfig.json:12-14` | 后来人照错的那份改，会删掉真的类型来源或留下双份声明 | 二选一并删掉另一份（建议留 `@types/node`） |
 | H3 | **宿主侧零测试**：`src/plugin/**` 没有任何 `*.test.ts`；`vitest` 里只有 `shared/catalog/catalog.test.ts`，没有 `primitives-stub` 之外的自修/工具契约测试 | `find src/plugin src/shared -name "*.test.*"` | 自修预算、指纹账本、工具协议、参数解包四条最容易回归的逻辑**没有网**；`pnpm build` 通过不代表行为对 | 宿主侧测试是本 Bot 的职责范围，建议补：`planFenceFeedback` 的纯函数表、`specOf` 四种形状、`validate_dsh_ui` 协议字段 |
-| H4 | **共享 `lib/` + 单工作区**：产物入库、HMR 轮询、link 安装直读 | `.gitignore` 注释、`git ls-files lib`=126、profile symlink；盘点期间已实测到混合产物（`modal*.d.ts` 00:11 vs `client.js` 00:03） | 提交带入他人在制品；并发构建互相破坏（见 §4.8）；`lib` 批次不一致时行为与源码对不上 | 执行 §4 R1–R5，尤其 R3 的批次一致性检查 |
+| H4 | **共享 `lib/` + 单工作区**：产物入库、HMR 轮询、link 安装直读 | `.gitignore` 注释、`git ls-files lib`=129、profile symlink；盘点期间已实测到混合产物（`modal*.d.ts` 00:11 vs `client.js` 00:03） | 提交带入他人在制品；并发构建互相破坏（见 §4.8）；`lib` 批次不一致时行为与源码对不上 | 执行 §4 R1–R5，尤其 R3 的批次一致性检查 |
 | H5 | **上游同名三撞** + 技能 `genui` 的 rank 归属未验证 | `index.ts` 的 `genui:fence` 段名、两处 `tools.register`、skill 名 `genui`；`dsh-skill` README | 共存必炸 section；技能名冲突时谁生效**没有结论**（本地文件系统 provider 的 rank 不在本仓库） | 共存切换只走 `plugin_manager` 顺序；要下结论需实测同名技能快照 |
 | H6 | **宿主侧唯一运行时跨包依赖**：`await import('@deepseek-ai/dsh-llm')` 取 `EMPTY_RESPONSE_CODE` / `isAgentLoopRequest` | `fence-feedback.ts:341-342`；当前包导出存在（grep 命中） | 宿主升级若改名/移除这两个导出，走 reasoning-only 路径时**运行时报错**（其余路径不受影响） | 升级宿主时把这条列为验收项；或改成本地常量 + 只在需要时降级 |
 | H7 | **资产路由只认平铺 `.js`** | `index.ts` 的 `ASSET_FILE_RE` + `serveGenuiAsset` 的 `content-type` | 将来加 wasm/字体/子目录（如 `echarts/xxx.js`）会**静默 404**，表现成「引擎加载失败」而不是配置错误 | 加资产类型时同步改正则 + content-type + 客户端 `loadGenuiAsset` 的 key 映射 |
@@ -583,7 +583,7 @@ git status --porcelain plugins/vt-gen-ui/lib   # 必须输出为空
 
 ## 6. 验证方法与未验证项
 
-**本文已实测：** 产物无测试残留（0 命中）、`lib` 入库 126 个文件（其中 120 个 `.d.ts`）、
+**本文已实测：** 产物无测试残留（0 命中）、`lib` 入库 129 个文件（其中 121 个 `.d.ts`）、
 `STRUCTURED_OUTPUT = 9900`、构建工具实际解析版本（0.22.14 / 1.33.0 / 5.9.3）、`dsh-llm` 两个导出存在、
 profile 为 `link:` 安装、peer/dev 依赖计数（20 peer / 70 dev）。
 
@@ -591,22 +591,25 @@ profile 为 `link:` 安装、peer/dev 依赖计数（20 peer / 70 dev）。
 （`find lib -type f -exec stat -f "%m %N" {} \; | sort | md5`），跑完 `pnpm typecheck`（退出码 0）后指纹**逐字节不变**；
 单跑 `tsc -p tsconfig.json --noEmit --emitDeclarationOnly false` 与 `tsc -p tsconfig.test.json` 也同样零写入。
 
-**构建形成证据（2026-11-22 补测，未在共享工作区跑 build）：**
+**构建形成证据（2026-11-22）：**
 
 - **干净 HEAD worktree 构建通过**：`pnpm build` 退出 0、约 7.5 s，8 个产物齐全，`lib` 内测试残留 0 命中，
   `lib/types` 与 `lib/index.js` 同批次（`find lib -name '*.d.ts' -newer lib/index.js` = 0），
-  `node scripts/check-client-bundles.mjs` 报 12 个 client 模块拼接通过。
+  `node scripts/check-client-bundles.mjs` 报 12 个 client 模块拼接通过（另有 1 个纯 host 插件按设计跳过）。
 - **同源重建字节一致（同目录）**：00:24 在主工作区有一次完整重建，产出的 `lib/client.js` 与 HEAD 已提交版本
   **逐字节相同**（`git status` 里该文件无差异），只有 `lib/index.js` 因当时的宿主侧未提交改动而变化。
-- **跨目录同样稳定**：worktree（`/tmp`）构建出的 4 个引擎 asset（`pele/three/echarts-core/echarts-full`… 含 `icons`）
+- **跨目录同样稳定**：worktree（`/tmp`）构建出的 5 个 asset（`pele/three/echarts-core/echarts-full/icons`）
   与仓库内已提交产物 sha256 一致。
 - **差异的真实来源不是不可复现**：`lib/index.js` 与 `lib/client.js` 在我那次比对中显出差异，根因是
   **HEAD 在我创建 worktree 之后移动**（`886d38c feat(gen-ui): 确认层与底部面板` 落地，引入了 `modal`），
   与工具链无关。**核对产物前先确认 HEAD 没动**，否则会把源码变化误判成构建不确定性。
-- **宿主侧测试已入库**（commit `48a97c2`）：`src/plugin/__tests__/` 下 4 个文件、84 个用例，
-  单独 `vitest run src/plugin` 全绿；它们覆盖资产路由的纯函数决策、工具协议、自修预算与注册顺序。
-  全量 `pnpm test` 会被在制的渲染/契约改动牵连（写文档时 `docs.ts` 正被编辑），所以**构建窗口的门槛是
-  「`pnpm typecheck` 绿 + `vitest run src/plugin` 绿」**，而不是全量测试绿。
+- **宿主侧测试已入库**（commit `48a97c2`）：`src/plugin/__tests__/` 下 4 个文件、**122 个用例**
+  （tool 32 / fence-feedback 52 / asset-route 26 / plugin-registration 12），`vitest run src/plugin` 全绿；
+  覆盖资产路由的纯函数决策、工具协议、自修预算与注册顺序。
+- **全量门禁已跑过一次**：同一提交上 `pnpm check` 全绿（typecheck 0 错、`251/251`、build 通过）。
+  写文档时工作区里还有渲染/契约的在制改动，全量 `pnpm test` 会随之变红（`modal.test.tsx` 的
+  `--proto-scrim` 断言，因为 `Prototype.module.css` 正被改），所以日常门禁仍按
+  「`pnpm typecheck` 绿 + `vitest run src/plugin` 绿」执行，全量绿留给构建窗口。
 
 **尚未做（等统一构建窗口）**：工具链版本锁（`tsdown` / `lightningcss` / `typescript` 去 `^`）、
 窗口内干净重建、以及按批次提交全量 `lib/**`（见 H1）。
@@ -619,7 +622,7 @@ profile 为 `link:` 安装、peer/dev 依赖计数（20 peer / 70 dev）。
 2. 两个 client 同时挂载时 DOM/slot 层面的真实表现（`data-genui-rendered` 标记、`render_ui` toolview 槽位）。
 3. `lib/client.js` 半写状态下 HMR 的具体报错形态（§4.8 是机制推断，未构造竞态复现）。
 4. 宿主升级后自修路径的兼容性（H6）。
-5. 同机二次构建是否真的 byte-identical（未跑第二次构建；按配置推断应成立）。
+5. 跨机器/跨目录的逐字节可复现：同目录重建已实测字节一致（`lib/client.js`），跨目录只验证了 5 个 asset；完整结论仍需在不同机器上对比 sha256。
 
 ---
 
