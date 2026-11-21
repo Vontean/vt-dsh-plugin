@@ -978,7 +978,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 | 章节 | 内容 |
 | --- | --- |
-| §14（新增） | 可断言条文：21 条（G1–G12 几何、L1–L3 线、T1–T2 文本、S1–S4 结构），附「jsdom 测不了几何」的分档 |
+| §14（新增） | 可断言条文：22 条（G1–G13 几何、L1–L3 线、T1–T2 文本、S1–S4 结构），附「jsdom 测不了几何」的分档 |
 | §12.3 | 页面四向留白定值（`G` = 24 / 窄 16）；`data-bleed` 改方向串；导航按 chrome 抵消顶/底 |
 | §6.7 | 不变式「同一位置只允许一条线」：divider 是补线，栏内有 `page` 时不生效 |
 | §12.6.1 | 补录本轮三条分歧判定 |
@@ -1126,6 +1126,8 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 2. **页面有标题栏时不抵消顶部**：导航在标题下方，它贴着标题、不贴页面框；底部同理，只在没有页脚时贴框底。
 
 **组件不写页面级内边距（四向）**：`empty` / `loading` 原来的 `padding-block: 24` 改为 0——它们是内容，边距由 gutter 给。保留的只有「组件内部」的 padding：卡片内部 16、控件内部 8、行内 8。
+
+**首/末子元素的外边距必须抑制**：内容列的首个子元素的 `margin-block-start` 与末个子元素的 `margin-block-end` 不得叠加到 `G` 上。容器层改对不等于结果对——静态探针把 `.pr-page-body` 改成四向 `padding` 之后，首个子元素自带的 `margin-block-start: 12` 还是把「页头底 → 首内容」顶成了 36，末个子元素的 `margin-block-end: 24` 把「末内容 → 框底」顶成了 49。谁给首个子元素加边距，这个毛病就会复发；判据见 §14 G13。
 
 **为什么是 24 / 16**：与左边缘同值，一屏只有一个边距数字；16 在 390 宽下保住内容宽度；32 会让标题栏与内容之间出现两个层级。
 
@@ -1298,18 +1300,33 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 | ID | 断言 | 来源 | 检查方式 |
 | --- | --- | --- | --- |
-| G1 | 给定无标题栏的 `page`：首个非贴边子元素的外框顶 − `P` 顶 = `G` | §12.3 | `getBoundingClientRect` 差值 |
+| G1 | 给定任一 `page` 内的 `[data-page-body]`：其 `padding` 四边计算值均 = `G`（宽 24 / 窄 16） | §12.3 | `getComputedStyle` 四边 |
 | G2 | 给定任一 `page`：所有非贴边子元素的内容左沿坐标相同（`max − min = 0`） | §12.3 | 同上 |
 | G3 | 给定 `data-bleed~='inline'` 的元素：盒左沿 − `P` 左 = 0，且其内容左沿 = 内容列左沿 | §12.3 | 同上 |
 | G4 | 给定 `nav` top 且为无标题栏页面的首元素：nav 顶 − `P` 顶 = 0；有标题栏时 ≥ 16 | §12.3 | 同上 |
 | G5 | 给定 `nav` tabs 且为末元素：`P` 底 − tabs 底 = 0；否则 ≥ 16 | §12.3 | 同上 |
-| G6 | 给定有标题栏的 `page`：标题顶 − `P` 顶 = `G`；标题栏底 − 首内容顶 = `G`（不是 2`G`） | §12.3 | 同上 |
+| G6 | 给定有标题栏的 `page`：标题栏 `padding-block-start = G`、`padding-block-end = 0`、`padding-inline = G` | §12.3 | 计算样式 |
 | G7 | 给定 `list-row`：首行 `border-top-width = 0`，其余行 = 1px；高度 ∈ {40, 56} 或内容撑开的自然高 | §6.3 | 计算样式 + rect |
 | G8 | 给定 `split` 并排：`abs(top₁ − top₂) = 0` 且 `abs(bottom₁ − bottom₂) = 0`；堆叠时 `gap = 16` | §6.7 | rect / 计算样式 |
-| G9 | 给定原型子树的任一样式：`margin` / `padding` 计算值 ∈ {0, 4, 8, 12, 16, 24} | §4.3 | 遍历计算样式 |
+| G9 | 给定原型子树的任一样式：`margin` / `padding` 计算值 ∈ {0, 4, 8, 12, 16, 24}，或为贴边抵消产生的负值 ∈ {−24, −16} | §4.3 / §12.3 | 遍历计算样式 |
 | G10 | 给定原型子树的任一样式：`border-radius` ∈ {0, 6, 8, 12, 999} | §4.4 | 同上 |
 | G11 | 给定 `modal`：dialog 宽 = `min(360, 可用宽)`；sheet 宽 = 可用宽 | §6.8 | rect |
 | G12 | 给定 `modal`：浮层 rect 与 `page` 内框 rect 四边差均为 0（覆盖且不越框） | §6.8 | rect |
+| G13 | 给定 `[data-page-body]` 的任意两个相邻兄弟块：二者 `margin` 之间的净垂直距离 = `G`（由 `gap` 给，不叠组件外边距） | §12.3.1 | rect 差值 |
+| G14 | 给定 `[data-page-body]` 的直接子元素：`margin-block-start` 与 `margin-block-end` 计算值均为 0（贴边抵消的负外边距除外） | §12.3.1 | 计算样式 |
+
+**为什么 G1 / G6 用 padding 口径而不是距离口径**：距离口径（元素外框到内沿 = `G`）在**子元素自带外边距**或**页面有标题栏**时与 padding 不等价——量到 36 时无法判断是 padding 错了还是外边距漏了。padding 是唯一可归因的量；距离由 `padding` + `0 外边距` 推导得出，作为推论成立而不单独断言。
+
+**不在 G9 检查范围的装饰几何**（它们是让位与描边偏移，不是排版间距）：
+
+| 位置 | 值 | 为什么豁免 |
+| --- | --- | --- |
+| `.pr-frame` / `page` 外框上边距 | 9 | 给角标让位（角标高 18，压在框线上） |
+| 角标的 `top` / `left` / 内边距 | 0 / 12 / 6 | 角标是骑在框线上的标签，落在 4 的倍数之外 |
+| 焦点环外扩 | 2 | 唯一允许的非 1px 描边厚度（§5.2） |
+| G13 | 给定 `page` 内容列的首个子元素与末个子元素：其 `margin-block-start` / `margin-block-end` 必须被抑制，不得叠加到 `G` 上——页头底 → 首内容顶 = `G`，末内容底 → `P` 底 = `G` | §12.3 | rect 差值 + 计算样式 |
+
+G13 的理由：容器层改对了不等于结果对。静态探针曾把 `.pr-page-body` 改成四向 `padding`，但首个子元素自带 `margin-block-start: 12`、末个自带 `margin-block-end: 24`，实测「页头底 → 首内容」变成 `G + 12 = 36`、「末内容 → 框底」变成 `G + 24 = 49`，两档间距又回来了。**这和漏掉上下留白是同一类错误，只是从容器层下沉到了子元素层**——所以必须有一条断言盯着子元素，而不是只看容器的 `padding` 值。
 
 **线（同一位置只允许一条）**
 
@@ -1340,7 +1357,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 | 档 | 可测的断言 | 在哪测 |
 | --- | --- | --- |
 | 计算样式 / DOM / 对比度 | T1、T2、S1–S4、L1–L3 | jsdom（vitest）够用 |
-| 几何 | G1–G12 | **jsdom 不布局，测不了**；要在 headless Chrome / Playwright 里量 `getBoundingClientRect`，或复用 `tools/visual` 的截图管线 |
+| 几何 | G1–G13 | **jsdom 不布局，测不了**；要在 headless Chrome / Playwright 里量 `getBoundingClientRect`，或复用 `tools/visual` 的截图管线 |
 
 **断言写法约定**
 
