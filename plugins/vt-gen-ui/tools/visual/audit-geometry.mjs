@@ -85,15 +85,23 @@ const SELECTORS = {
 }
 
 /**
- * 图标目录：从**已构建的资产**里取名字，审计不自带一份名单（否则等于拿自己校验自己）。
+ * 图标目录：两半都要，缺一半判定会静默失效。
+ * - `lib/assets/icons.js`：按需下载的字形（已构建资产）。
+ * - `src/client/icons/icon-names-full.ts`：全部规范名，其中 64 个是随包内联的，
+ *   它们**不在** icons.js 里。只读 assets 会把内联名（`Cube` 就是一个）当成“目录外”，
+ *   于是「已知名却没出字形」被判成「目录外，允许文字」——真故障不再报警。
  * 目录外的值（头像首字「王」、emoji）按设计允许保持文字。
  */
 const ICON_ASSET = join(ROOT, 'lib/assets/icons.js')
+const ICON_NAMES = join(ROOT, 'src/client/icons/icon-names-full.ts')
 const ICON_CATALOGUE = (() => {
-  if (!existsSync(ICON_ASSET)) return null
-  const source = readFileSync(ICON_ASSET, 'utf8')
+  if (!existsSync(ICON_ASSET) || !existsSync(ICON_NAMES)) return null
   const names = new Set()
-  for (const match of source.matchAll(/[,{]([A-Za-z][A-Za-z0-9_]*):\{viewBox:/g)) names.add(match[1])
+  for (const match of readFileSync(ICON_ASSET, 'utf8').matchAll(/[,{]([A-Za-z][A-Za-z0-9_]*):\{viewBox:/g)) {
+    names.add(match[1])
+  }
+  const declared = /ICON_NAMES_FULL[^=]*=\s*\[([^\]]*)\]/.exec(readFileSync(ICON_NAMES, 'utf8'))
+  if (declared !== null) for (const match of declared[1].matchAll(/"([^"]+)"/g)) names.add(match[1])
   return [...names]
 })()
 
