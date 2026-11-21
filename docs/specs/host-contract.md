@@ -337,7 +337,7 @@ window.__ModuleLoader__.load({ id: "dsh-vt-gen-ui", factory: (require) => {
 | `engines.pnpm` | **刻意不写** | DSH 不校验；桌面 launcher 用内置 pnpm 11.28.5，写了只会制造版本噪音（`scaffold.md` §4.1） |
 | peerDependencies | `^0.2.0-rc.1 \|\| ^0.2.1-rc.1`，共 20 个（19 个 `@deepseek-ai/*` + `react`）；其中 16 个 `@deepseek-ai/*` 标 `optional`，**3 个是硬性**：`dsh-agent`、`dsh-agent-loop`、`dsh-client-ui-primitives` | 运行时由宿主 profile 作答，插件不打包这些；硬性 peer 缺失会挡安装 |
 | devDependencies | 70 个，其中 55 个 `@deepseek-ai/*` 钉 `0.2.1-rc.2` | 仅作类型来源；`import type` 会被擦除 |
-| 构建工具 | `tsdown 0.22.14` / `lightningcss 1.33.0` / `typescript 5.9.3`；资产引擎 `three 0.180.0` / `echarts 5.6.0` / `echarts-wordcloud 2.1.0` / `pele 1.13.0` | **精确版本**（全部去 `^`）：同源重建逐字节复现，`lib/**` 零差异（见 §5 H1） |
+| 构建工具 | `tsdown 0.22.14` / `lightningcss 1.33.0` / `typescript 5.9.3`；资产引擎 `three 0.180.0` / `echarts 5.6.0` / `echarts-wordcloud 2.1.0` / `pele 1.13.0`；运行时 `react 18.3.1` / `react-dom 18.3.1` | **精确版本**（全部去 `^`）：同源重建逐字节复现，`lib/**` 含 `lib/assets/standalone-runtime.js` 均零差异（见 §5 H1） |
 | 包版本 | `1.1.0` | 必须与 `lib/client.js` 里的 `VERSION` 一致（`check-client-bundles.mjs` 校验） |
 
 **与上游插件共存/回滚的顺序约束（硬）。** `@changfenhuang/dsh-genui` 与本插件三处撞名：
@@ -567,7 +567,7 @@ git status --porcelain plugins/vt-gen-ui/lib   # 必须输出为空
 
 | # | 隐患 | 证据 | 影响 | 建议 |
 | --- | --- | --- | --- | --- |
-| H1 | **工具链版本浮动**（✅ 2026-11-22 已锁：工具链 `bec4ef8`，资产引擎组同批提交） | `plugins/vt-gen-ui/package.json` devDeps；`pnpm-lock.yaml` | 换机/重装可能换到别的 rolldown，minify 输出变化 → 整包产物大 diff、无法判断「视觉有没有改」 | 已改为精确版本 `tsdown 0.22.14` / `lightningcss 1.33.0` / `typescript 5.9.3`；**资产引擎组已一并钉死**：`three 0.180.0` / `echarts 5.6.0` / `echarts-wordcloud 2.1.0` / `pele 1.13.0`（后两者原本就是精确版本）。lockfile 的 specifier 同步、`version:` 行未变。验收：持锁 `pnpm build` 后 `lib/**` 与 `lib/assets/**` 均**零差异**，即两次锁定都是 no-op。**残留**：`react` / `react-dom`（`^18.3.1`）仍为区间——它们在 `standaloneConfig` 里走 `alwaysBundle`，决定 `lib/assets/standalone-runtime.js` 的字节；要彻底可复现需第三个决策 |
+| H1 | **工具链版本浮动**（✅ 2026-11-22 已全锁：工具链 `bec4ef8`、资产引擎组 `109f57c`、运行时 `react`/`react-dom` 同批） | `plugins/vt-gen-ui/package.json` devDeps；`pnpm-lock.yaml` | 换机/重装可能换到别的 rolldown，minify 输出变化 → 整包产物大 diff、无法判断「视觉有没有改」 | 已改为精确版本 `tsdown 0.22.14` / `lightningcss 1.33.0` / `typescript 5.9.3`；资产引擎组 `three 0.180.0` / `echarts 5.6.0` / `echarts-wordcloud 2.1.0` / `pele 1.13.0`；运行时 `react 18.3.1` / `react-dom 18.3.1`（`standaloneConfig` 走 `alwaysBundle`，所以它们直接决定 `standalone-runtime.js` 的字节）。lockfile 的 specifier 同步、`version:` 行始终未变。验收：每次持锁重建后 `lib/**` 与 `lib/assets/standalone-runtime.js` 均零差异。**无残留**（`peerDependencies.react` 的区间是兼容声明，不是安装 specifier，按设计保留） |
 | H2 | **node shim 与 tsconfig 口径矛盾**：shim 注释称 `types: []`、无 `@types/node`，实际 `tsconfig` 有 `types:["node"]` + devDep | `src/plugin/node-shims.d.ts:1-8` vs `tsconfig.json:12-14` | 后来人照错的那份改，会删掉真的类型来源或留下双份声明 | 二选一并删掉另一份（建议留 `@types/node`） |
 | H3 | **宿主侧零测试**：`src/plugin/**` 没有任何 `*.test.ts`；`vitest` 里只有 `shared/catalog/catalog.test.ts`，没有 `primitives-stub` 之外的自修/工具契约测试 | `find src/plugin src/shared -name "*.test.*"` | 自修预算、指纹账本、工具协议、参数解包四条最容易回归的逻辑**没有网**；`pnpm build` 通过不代表行为对 | 宿主侧测试是本 Bot 的职责范围，建议补：`planFenceFeedback` 的纯函数表、`specOf` 四种形状、`validate_dsh_ui` 协议字段 |
 | H4 | **共享 `lib/` + 单工作区**：产物入库、HMR 轮询、link 安装直读 | `.gitignore` 注释、`git ls-files lib`=129、profile symlink；盘点期间已实测到混合产物（`modal*.d.ts` 00:11 vs `client.js` 00:03） | 提交带入他人在制品；并发构建互相破坏（见 §4.8）；`lib` 批次不一致时行为与源码对不上 | 执行 §4 R1–R5，尤其 R3 的批次一致性检查 |
@@ -622,7 +622,7 @@ profile 为 `link:` 安装、peer/dev 依赖计数（20 peer / 70 dev）。
 2. 两个 client 同时挂载时 DOM/slot 层面的真实表现（`data-genui-rendered` 标记、`render_ui` toolview 槽位）。
 3. `lib/client.js` 半写状态下 HMR 的具体报错形态（§4.8 是机制推断，未构造竞态复现）。
 4. 宿主升级后自修路径的兼容性（H6）。
-5. 跨机器/跨目录的逐字节可复现：同目录重建已实测字节一致（`lib/client.js`），跨目录只验证了 5 个 asset；完整结论仍需在不同机器上对比 sha256。
+5. 跨机器/跨目录的逐字节可复现：**同目录重建已实测字节一致**（`lib/client.js`、`lib/assets/standalone-runtime.js`，后者是 `react`/`react-dom` 打进 bundle 的那条路径）；跨目录只验证了 5 个 asset；完整结论仍需在不同机器上对比 sha256。
 
 ---
 
