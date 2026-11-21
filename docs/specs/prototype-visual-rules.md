@@ -5,7 +5,8 @@
 > 上位 spec：[`prototype-channel.md`](./prototype-channel.md)
 > 设计基线：[`DESIGN.md`](../../plugins/vt-gen-ui/DESIGN.md)（插件视觉体系）、[`AGENTS.md`](../../plugins/vt-gen-ui/AGENTS.md)（硬约束）
 > 可渲染探针：[`tools/visual/prototype.html`](../../plugins/vt-gen-ui/tools/visual/prototype.html)
-> 基线截图：[浅色](../../plugins/vt-gen-ui/docs/visual/prototype-rules-light.png)、[深色](../../plugins/vt-gen-ui/docs/visual/prototype-rules-dark.png)、[窄容器浅色](../../plugins/vt-gen-ui/docs/visual/prototype-rules-narrow-light.png)、[窄容器深色](../../plugins/vt-gen-ui/docs/visual/prototype-rules-narrow-dark.png)
+> 基线截图（基础组件）：[浅色](../../plugins/vt-gen-ui/docs/visual/prototype-rules-light.png)、[深色](../../plugins/vt-gen-ui/docs/visual/prototype-rules-dark.png)、[窄容器浅色](../../plugins/vt-gen-ui/docs/visual/prototype-rules-narrow-light.png)、[窄容器深色](../../plugins/vt-gen-ui/docs/visual/prototype-rules-narrow-dark.png)
+> 基线截图（结构规则）：[浅色](../../plugins/vt-gen-ui/docs/visual/structures-rules-light.png)、[深色](../../plugins/vt-gen-ui/docs/visual/structures-rules-dark.png)
 
 这份文档唯一的读者是**实现者**。它给的不是「感觉」，而是可以直接写进 CSS Modules 的取值、属性和判据。任何一处数字都能回到这里的表；表里没有的数字，就是不许出现的新数字。
 
@@ -669,6 +670,24 @@
 | 遮罩怎么起作用 | **不靠「遮罩与页面的对比度」**。深色主题里页面本来就接近黑，遮罩与页面的亮度差天然很小（约 1.0–1.1）——靠的是「背景文字被压到中灰」+「弹层表面浮出」这两件事。所以别拿亮度差当判据，也别为了「看起来更暗」继续加百分比 |
 | 主题分支 | 组件里不写。分档在宿主 token 里，我们只引用 |
 
+**够不够压：浅色 24% 的判断**
+
+结论：**够**。但「够」要定义清楚——遮罩负责让弹层成为屏上唯一的焦点，不负责把背景文字压到读不清。
+
+| 观测量 | 24% 下的值 | 说明 |
+| --- | --- | --- |
+| 背景文字（`label-primary`）压后 | 约 **10.6:1** | 仍可读。这是特性：讨论「弹层盖在列表上」时，背后的列表还要能被指认出来 |
+| 弹层白 vs 背景 | **1.55:1** | 弹层是屏上唯一的纯白面；背景全部被压到 ≤ `#c2c2c2`，焦点唯一 |
+| 占位灰块 / hairline | 约 1.08:1，几乎消失 | 背景的结构细节退掉，正是遮罩该做的事 |
+
+三条理由：
+
+1. **密度不改变这个判断**。遮罩是把整层背景一起乘 0.76，背景内部的相对对比度基本不变；「真实内容比探针密」不会让 24% 变弱——内容密度与遮罩强度是正交的。
+2. **一致性优先**。宿主自己的浮层就是 24% / 50%。同一个界面里出现两种遮罩深度，用户会把其中一种读成外来件。
+3. **更暗的遮罩会掩盖问题**。如果一屏要 40% 以上才「压得住」，通常说明背景里有不该抢焦点的内容（第二块白卡片、第二组主操作）——该删内容，不该加深遮罩。
+
+**验收判据（可对照）**：打开浮层后，第一眼应落在弹层标题上。若视线先落到背景的某块白色或某行加粗文字，先查内容，不要动遮罩。
+
 **面板**
 
 | 项 | dialog | sheet |
@@ -785,19 +804,29 @@
 
 ### 8.1 怎么复现
 
+**哪个探针验证哪一节**（拆分后各管一段，改规则时只动对得上的那个，避免两个会话撞同一个文件）：
+
+| 文件 | 验证哪几节 |
+| --- | --- |
+| `tools/visual/prototype.html` | §2 线面语言、§3 低保真信号、§4 排版、§6.1–§6.8 组件规格、§7 双主题 |
+| `tools/visual/structures.html` | §12.3 一屏一个左边缘、§12.4 角标层级 + 嵌套虚线（原「屏 8」） |
+| `tools/visual/prototype.css` | 两个探针**共用**的组件样式，不在这里写结构规则 |
+| `tools/visual/theme.css` | 宿主 token 镜像，两个探针共用；宿主换 token 只改这里 |
+
 ```sh
 cd plugins/vt-gen-ui
-pnpm build                                   # 不需要（探针不依赖构建产物），改了组件才需要
-bash tools/visual/shot.sh prototype          # → /tmp/vt-gen-ui-preview/prototype-{light,dark}.png
+bash tools/visual/shot.sh prototype structures
+# → /tmp/vt-gen-ui-preview/{prototype,structures}-{light,dark}.png
+# 基线：docs/visual/prototype-rules-*.png（基础组件）、docs/visual/structures-rules-*.png（结构规则）
 ```
 
-窄容器（无头 Chrome 视口最小 500px，所以用容器宽度模拟 390）：
+窄容器（无头 Chrome 视口最小 500px，所以用容器宽度模拟 390；两个探针都支持 `?w=`）：
 
 ```sh
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 "$CHROME" --headless=new --disable-gpu --no-sandbox --hide-scrollbars \
   --force-device-scale-factor=2 --user-data-dir=/tmp/chrome-proto \
-  --window-size=500,4400 --virtual-time-budget=5000 \
+  --window-size=500,5600 --virtual-time-budget=6000 \
   --screenshot=/tmp/proto-390-light.png \
   "file://$PWD/tools/visual/prototype.html?theme=light&w=390"
 ```
@@ -830,11 +859,12 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 | 侧栏独立成块的描边看得出、且与标题左边缘对齐 | 屏 7 截图（浅色下内嵌面只有 1.05:1，全靠这条 4% 的边） |
 | 分隔线必须用 l2：4% 的 l1 竖线在白底上不可见 | 先按 l1 渲染过一版，线消失；改 l2 后可辨（`data-divider` 样例） |
 | 骨架错落：100 · 88 · 72 不出直边 | 屏 7 与方案 B 截图 |
+| 结构规则成立（左边缘、嵌套实线、A/B 角标） | `structures-rules-{light,dark}.png`；同时核对拆分前后：基础探针前 7 屏与拆分前基线**差异 0 像素** |
 
 ### 8.3 没验证到的（写在交付里，别当成已确认）
 
 - **组件实现未验证**：`page` / `nav` / `list-row` / `field-group` 已落地（切片 1），`modal` / `split` / `empty` / `loading` 尚未写进 `src/client/`。布局 bug 只会在真实组件里出现（例如 `overflow: clip` 与 `modal` 的焦点陷阱共存、`position: absolute` 与流式追加重渲染）。
-- **遮罩已改用宿主 `bg-mask-1`**，但仍未在宿主真实浮层旁边对比过；24% 在浅色下是否「够压」需要用真实内容再确认一次（探针里的背景是刻意留白较多的页面）。
+- **遮罩用宿主 `bg-mask-1`（浅 24% / 深 50%）**：判断见 §6.8「够不够压」。24% 让背景文字仍有约 10.6:1，这是**特性不是缺陷**——遮罩不负责压低背景内部对比度，只负责让弹层成为唯一纯白面。尚未在宿主真实浮层旁并排对比过一次（只剩「观感对齐」这一项）。
 - **窄屏是模拟的**：无头 Chrome 视口下限 500px，`?w=390` 是用容器宽度模拟，导出的单文件 HTML 在真实手机上可能还有 `env(safe-area-inset-*)` 的问题（底部标签贴屏幕边）。
 - **虚线 dash 节奏跨平台未测**：只测了 Chromium。
 - **`l3` / `l4` 的 3:1 达不到**：宿主四档最高 l4 = 1.45 / 1.91，够不到 WCAG 1.4.11 的 3:1（需要 alpha 41.6% / 34.3%，或挪用文本色）。这是宿主语言，不是遗漏。
@@ -922,7 +952,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 | 已定 2（原待定） | 控件描边升到 **l4**（1.45 / 1.91）。仍达不到 WCAG 1.4.11 的 3:1——需要 alpha 41.6% / 34.3%，或挪用文本色；宿主的四档都不够。**这是宿主语言，不是本规范漏做**（§2.2） |
 | 已定 3（原待定） | 深色 error 在卡片面 4.24、在 base 面 5.55。**先换面**（把错误文案放到 base 面或抬亮所在区域），换不了保留「描边 + 文案 + `alert`」三通道。深色没有更亮的红色档（`red-500` 3.70 更差） |
 | 待定 4 | 现有 50 个组件里仍有 `label-tertiary` 承载 12px 可读文本（浅色 3.71:1）。属「现有组件视觉重做」任务，本文不动 |
-| 待定 5 | 遮罩改用 `bg-mask-1` 后不再有自定百分比；仍需在**真实内容**上确认浅色 24% 是否够压（探针里的背景页面留白偏多，§8.3） |
+| 待定 5 | 遮罩已定为宿主 `bg-mask-1`，浅色 24% 的「够压」判断与验收判据见 §6.8。剩余只有一项：在宿主真实浮层旁并排对比一次观感 |
 | 已定 4（原待定） | 弹层标题定为 **16/24/500**（宿主 Modal 档）。不要降到 14（与 `list-row` 主文本同层，弹层失去焦点），也不要升到 18（与 `page` 标题同级、抢层） |
 | 待定 7 | `l2-darkmode-thin`（深色 6%）暂未使用——它与我们 `l1` 的深色值相同。若将来深色下分隔显重，再换这一档 |
 | 不在本文范围 | 组件字段与 DOM 语义（见 `prototype-channel.md`）、屏幕状态机、导出，以及 `modal` 的**行为契约**（焦点陷阱、`inert`、滚动锁、Escape、焦点归还）。§6.8 只定义它的视觉层，不预设它的内容布局 |
@@ -1102,7 +1132,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 ### 12.6 验证（探针屏 8）
 
-探针新增「屏 8 · 内容列与嵌套区域」，把两条规则渲染出来；四张基线已重出（860 / 390，浅 / 深）。
+探针「屏 8 · 内容列与嵌套区域」把两条规则渲染出来，**已拆到 `tools/visual/structures.html`**（基础组件留在 `prototype.html`）；结构规则的基线是新出的 `structures-rules-{light,dark}.png`。
 
 | 规则 | 渲染里确认的 | 证据 |
 | --- | --- | --- |

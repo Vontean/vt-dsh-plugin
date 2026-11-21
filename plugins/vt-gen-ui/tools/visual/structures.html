@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · 结构规则探针</title>
+<link rel="stylesheet" href="./theme.css" />
+<link rel="stylesheet" href="../../src/client/GenuiBlock.module.css" />
+<link rel="stylesheet" href="./prototype.css" />
+<style>
+/* 结构规则专用（§12.3 / §12.4）。基础组件样式在 prototype.css，不要在这里重复。 */
+/* ── 规则 A：内容列只有一个左边缘（§12.3） ── */
+.pr-page-body { padding-inline: var(--proto-pad-x); }
+.pr-page-body > [data-bleed="true"] { margin-inline: calc(-1 * var(--proto-pad-x)); }
+.pr-text { margin: 12px 0; font-size: 14px; line-height: 20px; color: var(--dsw-alias-label-primary); }
+
+/* ── 规则 B：只有屏幕画虚线，嵌套区域是实线（§12.4） ── */
+.pr-page--nested { border-style: solid; }
+.pr-frame--nested { margin-top: 0; }
+.pr-split--demo { margin: 16px 0 24px; }
+</style>
+</head>
+<body>
+<div class="block pr-probe">
+  <h1>结构规则探针</h1>
+  <p class="lead">验证两条规则：一屏只有一个左边缘（§12.3）；角标属于屏幕、虚线只有一层（§12.4）。</p>
+  <!-- 屏 8：内容列对齐 + 嵌套区域 -->
+  <div class="pr-frame">
+    <span class="pr-frame-label">屏 8 · 内容列与嵌套区域</span>
+    <div class="pr-page">
+      <header class="pr-header">
+        <div class="pr-header__text">
+          <h2 class="pr-title">我的一天</h2>
+          <p class="pr-sub">标题、直排 text、字段标签必须共用一条左边缘</p>
+        </div>
+      </header>
+      <div class="pr-page-body">
+        <p class="pr-text">直排 text 不再贴外框：左右缩进只由页面内容列提供，组件不各自决定。</p>
+        <div class="pr-field">
+          <label class="pr-field__label">截止时间</label>
+          <div class="pr-field__input pr-field__input--placeholder">选择日期</div>
+        </div>
+        <div class="pr-rows" data-bleed="true" style="margin-top: 12px;">
+          <div class="pr-row">
+            <span class="pr-row__media"></span>
+            <span class="pr-row__body">
+              <span class="pr-row__title">行是贴边型：hover 底与分隔线铺满整宽</span>
+              <span class="pr-row__desc">内容仍对齐 24，靠负外边距把盒子拉回外框</span>
+            </span>
+          </div>
+        </div>
+        <div class="pr-split pr-split--demo">
+          <div class="pr-frame pr-frame--nested">
+            <span class="pr-frame-label">方案 A · 空态</span>
+            <div class="pr-page pr-page--nested">
+              <div class="pr-empty" style="padding-top: 16px; padding-bottom: 16px;">
+                <div class="pr-empty__graphic"></div>
+                <div class="pr-empty__title">还没有内容</div>
+              </div>
+            </div>
+          </div>
+          <div class="pr-frame pr-frame--nested">
+            <span class="pr-frame-label">方案 B · 列表</span>
+            <div class="pr-page pr-page--nested">
+              <div class="pr-rows" data-bleed="true">
+                <div class="pr-row" style="min-height: 40px;">
+                  <span class="pr-row__media" style="width: 32px; height: 32px;"></span>
+                  <span class="pr-row__body"><span class="pr-row__title">嵌套区域用实线</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+  const params = new URLSearchParams(location.search);
+  document.body.setAttribute('data-theme', params.get('theme') === 'dark' ? 'dark' : 'light');
+  if (params.get('theme') === 'dark') document.body.setAttribute('data-ds-dark-theme', '');
+  const w = Number(params.get('w'));
+  if (w > 0) document.querySelector('.pr-probe').style.maxWidth = w + 'px';
+</script>
+</body>
+</html>
