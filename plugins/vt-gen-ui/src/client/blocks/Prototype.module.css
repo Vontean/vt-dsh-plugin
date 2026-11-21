@@ -128,14 +128,33 @@
 }
 
 /* The page content block is the ONLY source of page-level spacing (§12.3):
- * one gutter on all four sides. Components never add page-level padding on
- * top of it — that is how 24 + 24 accidents happen. */
+ * one gutter on all four sides, and the same number between blocks. Blocks
+ * used to sit flush (gap 0), so a block's bottom rule landed on the next
+ * block's top rule — the `double-line` audit hits.
+ *
+ * G (24 / 16) for block gaps too: 16 is already "within a group" (controls,
+ * title-to-content, split panes), so reusing it here would flatten the
+ * block/group hierarchy (§4.3).
+ * ------------------------------------------------------------------------ */
 .pageBody {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: var(--proto-gutter);
   min-width: 0;
   padding: var(--proto-gutter);
+}
+
+/* G13: an outer margin on the first / last child must not stack onto the
+ * gutter or the gap. `text` carries `margin-block: 12` upstream; without this
+ * the first block would start at 24 + 12 instead of 24. The bleed rules
+ * below are more specific on purpose, so an intentional negative edge
+ * margin still wins here. */
+.pageBody > :first-child {
+  margin-block-start: 0;
+}
+
+.pageBody > :last-child {
+  margin-block-end: 0;
 }
 
 /* Edge-to-edge components cancel the gutter on the edges they hug, so their
@@ -147,7 +166,9 @@
 }
 
 /* A block-edge bleed only applies to the FIRST / LAST child — a bar in the
- * middle of the content keeps the gutter above / below it (§12.3). */
+ * middle of the content keeps the gutter above / below it (§12.3).
+ * `inline` never touches the block edges: rows and bars take part in the
+ * vertical `gap` like any other block. */
 .pageBody > [data-bleed~='block-start']:first-child {
   margin-block-start: calc(-1 * var(--proto-gutter));
 }
@@ -263,9 +284,10 @@
   width: 200px;
   max-width: 100%;
   flex: 0 0 auto;
-  /* The page content column already insets this block; adding a margin here
-   * would double the inset (§12.3). */
-  margin: 16px 0 0;
+  /* No margin in any direction: the page gutter insets this block, and
+   * `pageBody`'s gap already sets the distance to its neighbours. A leftover
+   * 16px top margin would make one block sit 40 away instead of G (§12.3). */
+  margin: 0;
   padding: 8px;
   background: var(--proto-surface-inset);
   /* l2, not l1: a 4% line on the inset surface differs by 4/255 and reads as

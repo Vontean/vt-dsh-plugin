@@ -537,6 +537,36 @@ describe('style contract (no draft signals, one line width)', () => {
     expect(section('/* ---- empty', '/* ---- split')).not.toContain('padding-block: 24px')
   })
 
+  test('blocks are separated by the same G, and edge margins never stack', () => {
+    // §12.3 / G13: sibling blocks are G apart, and a first / last child's
+    // outer margin must not add to the gutter or the gap (a 12px text margin
+    // would otherwise turn 24 into 36).
+    const body = section('.pageBody {', '/* Edge-to-edge components')
+    expect(body).toContain('gap: var(--proto-gutter)')
+    expect(body).not.toContain('gap: 0')
+    expect(section('.pageBody > :first-child', '/* Edge-to-edge components'))
+      .toContain('margin-block-start: 0')
+    expect(section('.pageBody > :last-child', '/* Edge-to-edge components'))
+      .toContain('margin-block-end: 0')
+  })
+
+  test('the side rail adds no margin of its own', () => {
+    // §12.3: block distance is the pageBody gap, G. A leftover 16px margin
+    // put the rail 40 from the previous block instead.
+    const side = section(".nav[data-orientation='side'] {", '.nav[data-orientation=\'side\'] .navList')
+    expect(side).toContain('margin: 0')
+    expect(side).not.toContain('margin: 16px')
+  })
+
+  test('a vertical bleed never cancels the block edges', () => {
+    // Rows and bars take part in the vertical gap like any other block:
+    // `inline` touches the inline axis only, so their rules cannot land on a
+    // neighbour's rule.
+    const inlineRule = section("[data-bleed~='inline'] {", "[data-bleed~='block-start']")
+    expect(inlineRule).toContain('margin-inline:')
+    expect(inlineRule).not.toContain('margin-block')
+  })
+
   test('bleed is a direction list with one condition per direction', () => {
     // `inline` always applies; `block-start` / `block-end` only at the
     // first / last child, and the top edge additionally yields to a title
