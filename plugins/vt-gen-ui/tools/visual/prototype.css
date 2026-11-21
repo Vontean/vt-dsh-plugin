@@ -69,6 +69,30 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* ── 页面内容列（§12.3 / §12.3.1）：留白与块间距都只由它给 ── */
+.pr-page-body {
+  display: flex; flex-direction: column;
+  gap: var(--proto-gutter);
+  padding: var(--proto-gutter);
+}
+/* 首/末子元素不得带外边距，否则与 gap 相加（§14 G14） */
+.pr-page-body > :first-child { margin-block-start: 0; }
+.pr-page-body > :last-child { margin-block-end: 0; }
+/* 组件不自带页面级水平内边距，缩进由 pageBody 提供 */
+.pr-page-body > .pr-section,
+.pr-page-body > .pr-form,
+.pr-page-body > .pr-empty,
+.pr-page-body > .pr-loading,
+.pr-page-body > .pr-skel { padding-inline: 0; }
+/* 贴边：抵消它声明的那条边，自己承担内边距（§12.3 清单） */
+.pr-page-body > [data-bleed~="inline"] { margin-inline: calc(-1 * var(--proto-gutter)); }
+.pr-page-body > [data-bleed~="block-end"]:last-child { margin-block-end: calc(-1 * var(--proto-gutter)); }
+/* 顶部抵消只给「没有标题栏」的页面：有标题栏时导航贴的是标题，不是页面框 */
+.page:not(:has(> .pr-header)) > .pr-page-body > [data-bleed~="block-start"]:first-child,
+.pr-page:not(:has(> .pr-header)) > .pr-page-body > [data-bleed~="block-start"]:first-child {
+  margin-block-start: calc(-1 * var(--proto-gutter));
+}
+
 /* ── nav ── */
 .pr-nav { display: flex; align-items: center; gap: 8px; }
 .pr-nav--top {
@@ -126,9 +150,10 @@
 .pr-nav--bottom .pr-nav__item[data-active] .pr-nav__icon { color: var(--dsl-g-accent); }
 
 /* ── page header ── */
+/* 上 G、左右 G、下 0：让「标题 → 首内容」由 pageBody 的 gutter 给，而不是 16 + 24（§12.3） */
 .pr-header {
   display: flex; align-items: flex-start; gap: 16px;
-  padding: 16px var(--proto-gutter);
+  padding: var(--proto-gutter) var(--proto-gutter) 0;
 }
 .pr-header__text { flex: 1 1 auto; min-width: 0; }
 .pr-title { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; }
@@ -172,9 +197,14 @@
 .pr-row[data-disabled]:hover { background: transparent; }
 .pr-row__media {
   flex: 0 0 auto; width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
   border-radius: var(--proto-radius-control);
   background: var(--proto-fill-placeholder);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px; line-height: 18px;
+  overflow: hidden;
 }
+.pr-row__media svg { flex: 0 0 auto; }
 .pr-row__body { flex: 1 1 auto; min-width: 0; }
 .pr-row__title {
   display: block;
@@ -206,7 +236,7 @@
 .pr-ph-line--100 { width: 100%; }
 .pr-ph-line--72 { width: 72%; }
 .pr-ph-line--56 { width: 56%; }
-.pr-section { padding: 16px var(--proto-gutter); border-top: 1px solid var(--proto-line-rule); }
+.pr-section { padding: 16px 0; border-top: 1px solid var(--proto-line-rule); }
 .pr-section__head {
   display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px;
 }
@@ -216,7 +246,7 @@
 .pr-wire .pr-ph-box { width: 96px; height: 64px; flex: 0 0 auto; }
 
 /* ── field-group ── */
-.pr-form { display: flex; flex-direction: column; gap: 16px; padding: 16px var(--proto-gutter); }
+.pr-form { display: flex; flex-direction: column; gap: 16px; padding: 16px 0; }
 .pr-field { display: flex; flex-direction: column; }
 .pr-field__label { margin-bottom: 8px; font-size: 13px; line-height: 20px; font-weight: 500; }
 .pr-field__input {
@@ -238,7 +268,7 @@
 /* ── empty / loading ──（都是真实状态：没有整块虚线，只有内容槽是占位） */
 .pr-empty {
   display: flex; flex-direction: column; align-items: center; text-align: center;
-  gap: 8px; padding: 24px var(--proto-gutter);
+  gap: 8px; padding: 0;
 }
 .pr-empty__graphic {
   width: 40px; height: 40px; margin-bottom: 4px;
@@ -346,7 +376,7 @@
 /* ── 侧栏独立成块：一块缩进对齐内容的内嵌面，不是贴边的"栏" ── */
 .pr-nav--side.pr-nav--block {
   width: 200px; max-width: 100%;
-  margin: 16px var(--proto-gutter) 0;
+  margin: 0;                                   /* 缩进交给 pageBody，块间距交给 gap（§12.3.1） */
   border: 1px solid var(--proto-line-frame);
   border-radius: var(--proto-radius-control);
 }

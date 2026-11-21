@@ -39,59 +39,61 @@
         </div>
       </header>
 
-      <div class="pr-rows">
-        <button class="pr-row">
-          <span class="pr-row__media"></span>
-          <span class="pr-row__body">
-            <span class="pr-row__title">复核原型通道的 token 映射</span>
-            <span class="pr-row__desc">与宿主 alias 逐一对照，确认没有自造灰阶</span>
-          </span>
-          <span class="pr-row__trail">今天 14:30</span>
-          <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
-        </button>
-        <button class="pr-row">
-          <span class="pr-row__media"></span>
-          <span class="pr-row__body">
-            <span class="pr-row__title">小尺寸内容位用灰块，不勾虚线</span>
-            <span class="pr-row__desc">虚线只给 64px 以上的区域框；40px 的虚线框读起来像噪点</span>
-          </span>
-          <span class="pr-row__trail">待分配</span>
-          <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
-        </button>
-        <button class="pr-row" data-active>
-          <span class="pr-row__media"></span>
-          <span class="pr-row__body">
-            <span class="pr-row__title">选中行：只用一层浅色面，不加边框</span>
-            <span class="pr-row__desc">状态靠 data-active，不靠传 className</span>
-          </span>
-          <span class="pr-row__trail">进行中</span>
-          <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
-        </button>
-        <button class="pr-row" data-disabled>
-          <span class="pr-row__media"></span>
-          <span class="pr-row__body">
-            <span class="pr-row__title">禁用行：文字降一档，行为不变</span>
-            <span class="pr-row__desc">不用整体 opacity，避免把分隔线也一起淡掉</span>
-          </span>
-          <span class="pr-row__trail">已归档</span>
-          <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
-        </button>
-      </div>
+      <div class="pr-page-body" data-page-body="">
+        <div class="pr-rows" data-bleed="inline">
+          <button class="pr-row">
+            <span class="pr-row__media"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M18.063 5.674a1 1 0 0 1 .263 1.39l-7.5 11a1 1 0 0 1-1.533.143l-4.5-4.5a1 1 0 1 1 1.414-1.414l3.647 3.647 6.82-10.003a1 1 0 0 1 1.39-.263Z" clip-rule="evenodd"/></svg></span>
+            <span class="pr-row__body">
+              <span class="pr-row__title">复核原型通道的 token 映射</span>
+              <span class="pr-row__desc">与宿主 alias 逐一对照，确认没有自造灰阶</span>
+            </span>
+            <span class="pr-row__trail">今天 14:30</span>
+            <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+          </button>
+          <button class="pr-row">
+            <span class="pr-row__media"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.5 3.444a1 1 0 0 0-1 0l-6.253 3.61 6.768 3.807 6.955-3.682-6.47-3.735Zm7.16 5.632L13 12.602v7.666l6.16-3.556a1 1 0 0 0 .5-.867V9.076ZM11 20.268v-7.683L4.34 8.839v7.006a1 1 0 0 0 .5.867L11 20.268Zm-.5-18.557a3 3 0 0 1 3 0l6.66 3.846a3 3 0 0 1 1.5 2.598v7.69a3 3 0 0 1-1.5 2.598L13.5 22.29a3 3 0 0 1-3 0l-6.66-3.846a3 3 0 0 1-1.5-2.598v-7.69a3 3 0 0 1 1.5-2.598L10.5 1.71Z" clip-rule="evenodd"/></svg></span>
+            <span class="pr-row__body">
+              <span class="pr-row__title">小尺寸内容位用灰块，不勾虚线</span>
+              <span class="pr-row__desc">虚线只给 64px 以上的区域框；40px 的虚线框读起来像噪点</span>
+            </span>
+            <span class="pr-row__trail">待分配</span>
+            <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+          </button>
+          <button class="pr-row" data-active>
+            <span class="pr-row__media"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V8.828a3 3 0 0 0-.879-2.12l-3.828-3.83A3 3 0 0 0 13.172 2H7Zm5 2H7a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9h-3a3 3 0 0 1-3-3V4Zm5.586 4H15a1 1 0 0 1-1-1V4.414L17.586 8Z" clip-rule="evenodd"/></svg></span>
+            <span class="pr-row__body">
+              <span class="pr-row__title">选中行：只用一层浅色面，不加边框</span>
+              <span class="pr-row__desc">状态靠 data-active，不靠传 className</span>
+            </span>
+            <span class="pr-row__trail">进行中</span>
+            <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+          </button>
+          <button class="pr-row" data-disabled>
+            <span class="pr-row__media"><svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.66669 5C1.66669 3.61929 2.78598 2.5 4.16669 2.5H7.643C8.30604 2.5 8.94192 2.76339 9.41077 3.23223L10.1011 3.92259C10.2574 4.07887 10.4694 4.16667 10.6904 4.16667H15.8334C17.2141 4.16667 18.3334 5.28595 18.3334 6.66667V15C18.3334 16.3807 17.2141 17.5 15.8334 17.5H4.16669C2.78598 17.5 1.66669 16.3807 1.66669 15V5ZM4.16669 4.16667C3.70645 4.16667 3.33335 4.53976 3.33335 5V8.33333H16.6667V6.66667C16.6667 6.20643 16.2936 5.83333 15.8334 5.83333H10.6904C10.0273 5.83333 9.39145 5.56994 8.92261 5.1011L8.23225 4.41074C8.07597 4.25446 7.86401 4.16667 7.643 4.16667H4.16669ZM16.6667 10H3.33335V15C3.33335 15.4602 3.70645 15.8333 4.16669 15.8333H15.8334C16.2936 15.8333 16.6667 15.4602 16.6667 15V10Z"/></svg></span>
+            <span class="pr-row__body">
+              <span class="pr-row__title">禁用行：文字降一档，行为不变</span>
+              <span class="pr-row__desc">不用整体 opacity，避免把分隔线也一起淡掉</span>
+            </span>
+            <span class="pr-row__trail">已归档</span>
+            <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+          </button>
+        </div>
 
-      <section class="pr-section">
-        <div class="pr-section__head">
-          <span class="pr-section__title">内容区（结构待定）</span>
-          <span class="pr-section__meta">虚线 = 区域未定，灰块 = 内容未定</span>
-        </div>
-        <div class="pr-wire">
-          <div class="pr-ph-box">图</div>
-          <div class="pr-ph-lines">
-            <div class="pr-ph-line pr-ph-line--100"></div>
-            <div class="pr-ph-line pr-ph-line--72"></div>
-            <div class="pr-ph-line pr-ph-line--56"></div>
+        <section class="pr-section">
+          <div class="pr-section__head">
+            <span class="pr-section__title">内容区（结构待定）</span>
+            <span class="pr-section__meta">虚线 = 区域未定，灰块 = 内容未定</span>
           </div>
-        </div>
-      </section>
+          <div class="pr-wire">
+            <div class="pr-ph-box">图</div>
+            <div class="pr-ph-lines">
+              <div class="pr-ph-line pr-ph-line--100"></div>
+              <div class="pr-ph-line pr-ph-line--72"></div>
+              <div class="pr-ph-line pr-ph-line--56"></div>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   </div>
 
@@ -107,11 +109,13 @@
           </div>
           <div class="pr-actions"><button class="pr-btn pr-btn--primary">新建</button></div>
         </header>
-        <div class="pr-empty" style="border-top: 1px solid var(--proto-line-rule);">
-          <div class="pr-empty__graphic"></div>
-          <div class="pr-empty__title">还没有待处理的消息</div>
-          <div class="pr-empty__desc">新消息会出现在这里</div>
-          <button class="pr-btn">刷新</button>
+        <div class="pr-page-body" data-page-body="">
+          <div class="pr-empty" style="border-top: 1px solid var(--proto-line-rule);">
+            <div class="pr-empty__graphic"></div>
+            <div class="pr-empty__title">还没有待处理的消息</div>
+            <div class="pr-empty__desc">新消息会出现在这里</div>
+            <button class="pr-btn">刷新</button>
+          </div>
         </div>
       </div>
     </div>
@@ -126,18 +130,20 @@
           </div>
           <div class="pr-actions"><button class="pr-btn pr-btn--primary">新建</button></div>
         </header>
-        <div class="pr-skel pr-skel--pulse" style="border-top: 1px solid var(--proto-line-rule); padding-top: 8px; padding-bottom: 16px;">
-          <div class="pr-skel__row">
-            <span class="pr-skel__media"></span>
-            <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 88%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
-          </div>
-          <div class="pr-skel__row">
-            <span class="pr-skel__media"></span>
-            <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 76%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
-          </div>
-          <div class="pr-skel__row">
-            <span class="pr-skel__media"></span>
-            <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 72%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
+        <div class="pr-page-body" data-page-body="">
+          <div class="pr-skel pr-skel--pulse" style="border-top: 1px solid var(--proto-line-rule); padding-top: 8px; padding-bottom: 16px;">
+            <div class="pr-skel__row">
+              <span class="pr-skel__media"></span>
+              <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 88%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
+            </div>
+            <div class="pr-skel__row">
+              <span class="pr-skel__media"></span>
+              <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 76%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
+            </div>
+            <div class="pr-skel__row">
+              <span class="pr-skel__media"></span>
+              <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 72%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
+            </div>
           </div>
         </div>
       </div>
@@ -149,33 +155,35 @@
   <div class="pr-frame">
     <span class="pr-frame-label">屏 3 · 新建任务</span>
     <div class="pr-page">
-      <nav class="pr-nav pr-nav--top">
-        <span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></span>
-        <span class="pr-nav__title">新建任务</span>
-        <span class="pr-nav__spacer"></span>
-      </nav>
+      <div class="pr-page-body" data-page-body="">
+        <nav class="pr-nav pr-nav--top" data-bleed="inline block-start">
+          <span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></span>
+          <span class="pr-nav__title">新建任务</span>
+          <span class="pr-nav__spacer"></span>
+        </nav>
 
-      <div class="pr-form">
-        <div class="pr-field">
-          <label class="pr-field__label">任务名称</label>
-          <div class="pr-field__input">复核原型通道的 token 映射</div>
-          <span class="pr-field__msg">一句话说明要交付什么</span>
+        <div class="pr-form">
+          <div class="pr-field">
+            <label class="pr-field__label">任务名称</label>
+            <div class="pr-field__input">复核原型通道的 token 映射</div>
+            <span class="pr-field__msg">一句话说明要交付什么</span>
+          </div>
+          <div class="pr-field" data-invalid>
+            <label class="pr-field__label">截止时间</label>
+            <div class="pr-field__input pr-field__input--placeholder">选择日期</div>
+            <span class="pr-field__msg" role="alert">截止时间不能早于今天</span>
+          </div>
+          <div class="pr-field" data-disabled>
+            <label class="pr-field__label">负责人</label>
+            <div class="pr-field__input">由创建者指定</div>
+            <span class="pr-field__msg">创建后不可修改</span>
+          </div>
         </div>
-        <div class="pr-field" data-invalid>
-          <label class="pr-field__label">截止时间</label>
-          <div class="pr-field__input pr-field__input--placeholder">选择日期</div>
-          <span class="pr-field__msg" role="alert">截止时间不能早于今天</span>
-        </div>
-        <div class="pr-field" data-disabled>
-          <label class="pr-field__label">负责人</label>
-          <div class="pr-field__input">由创建者指定</div>
-          <span class="pr-field__msg">创建后不可修改</span>
-        </div>
-      </div>
 
-      <div class="pr-actions" style="padding: 16px var(--proto-gutter); border-top: 1px solid var(--proto-line-rule); justify-content: flex-end;">
-        <button class="pr-btn">取消</button>
-        <button class="pr-btn pr-btn--primary">创建</button>
+        <div class="pr-actions" style="padding: 16px 0; border-top: 1px solid var(--proto-line-rule); justify-content: flex-end;">
+          <button class="pr-btn">取消</button>
+          <button class="pr-btn pr-btn--primary">创建</button>
+        </div>
       </div>
     </div>
   </div>
@@ -184,33 +192,35 @@
   <div class="pr-frame" style="width: 360px; max-width: 100%;">
     <span class="pr-frame-label">屏 4 · 我的（360）</span>
     <div class="pr-page">
-      <div class="pr-shell">
-        <nav class="pr-nav pr-nav--side">
-          <span class="pr-nav__group">工作区</span>
-          <button class="pr-nav__item" data-active><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>概览</button>
-          <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>任务</button>
-          <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></span>日程</button>
-        </nav>
-        <div class="pr-main">
-          <header class="pr-header">
-            <div class="pr-header__text">
-              <h2 class="pr-title">我的</h2>
-              <p class="pr-sub">侧栏在 560 以下转成横向条</p>
-            </div>
-          </header>
-          <div class="pr-skel" style="padding-bottom: 16px;">
-            <div class="pr-skel__row">
-              <span class="pr-skel__media"></span>
-              <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 70%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
+      <div class="pr-page-body" data-page-body="">
+        <div class="pr-shell">
+          <nav class="pr-nav pr-nav--side">
+            <span class="pr-nav__group">工作区</span>
+            <button class="pr-nav__item" data-active><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>概览</button>
+            <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>任务</button>
+            <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></span>日程</button>
+          </nav>
+          <div class="pr-main">
+            <header class="pr-header">
+              <div class="pr-header__text">
+                <h2 class="pr-title">我的</h2>
+                <p class="pr-sub">侧栏在 560 以下转成横向条</p>
+              </div>
+            </header>
+            <div class="pr-skel" style="padding-bottom: 16px;">
+              <div class="pr-skel__row">
+                <span class="pr-skel__media"></span>
+                <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 70%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
+              </div>
             </div>
           </div>
         </div>
+        <nav class="pr-nav pr-nav--bottom" data-bleed="inline block-end">
+          <button class="pr-nav__item" data-active><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>概览</button>
+          <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>任务</button>
+          <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>我的</button>
+        </nav>
       </div>
-      <nav class="pr-nav pr-nav--bottom">
-        <button class="pr-nav__item" data-active><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>概览</button>
-        <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>任务</button>
-        <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>我的</button>
-      </nav>
     </div>
   </div>
 
@@ -219,35 +229,37 @@
   <div class="pr-frame">
     <span class="pr-frame-label">屏 5 · 确认层（dialog）</span>
     <div class="pr-page">
-      <nav class="pr-nav pr-nav--top">
-        <span class="pr-nav__title">任务</span>
-        <span class="pr-nav__spacer"></span>
-        <button class="pr-nav__item" data-active>全部</button>
-        <button class="pr-nav__item">进行中</button>
-      </nav>
-      <div class="pr-rows" style="padding: 16px 0 24px;">
-        <div class="pr-row">
-          <span class="pr-row__media"></span>
-          <span class="pr-row__body">
-            <span class="pr-row__title">遮罩之下的内容仍然可辨结构</span>
-            <span class="pr-row__desc">遮罩取宿主 bg-mask-1，浅 24% / 深 50%</span>
-          </span>
+      <div class="pr-page-body" data-page-body="">
+        <nav class="pr-nav pr-nav--top" data-bleed="inline block-start">
+          <span class="pr-nav__title">任务</span>
+          <span class="pr-nav__spacer"></span>
+          <button class="pr-nav__item" data-active>全部</button>
+          <button class="pr-nav__item">进行中</button>
+        </nav>
+        <div class="pr-rows" data-bleed="inline" style="padding: 16px 0 24px;">
+          <div class="pr-row">
+            <span class="pr-row__media"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4ZM2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12ZM12 6C12.5523 6 13 6.44772 13 7V12C13 12.2652 12.8946 12.5196 12.7071 12.7071L10.2071 15.2071C9.81658 15.5976 9.18342 15.5976 8.79289 15.2071C8.40237 14.8166 8.40237 14.1834 8.79289 13.7929L11 11.5858V7C11 6.44772 11.4477 6 12 6Z" fill="currentColor"/></svg></span>
+            <span class="pr-row__body">
+              <span class="pr-row__title">遮罩之下的内容仍然可辨结构</span>
+              <span class="pr-row__desc">遮罩取宿主 bg-mask-1，浅 24% / 深 50%</span>
+            </span>
+          </div>
+          <div class="pr-row">
+            <span class="pr-row__media"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M17.9754 4.01031C17.8588 4.00078 17.6965 4.00001 17.4 4.00001H9.8C8.94342 4.00001 8.36113 4.00078 7.91104 4.03756C7.47262 4.07338 7.24842 4.1383 7.09202 4.21799C6.7157 4.40974 6.40973 4.7157 6.21799 5.09202C6.1383 5.24842 6.07337 5.47263 6.03755 5.91104C6.00078 6.36113 6 6.94343 6 7.80001V16.1707C6.31278 16.0602 6.64937 16 7 16H18L18 4.60001C18 4.30348 17.9992 4.14122 17.9897 4.02464C17.9893 4.02 17.9889 4.0156 17.9886 4.01145C17.9844 4.01107 17.98 4.01069 17.9754 4.01031ZM17.657 18H7C6.44772 18 6 18.4477 6 19C6 19.5523 6.44772 20 7 20H17.657C17.5343 19.3301 17.5343 18.6699 17.657 18ZM4 19L4 7.75871C3.99999 6.95374 3.99998 6.28937 4.04419 5.74818C4.09012 5.18608 4.18868 4.66938 4.43597 4.18404C4.81947 3.43139 5.43139 2.81947 6.18404 2.43598C6.66937 2.18869 7.18608 2.09012 7.74818 2.0442C8.28937 1.99998 8.95373 1.99999 9.7587 2L17.4319 2C17.6843 1.99997 17.9301 1.99994 18.1382 2.01695C18.3668 2.03563 18.6366 2.07969 18.908 2.21799C19.2843 2.40974 19.5903 2.7157 19.782 3.09203C19.9203 3.36345 19.9644 3.63318 19.9831 3.86178C20.0001 4.06994 20 4.31574 20 4.56812L20 17C20 17.1325 19.9736 17.2638 19.9225 17.386C19.4458 18.5253 19.4458 19.4747 19.9225 20.614C20.0517 20.9227 20.0179 21.2755 19.8325 21.5541C19.6471 21.8326 19.3346 22 19 22H7C5.34315 22 4 20.6569 4 19Z" fill="currentColor"/></svg></span>
+            <span class="pr-row__body">
+              <span class="pr-row__title">浮层只覆盖页面框，不盖住对话</span>
+              <span class="pr-row__desc">position: absolute + page 的 overflow: clip</span>
+            </span>
+          </div>
         </div>
-        <div class="pr-row">
-          <span class="pr-row__media"></span>
-          <span class="pr-row__body">
-            <span class="pr-row__title">浮层只覆盖页面框，不盖住对话</span>
-            <span class="pr-row__desc">position: absolute + page 的 overflow: clip</span>
-          </span>
-        </div>
-      </div>
-      <div class="pr-overlay" data-variant="dialog" role="dialog" aria-modal="true" aria-label="删除任务">
-        <div class="pr-dialog">
-          <div class="pr-dialog__title">删除这个任务？</div>
-          <div class="pr-dialog__body">删除后无法恢复，关联的 3 条记录会同时移除。</div>
-          <div class="pr-dialog__actions">
-            <button class="pr-btn">取消</button>
-            <button class="pr-btn pr-btn--danger">删除</button>
+        <div class="pr-overlay" data-variant="dialog" role="dialog" aria-modal="true" aria-label="删除任务">
+          <div class="pr-dialog">
+            <div class="pr-dialog__title">删除这个任务？</div>
+            <div class="pr-dialog__body">删除后无法恢复，关联的 3 条记录会同时移除。</div>
+            <div class="pr-dialog__actions">
+              <button class="pr-btn">取消</button>
+              <button class="pr-btn pr-btn--danger">删除</button>
+            </div>
           </div>
         </div>
       </div>
@@ -264,35 +276,37 @@
           <p class="pr-sub">面板贴底，顶部圆角 12，操作仍右对齐</p>
         </div>
       </header>
-      <div class="pr-form">
-        <div class="pr-field">
-          <label class="pr-field__label">负责人</label>
-          <div class="pr-field__input">未指定</div>
+      <div class="pr-page-body" data-page-body="">
+        <div class="pr-form">
+          <div class="pr-field">
+            <label class="pr-field__label">负责人</label>
+            <div class="pr-field__input">未指定</div>
+          </div>
         </div>
-      </div>
-      <div class="pr-rows" style="padding-top: 8px;">
-        <div class="pr-row">
-          <span class="pr-row__media"></span>
-          <span class="pr-row__body">
-            <span class="pr-row__title">面板只压住页面下半部分</span>
-            <span class="pr-row__desc">标题栏仍然可见，说明这是页内浮层</span>
-          </span>
+        <div class="pr-rows" data-bleed="inline" style="padding-top: 8px;">
+          <div class="pr-row">
+            <span class="pr-row__media"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M11.33 5h1.33a1 1 0 0 1 1 1v13h-3.33V6a1 1 0 0 1 1-1Zm4.33 14V9H18a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.34Zm0-12V6a3 3 0 0 0-3-3h-1.33a3 3 0 0 0-3 3v5H6a3 3 0 0 0-3 3v4a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-8a3 3 0 0 0-3-3h-2.34Zm-7.33 6v6H6a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2.33Z"/></svg></span>
+            <span class="pr-row__body">
+              <span class="pr-row__title">面板只压住页面下半部分</span>
+              <span class="pr-row__desc">标题栏仍然可见，说明这是页内浮层</span>
+            </span>
+          </div>
+          <div class="pr-row">
+            <span class="pr-row__media"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12 4a4 4 0 0 0-4 4h8a4 4 0 0 0-4-4Zm-6 6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H6Zm0-2a6 6 0 1 1 12 0 3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3Zm4 6a2 2 0 1 1 3 1.732V17a1 1 0 1 1-2 0v-1.268A2 2 0 0 1 10 14Z" clip-rule="evenodd"/></svg></span>
+            <span class="pr-row__body">
+              <span class="pr-row__title">遮罩用宿主的 bg-mask-1</span>
+              <span class="pr-row__desc">浅色 24% / 深色 50%，不是我们自定的百分比</span>
+            </span>
+          </div>
         </div>
-        <div class="pr-row">
-          <span class="pr-row__media"></span>
-          <span class="pr-row__body">
-            <span class="pr-row__title">遮罩用宿主的 bg-mask-1</span>
-            <span class="pr-row__desc">浅色 24% / 深色 50%，不是我们自定的百分比</span>
-          </span>
-        </div>
-      </div>
-      <div class="pr-overlay" data-variant="sheet" role="dialog" aria-modal="true" aria-label="指派负责人">
-        <div class="pr-sheet">
-          <div class="pr-dialog__title">指派负责人</div>
-          <div class="pr-dialog__body">选择一位成员接手这个任务。</div>
-          <div class="pr-dialog__actions">
-            <button class="pr-btn">取消</button>
-            <button class="pr-btn pr-btn--primary">指派</button>
+        <div class="pr-overlay" data-variant="sheet" role="dialog" aria-modal="true" aria-label="指派负责人">
+          <div class="pr-sheet">
+            <div class="pr-dialog__title">指派负责人</div>
+            <div class="pr-dialog__body">选择一位成员接手这个任务。</div>
+            <div class="pr-dialog__actions">
+              <button class="pr-btn">取消</button>
+              <button class="pr-btn pr-btn--primary">指派</button>
+            </div>
           </div>
         </div>
       </div>
@@ -309,14 +323,16 @@
           <p class="pr-sub">侧栏没有内容并排时，是一块缩进对齐的内嵌面</p>
         </div>
       </header>
-      <nav class="pr-nav pr-nav--side pr-nav--block">
-        <button class="pr-nav__item" data-active><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>概览</button>
-        <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>任务</button>
-      </nav>
-      <div class="pr-skel pr-skel--block">
-        <div class="pr-ph-line pr-ph-line--100"></div>
-        <div class="pr-ph-line pr-ph-line--72" style="width: 88%"></div>
-        <div class="pr-ph-line pr-ph-line--56" style="width: 72%"></div>
+      <div class="pr-page-body" data-page-body="">
+        <nav class="pr-nav pr-nav--side pr-nav--block">
+          <button class="pr-nav__item" data-active><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>概览</button>
+          <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>任务</button>
+        </nav>
+        <div class="pr-skel pr-skel--block">
+          <div class="pr-ph-line pr-ph-line--100"></div>
+          <div class="pr-ph-line pr-ph-line--72" style="width: 88%"></div>
+          <div class="pr-ph-line pr-ph-line--56" style="width: 72%"></div>
+        </div>
       </div>
     </div>
   </div>
