@@ -2,6 +2,9 @@
 node_modules/
 .codegraph/
 dist/
+# 例外：插件的构建产物要随仓库发布（docs/plugin-conventions.md §5）
+!plugins/*/webview/dist/
+!plugins/*/webview/dist/**
 
 # OS / editor noise
 .DS_Store
