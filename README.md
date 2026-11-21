@@ -13,7 +13,7 @@
 | [VT UI/UX 增强](plugins/vt-uiux-enhancer/README.md) | `dsh-vt-uiux-enhancer` | 把界面调成干净的白纸：配色、层级、控件形状、间距与动效；流式回答不再甩走阅读位置；关闭即完全还原 | 界面与外观 |
 | [VT GenUI 生成式界面](plugins/vt-gen-ui/README.md) | `dsh-vt-gen-ui` | 把 `dsh-ui` 围栏渲染成可交互界面：50 种组件、图表与流程图、表单本地判分、常驻面板 | 生成式界面 |
 | [模型额度](plugins/vt-quote-bar/README.md) | `dsh-vt-quote-bar` | 在侧边栏显示 DeepSeek 余额与 OpenCode Go 的额度 | 用量与额度 |
-| [网页对话](plugins/vt-web-chat/README.md) | `dsh-vt-web-chat` | 「新建会话」下方的网页对话入口，把 chat.deepseek.com 作为主区面板打开 | 界面与外观 |
+| [网页对话](plugins/vt-web-chat/README.md) | `dsh-vt-web-chat` | 「新建会话」下方的网页对话面板，内置 DeepSeek 官方开源界面，走 API 计费，可按天数自动清理旧会话 | 界面与外观 |
 | [全局提示词](plugins/vt-system-prompt/README.md) | `dsh-vt-system-prompt` | 设置页里的全局系统提示词（`AGENTS.md`）查看与编辑 | 工作流与提示词 |
 | [Figma 使用手册](plugins/vt-use-figma/README.md) | `dsh-vt-use-figma` | 遇到 Figma 链接自动走远程 Figma MCP，并按官方要求先加载对应技能；把 Figma 官方技能就地接进 DSH | 工作流与提示词 |
 | [VT 任务看板](plugins/vt-taskboard/README.md) | `dsh-vt-taskboard` | 人建卡、Agent 认领执行、人验收的任务看板：五列流转、定时执行、Worktree 隔离与验收清单，配一套柔和纸张视觉 | 工作流与提示词 |

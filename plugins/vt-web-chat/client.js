@@ -1,864 +1,389 @@
 /**
- * dsh-vt-web-chat — client half.
+ * Browser half of dsh-vt-web-chat.
  *
- * One sidebar entry (the same `sidebar.panellist` + `main` mechanism the Plugins
- * and Scheduled tasks rows use) and one full main-area page hosting
- * `chat.deepseek.com`.
+ * 面板里就是官方开源 chat-demo 的界面本身：插件把自己的 `/webchat/` 路由托管给同源
+ * `iframe`，请求由 Host 用 DSH 的 DeepSeek 凭据代发。这里只负责三件事：
+ * 侧栏入口、整页面板、设置页里的会话保留策略。
  *
- * Why a webview and not an iframe: the site answers with
- * `content-security-policy: frame-ancestors 'none'`, so no page may frame it.
- * The desktop shell exposes `globalThis.dshDesktop.browser` — the same guest
- * lease bridge its built-in sidebar browser uses. The main process rejects every
- * webview that does not carry an approved lease, so the only legal sequence is
- * acquire → create an element named by the lease with its partition → load.
- *
- * Failure containment is a hard rule here. DSH has no error boundary around a
- * slot entry, and an escaping error in the `main` slot unmounts the whole
- * application UI. Every guest call is attached-checked and wrapped, and a
- * rendering boundary keeps a crash inside this panel. A dead guest becomes a
- * retry card, never a blank window.
- *
- * Leaving the panel releases the guest, so the page remembers the last
- * conversation URL and reopens there instead of starting a new chat each time.
+ * 为什么不再用桌面壳的 webview 租约：本插件的页面由自己托管，
+ * 不受站点 `frame-ancestors` 限制，Web 端与桌面端可以用同一条路径。
  */
 window.__ModuleLoader__.load({
-  // 模块 id 必须与包名一致；装载器把多个 client.js 拼进同一个脚本，所以顶层只能有
-  // 这一个 load() 调用，其余常量一律放进 factory 的作用域，避免重名 SyntaxError。
   id: 'dsh-vt-web-chat',
   factory(require) {
-    'use strict';
+    const React = require('react');
+    const h = React.createElement;
 
-    /** Package identity: one source for the module id and every log/storage prefix. */
     const PLUGIN_ID = 'dsh-vt-web-chat';
-    /** Must equal `version` in package.json; printed once in the mount trace below. */
-    const VERSION = '1.2.1';
-
-    // Mount trace: one line naming the loaded build (DevTools → verbose level).
-    console.debug(`[${PLUGIN_ID}] v${VERSION}`);
-
-    const reactModule = require('react');
-    const React =
-      reactModule !== null && typeof reactModule.createElement === 'function'
-        ? reactModule
-        : reactModule.default;
-
-    /** Locale namespace owned by this plugin. */
-    const NS = 'vtWebChat';
-    /** `main` cell key and `sidebar.panellist` id — the two must match. */
+    const VERSION = '2.0.0';
+    const NS = PLUGIN_ID;
+    /** 侧栏行与主面板共用的 id。 */
     const PANEL_ID = 'vt-web-chat';
-    const CHAT_URL = 'https://chat.deepseek.com/';
-    /**
-     * Storage identity for the guest partition. The main process keeps one
-     * partition per identity for the lifetime of the process, so leaving and
-     * re-entering the panel keeps the page and its login.
-     */
-    const PARTITION_KEY = 'panel:vt-web-chat';
-    /** Last visited conversation, remembered across panel switches and reloads. */
-    const STORAGE_KEY = `${PLUGIN_ID}:last-url`;
-    /**
-     * Record the site keeps its own UI preferences in. It is written by the
-     * site's storage kit, so a hand-written value must keep the same envelope
-     * (`{ value, __version }`) or the site discards it.
-     */
-    const SITE_PREFS_KEY = '__appKit_@deepseek/chat_lastSessionValue';
-    /**
-     * The site's own "environment warning dismissed" flag. The warning is shown
-     * because the embedded browser reports Electron; closing it writes this
-     * flag, so writing it here is the same dismissal without a click.
-     */
-    const UNSAFE_WARN_KEY = 'closeUnsafeEnvWarn';
-    /** Guest-side reload counter, so a failed write cannot reload forever. */
-    const PREF_GUARD_KEY = `${PLUGIN_ID}:pref-reloads`;
-    /** Reloads one guest session may perform while it settles its preferences. */
-    const PREF_RELOAD_LIMIT = 2;
-    /** Paths that are not a conversation: a brand-new chat, or an auth page. */
-    const AUTH_PATHS = new Set(['/sign_in', '/login', '/signup', '/auth']);
-    /** A guest that never reaches `dom-ready` is reported instead of hanging. */
-    const WATCHDOG_MS = 15000;
+    /** 与宿主路由一致的接口前缀。 */
+    const ROUTE_PREFIX = '/webchat';
+    /** 保留天数档位；0 表示永不清理。 */
+    const RETENTION_CHOICES = [30, 60, 90, 0];
 
     const DICT = {
       zh: {
-        entry: '网页对话',
-        title: 'DeepSeek 网页对话',
-        loading: '正在加载网页对话…',
-        failed: '网页对话没有打开',
-        timeout: '网页对话没有启动',
-        crashed: '内嵌页面已退出',
-        retry: '重试',
-        unsupportedTitle: '需要桌面版 App',
-        unsupportedBody: '网页对话依赖桌面端的内嵌浏览器（桥接协议 v1）。当前环境要么不是桌面版，要么桌面壳的协议版本与插件不一致。请在浏览器新标签中打开，或把 DSH 升级到与插件匹配的版本。',
-        openExternal: '在浏览器打开',
-        signInHint: '登录状态只在本次运行中保留；重启 DSH 后需要重新登录。',
-        signInAction: '在系统浏览器登录',
+        'meta.title': '网页对话',
+        'meta.description': '用官方 DeepSeek 网页界面聊天，请求走 DeepSeek API 与你的 DSH 账号。',
+        'entry': '网页对话',
+        'panel.title': '网页对话',
+        'panel.hint': '滚动、复制、上传都在面板内完成；对话保存在本机，不会写入 DSH 会话。',
+        'settings.nav': '网页对话',
+        'settings.title': '会话保留',
+        'settings.description': '超过所选天数没有继续聊的会话，会在下次打开面板时自动删除。',
+        'settings.days30': '30 天',
+        'settings.days60': '60 天',
+        'settings.days90': '90 天',
+        'settings.never': '永不',
+        'settings.saving': '保存中…',
+        'settings.saved': '已保存',
+        'settings.failed': '保存失败，请重试',
+        'settings.loadFailed': '读取设置失败，暂按 30 天处理',
+        'settings.currentDays': '当前：闲置超过 {n} 天的会话会被删除。',
+        'settings.currentNever': '当前：永不自动删除。',
+        'settings.crashed': '设置区块加载失败，请重新打开设置页。',
       },
       en: {
-        entry: 'Web Chat',
-        title: 'DeepSeek Web Chat',
-        loading: 'Loading Web Chat…',
-        failed: 'Web Chat did not open',
-        timeout: 'Web Chat did not start',
-        crashed: 'The embedded page exited',
-        retry: 'Retry',
-        unsupportedTitle: 'Desktop app required',
-        unsupportedBody:
-          'Web Chat needs the desktop embedded browser (bridge protocol v1). This environment is either not the desktop app, or its shell speaks a different protocol version. Open it in a browser tab instead, or update DSH to match this plugin.',
-        openExternal: 'Open in browser',
-        signInHint:
-          'Your sign-in lasts only for this app run; restarting DSH requires signing in again.',
-        signInAction: 'Sign in with your browser',
+        'meta.title': 'Web Chat',
+        'meta.description': 'Chat on the official DeepSeek web UI, billed through the DeepSeek API with your DSH account.',
+        'entry': 'Web Chat',
+        'panel.title': 'Web Chat',
+        'panel.hint': 'Scrolling, copying and uploads stay inside the panel; chats are stored locally and never written to a DSH session.',
+        'settings.nav': 'Web Chat',
+        'settings.title': 'Chat retention',
+        'settings.description': 'Chats untouched for longer than the chosen period are deleted the next time the panel opens.',
+        'settings.days30': '30 days',
+        'settings.days60': '60 days',
+        'settings.days90': '90 days',
+        'settings.never': 'Never',
+        'settings.saving': 'Saving…',
+        'settings.saved': 'Saved',
+        'settings.failed': 'Save failed, please retry',
+        'settings.loadFailed': 'Could not read settings; assuming 30 days',
+        'settings.currentDays': 'Current: chats idle for more than {n} days are deleted.',
+        'settings.currentNever': 'Current: never delete automatically.',
+        'settings.crashed': 'This section failed to render; reopen Settings to try again.',
       },
     };
 
-    /** Set by `apply`; components fall back to it when slot injection is absent. */
-    let translate = (key) => key;
-    let localeService = undefined;
-
     /**
-     * Re-render when the active locale changes, so panel copy follows the host.
-     * @param locale - Client locale service, if available.
-     * @returns the current revision; the value itself is not read.
-     */
-    function useLocaleRevision(locale) {
-      const [revision, setRevision] = React.useState(0);
-      React.useEffect(() => {
-        if (locale === undefined || locale === null || typeof locale.subscribe !== 'function') {
-          return undefined;
-        }
-        return locale.subscribe(() => setRevision((value) => value + 1));
-      }, [locale]);
-      return revision;
-    }
-
-    /**
-     * Parse a chat.deepseek.com page URL.
-     * @param value - candidate URL.
-     * @returns the parsed URL for the site origin, or undefined.
-     */
-    function parseChatUrl(value) {
-      if (typeof value !== 'string' || value.length === 0 || value.length > 4096) return undefined;
-      try {
-        const url = new URL(value);
-        if (url.protocol !== 'https:' || url.hostname !== 'chat.deepseek.com') return undefined;
-        if (url.username !== '' || url.password !== '') return undefined;
-        return url;
-      } catch {
-        return undefined;
-      }
-    }
-
-    /**
-     * Whether a URL is deep enough to be a conversation page.
-     * @param url - parsed chat URL, possibly undefined.
-     * @returns true for a conversation, false for the new-chat root or an auth page.
-     */
-    function isConversation(url) {
-      if (url === undefined) return false;
-      const path = url.pathname.replace(/\/+$/u, '') || '/';
-      return !AUTH_PATHS.has(path) && path !== '/';
-    }
-
-    /**
-     * Whether the guest currently shows a sign-in page.
-     * @param raw - current page URL reported by the guest.
-     * @returns true for the known auth paths.
-     */
-    function isAuthUrl(raw) {
-      const url = parseChatUrl(raw);
-      if (url === undefined) return false;
-      const path = url.pathname.replace(/\/+$/u, '') || '/';
-      return AUTH_PATHS.has(path);
-    }
-
-    /**
-     * Read the conversation remembered from the last visit.
-     * @returns the URL to open; the site root when nothing usable is remembered.
-     */
-    function rememberedTarget() {
-      try {
-        const saved = parseChatUrl(window.localStorage.getItem(STORAGE_KEY));
-        return isConversation(saved) ? saved.toString() : CHAT_URL;
-      } catch {
-        return CHAT_URL;
-      }
-    }
-
-    /**
-     * Remember where the guest currently is.
+     * 面板地址。桌面壳的静态页面通过 `__DSH_TRANSPORT__` 拿到 Host 的 HTTP origin，
+     * 浏览器页面直接用当前 origin；两者都没有时退回根路径。
      *
-     * A brand-new chat clears the memory so the next visit starts clean. An auth
-     * page never overwrites it, so a login detour does not lose the conversation.
-     * @param raw - current page URL reported by the guest.
+     * 带上 `lang`：面板是独立文档，拿不到宿主的 i18n；首次进入时由注入脚本
+     * 把它写进前端自己的 locale 存储，之后用户在前端里改过就以前端为准。
+     * @param locale - 宿主当前语言。
+     * @returns 面板 URL。
      */
-    function rememberTarget(raw) {
-      const url = parseChatUrl(raw);
-      if (url === undefined) return;
+    function panelUrl(locale) {
       try {
-        if (isConversation(url)) window.localStorage.setItem(STORAGE_KEY, url.toString());
-        else if ((url.pathname.replace(/\/+$/u, '') || '/') === '/') {
-          window.localStorage.removeItem(STORAGE_KEY);
-        }
+        const transport = window.__DSH_TRANSPORT__;
+        const base =
+          typeof transport?.streamBaseUrl === 'string' && transport.streamBaseUrl.length > 0
+            ? transport.streamBaseUrl.replace(/\/+$/u, '')
+            : window.location.protocol === 'file:'
+              ? ''
+              : window.location.origin;
+        return `${base}${ROUTE_PREFIX}/?lang=${encodeURIComponent(locale)}`;
       } catch {
-        /* storage unavailable: the panel still works, it just forgets */
+        return `${ROUTE_PREFIX}/?lang=${encodeURIComponent(locale)}`;
       }
     }
 
     /**
-     * Script that settles the site's own preferences before the panel is used.
+     * 把宿主语言收敛成前端认识的两个值。
+     * @param ctx - Client 插件上下文。
+     * @returns `'zh-CN'` 或 `'en-US'`（上游 Locale 的合法值）。
+     */
+    function hostLocale(ctx) {
+      try {
+        const active = ctx.locale.getSnapshot?.()?.active;
+        if (typeof active === 'string' && active.length > 0) {
+          return active.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US';
+        }
+      } catch {
+        // 快照不可用：退回文档语言。
+      }
+      const lang = typeof document?.documentElement?.lang === 'string' ? document.documentElement.lang : '';
+      return lang.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US';
+    }
+
+    /**
+     * 量出 DSH 顶部占位（侧栏收起后的悬浮岛）的高度。
      *
-     * Two records carry the state, and the site reads both once at boot: the
-     * environment-warning dismissal and the sidebar state. Writing them without
-     * a reload has no effect, so the script writes only what differs and
-     * reloads once. A guest sessionStorage counter caps the reloads, so a site
-     * that refuses the write cannot loop. Without a sign-in token there is no
-     * sidebar yet, so only the warning is handled on the auth page.
-     * @returns the script text, safe to hand to `executeJavaScript`.
+     * DSH 在主面板左上角盖了一个 `shell.leading` 座位；框架会给出
+     * `--dsh-frame-leading-clearance`，但 iframe 拿不到宿主的 CSS 变量，
+     * 所以这里直接量座位元素的实际底边，再把数字发给面板。
+     * @returns 需要让出的顶部高度，没有座位时为 0。
      */
-    function guestPreferencesScript() {
-      return `(() => {
-  try {
-    const reloads = Number(sessionStorage.getItem('${PREF_GUARD_KEY}') || '0');
-    if (reloads >= ${PREF_RELOAD_LIMIT}) return 'settled';
-    const read = (key) => {
+    function measureSeatInset(host) {
       try {
-        const raw = localStorage.getItem(key);
-        if (raw === null) return null;
-        const parsed = JSON.parse(raw);
-        return parsed !== null && typeof parsed === 'object' ? parsed : null;
-      } catch (error) {
-        return null;
-      }
-    };
-    const write = (key, value) => {
-      const record = read(key) || {};
-      record.value = value;
-      if (typeof record.__version !== 'string') record.__version = '0';
-      localStorage.setItem(key, JSON.stringify(record));
-    };
-    let reload = false;
-    const warning = read('${UNSAFE_WARN_KEY}');
-    if (warning === null || warning.value !== true) {
-      write('${UNSAFE_WARN_KEY}', true);
-      reload = true;
-    }
-    const token = read('userToken');
-    if (token !== null && token.value !== null && token.value !== undefined) {
-      const prefs = read('${SITE_PREFS_KEY}');
-      const value = prefs !== null && prefs.value !== null && typeof prefs.value === 'object' ? prefs.value : {};
-      if (value.siderCollapsed !== true) {
-        const next = prefs === null ? {} : prefs;
-        next.value = Object.assign({}, value, { siderCollapsed: true });
-        if (typeof next.__version !== 'string') next.__version = '0';
-        localStorage.setItem('${SITE_PREFS_KEY}', JSON.stringify(next));
-        reload = true;
-      }
-    }
-    if (!reload) return 'ready';
-    sessionStorage.setItem('${PREF_GUARD_KEY}', String(reloads + 1));
-    location.reload();
-    return 'reloading';
-  } catch (error) {
-    return 'unavailable';
-  }
-})()`;
-    }
-
-    /**
-     * Apply the guest preferences to a live guest.
-     *
-     * The changes go through the site's own records rather than its DOM, so a
-     * site redesign cannot break them into wrong clicks. Every failure stays
-     * inside this panel: a guest that refuses the script keeps its own layout
-     * and its own warning.
-     * @param element - webview element hosting the site.
-     */
-    function applyGuestPreferences(element) {
-      if (!attached(element)) return;
-      try {
-        const pending = element.executeJavaScript(guestPreferencesScript(), false);
-        if (pending !== undefined && pending !== null && typeof pending.catch === 'function') {
-          pending.catch(() => {});
+        const seat = document.querySelector('[class*="leadingSeat"]');
+        if (seat !== null) {
+          const rect = seat.getBoundingClientRect();
+          if (rect.width > 0 || rect.height > 0) return Math.ceil(rect.bottom + 8);
         }
+        // 兜底：座位元素找不到（例如上游改了类名），但框架声明了 leading clearance，
+        // 说明座位仍然挂在主面板上方，用一个保守高度让开。
+        const probe = host ?? document.querySelector('[class*="mainPanel"]') ?? document.body;
+        const clearance = getComputedStyle(probe).getPropertyValue('--dsh-frame-leading-clearance');
+        if (Number.parseFloat(clearance) > 0) return 48;
       } catch {
-        /* scripting disabled for this guest: keep the site's own behaviour */
+        // 量不到就让开 0：宁可重叠，也不要凭空留一条空白。
       }
+      return 0;
     }
 
     /**
-     * Open a chat URL in the system browser. The desktop shell routes
-     * `window.open` for http(s) to the OS browser and denies every other window.
-     * @param url - http(s) target.
+     * 读设置。
+     * @returns `{ retentionDays }`；失败时抛出。
      */
-    function openExternally(url) {
-      try {
-        window.open(url, '_blank', 'noopener');
-      } catch {
-        /* a blocked popup leaves the panel usable */
-      }
+    async function fetchSettings() {
+      const response = await fetch(`${ROUTE_PREFIX}/api/settings`, { headers: { accept: 'application/json' } });
+      if (!response.ok) throw new Error(`settings ${response.status}`);
+      return response.json();
     }
 
     /**
-     * Whether the guest element is still in the document. Electron's webview
-     * methods throw once it is detached, so this gates every guest call.
-     * @param element - webview element.
-     * @returns true while the element can still host a guest.
+     * 写设置。
+     * @param retentionDays - 保留天数，0 表示永不。
+     * @returns 落盘后的设置。
      */
-    function attached(element) {
-      try {
-        return element.isConnected === true;
-      } catch {
-        return false;
-      }
+    async function saveSettings(retentionDays) {
+      const response = await fetch(`${ROUTE_PREFIX}/api/settings`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ retentionDays }),
+      });
+      if (!response.ok) throw new Error(`settings ${response.status}`);
+      return response.json();
     }
 
-    /**
-     * Guest URL, or undefined when the element cannot report one.
-     * @param element - webview element.
-     * @returns the URL string, or undefined.
-     */
-    function readUrl(element) {
-      if (!attached(element)) return undefined;
-      try {
-        const url = element.getURL();
-        return typeof url === 'string' && url.length > 0 ? url : undefined;
-      } catch {
-        return undefined;
-      }
-    }
+    /** 面板本体：一个占满主内容区的同源 iframe。 */
+    function Panel(props) {
+      const frameRef = React.useRef(null);
+      const inset = props.inset ?? 0;
 
-    /**
-     * Navigate the guest without ever throwing.
-     * @param element - webview element.
-     * @param url - target URL.
-     * @returns false when the guest is gone, so the caller can report it.
-     */
-    function navigate(element, url) {
-      if (!attached(element)) return false;
-      try {
-        const pending = element.loadURL(url);
-        if (pending !== undefined && pending !== null && typeof pending.catch === 'function') {
-          pending.catch(() => {});
+      // 座位高度用 postMessage 传进去：面板是独立文档，读不到宿主的布局状态。
+      const pushSeat = React.useCallback(() => {
+        const win = frameRef.current === null ? null : frameRef.current.contentWindow;
+        if (win === null) return;
+        try {
+          win.postMessage({ type: 'vt-webchat:seat', inset }, '*');
+        } catch {
+          // 面板还没准备好：等 onLoad 再发一次。
         }
-        return true;
-      } catch {
-        return false;
-      }
+      }, [inset]);
+
+      React.useEffect(pushSeat, [pushSeat]);
+
+      return h(
+        'div',
+        {
+          // 容器留在宿主文档里，用来读取继承下来的框架变量（座位是否挂载）。
+          ref: props.hostRef,
+          style: {
+            height: '100%',
+            minHeight: 320,
+            display: 'flex',
+            background: 'var(--dsw-alias-bg-layer-1, #fff)',
+          },
+        },
+        h('iframe', {
+          ref: frameRef,
+          onLoad: pushSeat,
+          src: panelUrl(props.locale ?? 'zh-CN'),
+          title: 'DeepSeek',
+          allow: 'clipboard-write; microphone',
+          style: { width: '100%', height: '100%', border: 'none', display: 'block', background: 'transparent' },
+        }),
+      );
     }
 
-    /**
-     * Sidebar glyph: a speech bubble drawn on currentColor so the sidebar's
-     * active state owns the ink. Sized for its 16/18px seat.
-     * @param props - size supplied by the panel list.
-     * @returns the glyph element.
-     */
-    function Glyph({ size = 16 }) {
-      return React.createElement(
+    /** 侧栏图标：与 icon.svg 同形，用 currentColor 跟随侧栏配色。 */
+    function Glyph(props) {
+      const size = typeof props?.size === 'number' ? props.size : 16;
+      return h(
         'svg',
         {
+          viewBox: '0 0 24 24',
           width: size,
           height: size,
-          viewBox: '0 0 24 24',
           fill: 'none',
-          'aria-hidden': 'true',
-          focusable: 'false',
-        },
-        React.createElement('path', {
-          d: 'M20.25 11.5c0 4.28-3.7 7.75-8.25 7.75-.53 0-1.05-.05-1.55-.14l-4.1 1.9c-.6.28-1.26-.22-1.18-.87l.5-3.93C4.4 14.9 3.75 13.27 3.75 11.5c0-4.28 3.7-7.75 8.25-7.75s8.25 3.47 8.25 7.75Z',
           stroke: 'currentColor',
+          'aria-hidden': true,
+          style: { display: 'block' },
+        },
+        h('path', {
+          d: 'M20.25 11.5c0 4.28-3.7 7.75-8.25 7.75-.53 0-1.05-.05-1.55-.14l-4.1 1.9c-.6.28-1.26-.22-1.18-.87l.5-3.93C4.4 14.9 3.75 13.27 3.75 11.5c0-4.28 3.7-7.75 8.25-7.75s8.25 3.47 8.25 7.75Z',
           strokeWidth: 1.3,
           strokeLinejoin: 'round',
         }),
-        React.createElement('path', {
+        h('path', {
           d: 'M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01',
-          stroke: 'currentColor',
           strokeWidth: 1.6,
           strokeLinecap: 'round',
         }),
       );
     }
 
-    const styles = {
-      root: {
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        minHeight: '0',
-        background: 'var(--dsw-alias-bg-base)',
-        color: 'var(--dsw-alias-label-primary)',
-      },
-      host: {
-        position: 'relative',
-        flex: '1',
-        minHeight: '0',
-        display: 'flex',
-      },
-      guest: {
-        width: '100%',
-        height: '100%',
-        border: '0',
-        background: 'transparent',
-        display: 'flex',
-      },
-      overlay: {
-        position: 'absolute',
-        inset: '0',
-        zIndex: '1',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '10px',
-        padding: '24px',
-        textAlign: 'center',
-        color: 'var(--dsw-alias-label-tertiary)',
-        fontSize: '12px',
-        lineHeight: '18px',
-        background: 'var(--dsw-alias-bg-base)',
-      },
-      overlayTitle: {
-        color: 'var(--dsw-alias-label-primary)',
-        fontSize: '13px',
-        lineHeight: '20px',
-      },
-      actions: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-      },
-      button: {
-        color: 'var(--dsw-alias-label-primary)',
-        background: 'var(--dsw-alias-bg-layer-1)',
-        border: '.5px solid var(--dsw-alias-border-l2)',
-        borderRadius: 'var(--dsw-radius-sm)',
-        padding: '4px 12px',
-        cursor: 'pointer',
-        fontSize: '12px',
-        lineHeight: '18px',
-      },
-      linkButton: {
-        border: '0',
-        padding: '0',
-        background: 'transparent',
-        color: 'var(--dsw-alias-brand-primary)',
-        cursor: 'pointer',
-        fontSize: '12px',
-        lineHeight: '18px',
-      },
-      signInBar: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        flex: 'none',
-        padding: '6px 12px',
-        borderBottom: '.5px solid var(--dsw-alias-border-l1)',
-        background: 'var(--dsw-alias-bg-layer-1)',
-        color: 'var(--dsw-alias-label-secondary)',
-        fontSize: '12px',
-        lineHeight: '18px',
-      },
-      signInText: {
-        flex: '1',
-        minWidth: '0',
-      },
-    };
-
     /**
-     * Keeps a rendering failure inside this panel. DSH has no boundary of its
-     * own around slot entries: an escaping error unmounts the root slot, which
-     * is the whole application UI.
-     */
-    class PanelBoundary extends React.Component {
-      constructor(props) {
-        super(props);
-        this.state = { failure: undefined };
-      }
-
-      static getDerivedStateFromError(error) {
-        return { failure: String((error && error.message) || error) };
-      }
-
-      componentDidCatch(error) {
-        try {
-          console.error(`${PLUGIN_ID}: panel render failed`, error);
-        } catch {
-          /* console unavailable */
-        }
-      }
-
-      render() {
-        if (this.state.failure !== undefined) {
-          const t = this.props.t;
-          return React.createElement(
-            'div',
-            { style: styles.root },
-            React.createElement(
-              'div',
-              { style: styles.overlay },
-              React.createElement('div', { style: styles.overlayTitle }, t('failed')),
-              React.createElement('div', null, this.state.failure),
-              React.createElement(
-                'div',
-                { style: styles.actions },
-                React.createElement(
-                  'button',
-                  {
-                    type: 'button',
-                    style: styles.button,
-                    onClick: () => openExternally(CHAT_URL),
-                  },
-                  t('openExternal'),
-                ),
-              ),
-            ),
-          );
-        }
-        return this.props.children ?? null;
-      }
-    }
-
-    /**
-     * The global Web Chat panel: a guest webview filling the main column.
+     * 设置区块：四个保留档位，点一下即保存。
      *
-     * The guest is created only after the lease resolves, and it is mounted with
-     * `name`/`partition`/`src` already set, because the main process inspects
-     * exactly that bootstrap src when it approves the attachment. The first load
-     * goes to the remembered conversation; navigation events keep that memory
-     * current. A dead guest (crash, destroy, failed start) turns into a retry
-     * card inside the panel; cleanup releases the lease and never calls into a
-     * detached element.
-     * @param props - slot props; `t` and `locale` arrive through registration.
-     * @returns the panel element tree.
+     * 文案一律走字符串字典：语言服务对函数值不保证透传，
+     * 之前的 `t(key)(...)` 在宿主里拿到空串后整块区域会被 React 卸载。
      */
-    function ChatPanel(props) {
-      const t = props.t ?? translate;
-      const locale = props.locale ?? localeService;
-      useLocaleRevision(locale);
-
-      const hostRef = React.useRef(null);
-      const lastUrlRef = React.useRef(undefined);
-      const [phase, setPhase] = React.useState('loading');
-      const [failure, setFailure] = React.useState(undefined);
-      const [authPage, setAuthPage] = React.useState(false);
-      const [attempt, setAttempt] = React.useState(0);
-
-      const retry = React.useCallback(() => {
+    function RetentionSettings(props) {
+      const t = (key) => {
         try {
-          setPhase('loading');
-          setFailure(undefined);
-          setAuthPage(false);
-          setAttempt((value) => value + 1);
+          if (typeof props?.t === 'function') {
+            const value = props.t(key);
+            if (typeof value === 'string' && value.length > 0 && value !== key) return value;
+          }
         } catch {
-          /* the panel is gone */
+          // 语言服务不可用：退回内置字典，不让设置区跟着崩。
         }
-      }, []);
+        return DICT.en[key] ?? key;
+      };
+      const [days, setDays] = React.useState(30);
+      const [state, setState] = React.useState('idle');
 
       React.useEffect(() => {
-        const host = hostRef.current;
-        // 桌面壳用 protocolVersion 声明这套桥接契约的版本。内置侧边栏浏览器也做同样的
-        // 判断（dsh-client-ui-sidebar-browser 的 carrier?.protocolVersion === 1）。不校验的话，
-        // 一旦壳升版，这里会拿到形状不对的对象，表现为「打不开、重试」而看不出原因。
-        const carrier = globalThis.dshDesktop;
-        const bridge = carrier?.protocolVersion === 1 ? carrier.browser : undefined;
-        if (host === null) return undefined;
-        if (bridge === undefined) {
-          try {
-            setPhase('unsupported');
-          } catch {
-            /* the panel is gone */
-          }
-          return undefined;
-        }
-
-        let disposed = false;
-        let unsubscribeOpen;
-        let lease;
-        let watchdog;
-        let started = false;
-        const element = document.createElement('webview');
-        const initialTarget = rememberedTarget();
-        let restoring = initialTarget !== CHAT_URL;
-
-        Object.assign(element.style, styles.guest);
-        element.setAttribute('allowpopups', '');
-
-        /** Report a guest failure inside the panel; never throw. */
-        const fail = (error) => {
-          if (disposed) return;
-          try {
-            setPhase('failed');
-            setFailure(String((error && error.message) || error));
-          } catch {
-            /* the panel is gone */
-          }
-        };
-
-        /** Remember a URL reported by the guest and refresh the sign-in notice. */
-        const remember = (raw) => {
-          const url = parseChatUrl(raw);
-          if (url === undefined) return;
-          lastUrlRef.current = url.toString();
-          rememberTarget(url.toString());
-          try {
-            setAuthPage(isAuthUrl(url.toString()));
-          } catch {
-            /* the panel is gone */
-          }
-        };
-
-        const clearWatchdog = () => {
-          if (watchdog !== undefined) {
-            clearTimeout(watchdog);
-            watchdog = undefined;
-          }
-        };
-
-        const onDomReady = () => {
-          started = true;
-          clearWatchdog();
-          if (!navigate(element, initialTarget)) {
-            fail(new Error(t('crashed')));
-            return;
-          }
-          remember(initialTarget);
-        };
-
-        const onStopLoading = () => {
-          if (disposed) return;
-          const raw = readUrl(element);
-          if (raw !== undefined) remember(raw);
-          restoring = false;
-          // Only a site document can carry the preferences; about:blank cannot.
-          if (parseChatUrl(raw) !== undefined) applyGuestPreferences(element);
-          try {
-            setPhase('ready');
-            setFailure(undefined);
-          } catch {
-            /* the panel is gone */
-          }
-        };
-
-        const onNavigate = () => {
-          if (disposed) return;
-          remember(readUrl(element));
-        };
-
-        const onNavigateInPage = (event) => {
-          if (disposed || event?.isMainFrame !== true) return;
-          onNavigate();
-          // Signing in can be an in-page route change, which skips did-stop-loading.
-          applyGuestPreferences(element);
-        };
-
-        const onFailLoad = (event) => {
-          if (disposed || event?.isMainFrame !== true) return;
-          // -3 is ERR_ABORTED: a superseded navigation, not a failure.
-          if (event.errorCode === -3) return;
-          if (restoring) {
-            // The remembered conversation is gone or unreachable; start clean.
-            restoring = false;
-            if (!navigate(element, CHAT_URL)) fail(new Error(t('crashed')));
-            else remember(CHAT_URL);
-            return;
-          }
-          fail(event.errorDescription ?? event.errorCode);
-        };
-
-        /** The guest process exited or the guest was torn down underneath us. */
-        const onGuestGone = () => {
-          if (disposed) return;
-          fail(new Error(t('crashed')));
-        };
-
-        const listeners = [
-          ['dom-ready', onDomReady],
-          ['did-stop-loading', onStopLoading],
-          ['did-navigate', onNavigate],
-          ['did-navigate-in-page', onNavigateInPage],
-          ['did-fail-load', onFailLoad],
-          ['render-process-gone', onGuestGone],
-          ['destroyed', onGuestGone],
-        ];
-
-        try {
-          for (const [type, handler] of listeners) {
-            element.addEventListener(type, handler, type === 'dom-ready' ? { once: true } : undefined);
-          }
-        } catch (error) {
-          fail(error);
-        }
-
-        const start = async () => {
-          try {
-            const reservation = await bridge.acquire(PARTITION_KEY);
-            if (disposed) {
-              try {
-                Promise.resolve(bridge.release(reservation.lease)).catch(() => {});
-              } catch {
-                /* lease already gone */
-              }
-              return;
-            }
-            lease = reservation.lease;
-            element.setAttribute('name', reservation.lease);
-            element.setAttribute('partition', reservation.partition);
-            element.setAttribute('src', `about:blank#${reservation.lease}`);
-            try {
-              unsubscribeOpen = bridge.onOpenRequested(reservation.lease, (url) => {
-                if (!disposed && typeof url === 'string') navigate(element, url);
-              });
-            } catch {
-              /* popup bridge unavailable: the guest still works */
-            }
-            host.append(element);
-            watchdog = setTimeout(() => {
-              watchdog = undefined;
-              if (disposed || started) return;
-              fail(new Error(t('timeout')));
-            }, WATCHDOG_MS);
-          } catch (error) {
-            fail(error);
-          }
-        };
-        void start();
-
+        let alive = true;
+        fetchSettings()
+          .then((value) => {
+            if (!alive) return;
+            if (typeof value?.retentionDays === 'number') setDays(value.retentionDays);
+          })
+          .catch(() => {
+            if (alive) setState('load-failed');
+          });
         return () => {
-          disposed = true;
-          // Read before removal: React cleans up after taking the DOM away, and
-          // Electron's getURL() throws on a detached webview.
-          const current = readUrl(element);
-          if (current !== undefined) {
-            lastUrlRef.current = current;
-            rememberTarget(current);
-          }
-          clearWatchdog();
-          try {
-            if (typeof unsubscribeOpen === 'function') unsubscribeOpen();
-          } catch {
-            /* already detached */
-          }
-          for (const [type, handler] of listeners) {
-            try {
-              element.removeEventListener(type, handler);
-            } catch {
-              /* already detached */
-            }
-          }
-          try {
-            element.remove();
-          } catch {
-            /* already detached */
-          }
-          const released = lease;
-          lease = undefined;
-          if (released !== undefined) {
-            try {
-              Promise.resolve(bridge.release(released)).catch(() => {});
-            } catch {
-              /* lease already gone */
-            }
-          }
+          alive = false;
         };
-        // The effect is re-run only by an explicit retry.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, [attempt]);
+      }, []);
 
-      if (phase === 'unsupported') {
-        return React.createElement(
+      const choose = (value) => {
+        if (state === 'saving') return;
+        const previous = days;
+        setDays(value);
+        setState('saving');
+        saveSettings(value)
+          .then((saved) => {
+            setDays(Number(saved?.retentionDays ?? value));
+            setState('saved');
+          })
+          .catch(() => {
+            setDays(previous);
+            setState('failed');
+          });
+      };
+
+      const status =
+        state === 'saving'
+          ? t('settings.saving')
+          : state === 'saved'
+            ? t('settings.saved')
+            : state === 'failed'
+              ? t('settings.failed')
+              : state === 'load-failed'
+                ? t('settings.loadFailed')
+                : '';
+
+      return h(
+        'section',
+        { style: { display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 0 8px' } },
+        h(
           'div',
-          { style: styles.root, role: 'region', 'aria-label': t('title') },
-          React.createElement(
-            'div',
-            { style: styles.overlay },
-            React.createElement('div', { style: styles.overlayTitle }, t('unsupportedTitle')),
-            React.createElement('div', null, t('unsupportedBody')),
-            React.createElement(
-              'div',
-              { style: styles.actions },
-              React.createElement(
-                'button',
-                { type: 'button', style: styles.button, onClick: () => openExternally(CHAT_URL) },
-                t('openExternal'),
-              ),
+          { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+          h('h3', { style: { margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--dsw-alias-label-primary, #0f1115)' } }, t('settings.title')),
+          h(
+            'p',
+            { style: { margin: 0, fontSize: 13, lineHeight: 1.6, color: 'var(--dsw-alias-label-secondary, #61656e)' } },
+            t('settings.description'),
+          ),
+        ),
+        h(
+          'div',
+          { style: { display: 'flex', flexWrap: 'wrap', gap: 8 } },
+          RETENTION_CHOICES.map((value) =>
+            h(
+              'button',
+              {
+                key: value,
+                type: 'button',
+                onClick: () => choose(value),
+                'aria-pressed': days === value,
+                style: {
+                  minWidth: 64,
+                  padding: '6px 14px',
+                  borderRadius: 999,
+                  font: 'inherit',
+                  fontSize: 13,
+                  cursor: state === 'saving' ? 'progress' : 'pointer',
+                  border:
+                    days === value
+                      ? '1px solid var(--dsw-alias-brand-primary, #0f1115)'
+                      : '1px solid var(--dsw-alias-border-l2, rgba(0,0,0,0.12))',
+                  // 选中态用宿主自己的配对：品牌色做底、反色做字。
+                  // 暗色下 brand-primary 是近白，反色是深灰；亮色下正好相反。
+                  background:
+                    days === value ? 'var(--dsw-alias-brand-primary, #0f1115)' : 'transparent',
+                  color:
+                    days === value
+                      ? 'var(--dsw-alias-label-primary-inverted, #fff)'
+                      : 'var(--dsw-alias-label-primary, #0f1115)',
+                },
+              },
+              value === 0 ? t('settings.never') : t(`settings.days${value}`),
             ),
           ),
-        );
-      }
-
-      return React.createElement(
-        'div',
-        { style: styles.root, role: 'region', 'aria-label': t('title') },
-        phase === 'ready' && authPage
-          ? React.createElement(
-              'div',
-              { style: styles.signInBar },
-              React.createElement('span', { style: styles.signInText }, t('signInHint')),
-              React.createElement(
-                'button',
-                {
-                  type: 'button',
-                  style: styles.linkButton,
-                  onClick: () => openExternally('https://chat.deepseek.com/sign_in'),
-                },
-                t('signInAction'),
-              ),
-            )
-          : null,
-        React.createElement(
-          'div',
-          { style: styles.host, ref: hostRef },
-          phase === 'failed' ? null : phase === 'ready' ? null : React.createElement(
-            'div',
-            { style: styles.overlay },
-            React.createElement('div', null, t('loading')),
-          ),
-          phase === 'failed'
-            ? React.createElement(
-                'div',
-                { style: styles.overlay },
-                React.createElement('div', { style: styles.overlayTitle }, t('failed')),
-                failure === undefined ? null : React.createElement('div', null, failure),
-                React.createElement(
-                  'div',
-                  { style: styles.actions },
-                  React.createElement(
-                    'button',
-                    { type: 'button', style: styles.button, onClick: retry },
-                    t('retry'),
-                  ),
-                  React.createElement(
-                    'button',
-                    {
-                      type: 'button',
-                      style: styles.linkButton,
-                      onClick: () => openExternally(CHAT_URL),
-                    },
-                    t('openExternal'),
-                  ),
-                ),
-              )
-            : null,
+        ),
+        h(
+          'p',
+          { style: { margin: 0, fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #8b8f98)' } },
+          status.length > 0
+            ? status
+            : days === 0
+              ? t('settings.currentNever')
+              : t('settings.currentDays').replace('{n}', String(days)),
         ),
       );
     }
 
-    /** The registered panel: the boundary owns every rendering failure below it. */
-    function ChatPanelShell(props) {
-      return React.createElement(
-        PanelBoundary,
-        { t: props.t ?? translate },
-        React.createElement(ChatPanel, props),
-      );
+    /** 设置区块的最小错误边界：DSH 没有为设置区提供边界，一个渲染错误会整页空白。 */
+    class SettingsBoundary extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { failed: false };
+      }
+
+      static getDerivedStateFromError() {
+        return { failed: true };
+      }
+
+      componentDidCatch(error) {
+        console.error(`${PLUGIN_ID}: settings section failed`, error);
+      }
+
+      render() {
+        if (this.state.failed) {
+          return h(
+            'p',
+            { style: { margin: 0, fontSize: 13, color: 'var(--dsw-alias-label-secondary, #61656e)' } },
+            this.props.fallback,
+          );
+        }
+        return this.props.children;
+      }
     }
 
-    /** Client services this plugin reads; the loader waits for the slot registry. */
-    const inject = ['slots', 'locale'];
-
-    /**
-     * Register the sidebar entry and its main panel.
-     * @param ctx - client plugin context.
-     */
-    function apply(ctx) {
-      try {
-        // Copy is owned by the locale service so it follows host language changes.
+    return {
+      inject: ['slots', 'locale'],
+      apply(ctx) {
         ctx.effect(() => {
           const offZh = ctx.locale.register(NS, 'zh', DICT.zh);
           const offEn = ctx.locale.register(NS, 'en', DICT.en);
@@ -866,50 +391,82 @@ window.__ModuleLoader__.load({
             offZh();
             offEn();
           };
-        }, 'vt-web-chat: locale dictionaries');
+        }, `${PLUGIN_ID}: locale`);
 
         const bound = ctx.locale.bind(NS);
-        const fallback = (key) => DICT.en[key] ?? key;
-        const t = (key) => {
+        const t = (key, ...rest) => {
           const raw = bound(key);
-          return raw === key || raw === undefined || raw === null ? fallback(key) : raw;
+          const value = raw === key || raw === undefined || raw === null ? DICT.en[key] : raw;
+          return typeof value === 'function' ? value(...rest) : value;
         };
-        translate = t;
-        localeService = ctx.locale;
 
-        // The same id addresses the panellist row and the main panel it selects.
+        // 宿主语言变化时重挂 iframe，让面板文案与新语言一致；
+        // 同时盯着顶部的悬浮岛，把需要让出的高度实时传进面板。
+        function PanelShell() {
+          const [locale, setLocale] = React.useState(() => hostLocale(ctx));
+          const hostRef = React.useRef(null);
+          const [inset, setInset] = React.useState(() => measureSeatInset(null));
+
+          React.useEffect(() => ctx.locale.subscribe(() => setLocale(hostLocale(ctx))), []);
+
+          React.useEffect(() => {
+            let timer;
+            const schedule = () => {
+              if (timer !== undefined) return;
+              timer = setTimeout(() => {
+                timer = undefined;
+                setInset(measureSeatInset(hostRef.current));
+              }, 120);
+            };
+            // 侧栏开合会换掉框架的子节点，座位随之出现或消失。
+            const observer = new MutationObserver(schedule);
+            observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+            const resizer = new ResizeObserver(schedule);
+            resizer.observe(document.documentElement);
+            window.addEventListener('resize', schedule);
+            const onMessage = (event) => {
+              if (event.data?.type === 'vt-webchat:hello') setInset(measureSeatInset(hostRef.current));
+            };
+            window.addEventListener('message', onMessage);
+            return () => {
+              if (timer !== undefined) clearTimeout(timer);
+              observer.disconnect();
+              resizer.disconnect();
+              window.removeEventListener('resize', schedule);
+              window.removeEventListener('message', onMessage);
+            };
+          }, []);
+
+          return h(Panel, { locale, inset, hostRef });
+        }
+
         ctx.slots.inject('main', () =>
-          ctx.slots.register(
-            {
-              name: 'main',
-              key: PANEL_ID,
-              inject: () => ({ t, locale: ctx.locale }),
-            },
-            ChatPanelShell,
-          ),
+          ctx.slots.register({ name: 'main', key: PANEL_ID }, PanelShell),
         );
 
-        // order -10 puts the row directly under "New Session", before Plugins (0).
+        // order -10 让入口贴着「新会话」；与 1.x 的位置保持一致，升级后用户不会找不到。
         ctx.slots.inject('sidebar.panellist', () =>
           ctx.slots.register(
-            {
-              name: 'sidebar.panellist',
-              id: PANEL_ID,
-              order: -10,
-              label: () => t('entry'),
-            },
+            { name: 'sidebar.panellist', id: PANEL_ID, order: -10, label: () => t('entry') },
             Glyph,
           ),
         );
-      } catch (error) {
-        try {
-          console.error(`${PLUGIN_ID}: registration failed`, error);
-        } catch {
-          /* console unavailable */
-        }
-      }
-    }
 
-    return { apply, inject };
+        ctx.slots.inject('settings.section', () =>
+          ctx.slots.register(
+            {
+              name: 'settings.section',
+              id: 'web-chat-settings',
+              order: 26,
+              label: () => t('settings.nav'),
+              inject: () => ({ t }),
+            },
+            (props) => h(SettingsBoundary, { fallback: t('settings.crashed') }, h(RetentionSettings, props)),
+          ),
+        );
+
+        console.info(`[${PLUGIN_ID}] ${VERSION} ready`);
+      },
+    };
   },
 });

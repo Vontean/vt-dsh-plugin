@@ -1,8 +1,8 @@
 {
   "name": "dsh-vt-web-chat",
-  "version": "1.2.1",
+  "version": "2.0.0",
   "type": "module",
-  "description": "Adds a Web Chat entry under New Session that opens chat.deepseek.com as a full main-area panel in the desktop embedded browser, remembers the last conversation, starts with the site sidebar collapsed and keeps the site's environment warning dismissed.",
+  "description": "Adds a Web Chat panel that runs DeepSeek's official open-source chat UI inside DeepSeek Harness, with requests proxied through your signed-in account and a configurable local chat-retention policy.",
   "license": "MIT",
   "author": "Vontean",
   "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-web-chat#readme",
@@ -18,9 +18,9 @@
     "dsh-plugin",
     "deepseek-harness",
     "web-chat",
-    "chat",
-    "sidebar",
-    "embedded-browser"
+    "chat-demo",
+    "deepseek",
+    "retention"
   ],
   "engines": {
     "dsh": ">=0.2.1-rc.5 <0.3.0"
@@ -34,11 +34,20 @@
   "files": [
     "index.js",
     "client.js",
+    "src/",
+    "scripts/",
+    "webview/dist/",
+    "webview/UPSTREAM.json",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
-    "README.md"
+    "README.md",
+    "docs/"
   ],
+  "scripts": {
+    "sync-upstream": "node scripts/sync-upstream.mjs",
+    "dev": "node scripts/dev-server.mjs"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

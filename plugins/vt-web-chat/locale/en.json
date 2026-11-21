@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Web Chat",
-    "description": "Adds a \"Web Chat\" entry under New Session that opens chat.deepseek.com as a full main-area panel in the desktop embedded browser, remembering the last conversation."
+    "description": "Adds a Web Chat panel under New Session that runs DeepSeek's official open-source chat UI, proxied through your signed-in DSH account, with a configurable chat-retention policy."
   }
 }

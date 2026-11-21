@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "网页对话",
-    "description": "在「新会话」下方新增「网页对话」入口，点击后在主内容区打开 chat.deepseek.com 官网对话（桌面端内嵌浏览器），并记住上次的对话。"
+    "description": "在「新会话」下方新增「网页对话」入口，面板里是 DeepSeek 官方开源界面，请求由 DSH 用你的 DeepSeek 账号走 API，并可按天数自动清理旧会话。"
   }
 }
