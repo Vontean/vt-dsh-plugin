@@ -37,6 +37,34 @@ import { isTableDetailReachable, prepareTableRows, tableRowsForDetails } from '.
 import { color, enu, int, num, obj, opt, safeMediaSrc, str } from './genui-runtime/value-utils.ts'
 import { classifyLinkTarget } from './file-link.ts'
 
+/**
+ * Stable code for one pipeline error. Errors keep their human-readable text,
+ * but the tier judgement (`isIntentionalBudgetCut`) reads this code instead of
+ * matching message prefixes, so wording can change without changing behavior.
+ */
+export type GenuiErrorCode =
+  /** Spec exceeds a resource limit; the tail is elided by design. */
+  | 'budget-nodes'
+  /** Repair dropped declared nodes (the declared-vs-rendered ledger). */
+  | 'dropped-nodes'
+  /** A node names a type outside the white list (custom nodes stay opaque). */
+  | 'unknown-type'
+  /** Structural or field-level validation failure. */
+  | 'invalid-schema'
+
+export interface GenuiErrorDetail {
+  readonly code: GenuiErrorCode
+  readonly message: string
+}
+
+/** Classify one pipeline error. The single place that reads error text. */
+function genuiErrorCode(message: string): GenuiErrorCode {
+  if (message.startsWith('spec exceeds ')) return 'budget-nodes'
+  if (message.startsWith('repair dropped ')) return 'dropped-nodes'
+  if (message.includes(': unknown type ')) return 'unknown-type'
+  return 'invalid-schema'
+}
+
 /** Result of `validateGenuiSpec`. */
 export interface GenuiValidation {
   ok: boolean
@@ -1790,6 +1818,8 @@ export interface GenuiProcessResult {
   spec: GenuiSpec | null
   /** Structural and semantic validation errors. */
   errors: string[]
+  /** `errors` with stable codes; renderers/tests judge on `code`, not text. */
+  errorDetails: readonly GenuiErrorDetail[]
   /** Alias and native unknown-field warnings. */
   warnings: GenuiDiagnostic[]
   /** Native nodes declared in the canonical input, before repair drops. */
@@ -1870,6 +1900,7 @@ export function processGenuiSpec(value: unknown): GenuiProcessResult {
     repaired,
     spec: repaired,
     errors: [...new Set(errors)],
+    errorDetails: [...new Set(errors)].map(message => ({ code: genuiErrorCode(message), message })),
     warnings,
     // Compatibility fields retain their historical meanings: declaredCount
     // is native declarations, while renderedCount is the total rendered tree.
@@ -1886,8 +1917,10 @@ export function isIntentionalBudgetCut(processed: GenuiProcessResult): boolean {
   // 只要错误全部是预算类、且修复结果正好填满 maxNodes，就是「按设计截断」：
   // 多余的尾巴被丢掉，剩下的照常渲染。多屏共享同一预算时这条同样成立，
   // 因此不再要求 declared 恰好是 maxNodes + 1（D4）。
-  return processed.errors.length > 0
-    && processed.errors.every(error => error.startsWith('spec exceeds ') || error.startsWith('repair dropped '))
+  // 判定读 code（决定 E）：文案以后随便改，行为不变。
+  return processed.errorDetails.length > 0
+    && processed.errorDetails.every(detail =>
+      detail.code === 'budget-nodes' || detail.code === 'dropped-nodes')
     && processed.renderedNativeCount === GENUI_LIMITS.maxNodes
 }
 

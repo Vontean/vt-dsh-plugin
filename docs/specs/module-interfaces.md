@@ -247,7 +247,7 @@
 | 修复 | `repairGenuiSpec(value: unknown): GenuiSpec \| null` | 原始值 | 可直接渲染的 canonical spec 或 `null` | 先归一，再按上限裁剪、按字段类型取舍 |
 | 校验 | `validateGenuiSpec(value: unknown): GenuiValidation` | 原始值 | `{ ok: boolean, errors: string[] }` | 别名归一后只报真错，不把可修别名当错 |
 | 诊断 | `diagnoseUnknownGenuiFields(value: unknown): GenuiDiagnostic[]` | 归一后的值 | `kind: 'alias' \| 'unknown-field' \| 'truncated'` 的诊断数组 | 给模型的可读提示 |
-| 管线 | `processGenuiSpec(value: unknown): GenuiProcessResult` | 原始值 | `{ value, normalized, repaired, spec, errors, warnings, declaredCount, renderedCount, declaredNativeCount, renderedNativeCount, renderedTotalCount }` | 归一 → 修复 → 校验 → 账目核对 |
+| 管线 | `processGenuiSpec(value: unknown): GenuiProcessResult` | 原始值 | `{ value, normalized, repaired, spec, errors, errorDetails, warnings, declaredCount, renderedCount, declaredNativeCount, renderedNativeCount, renderedTotalCount }` | 归一 → 修复 → 校验 → 账目核对。`errorDetails[].code` 是稳定判定依据（见 §4.4） |
 | 坏节点清理 | `partialRepairGenuiSpec(processed): GenuiSpec \| null` | 管线结果 | 剪掉错误指向节点后的 spec，或 `null` | 单次重试，只剪不修 |
 | 围栏解析 | `resolveFence(raw: string, { settled: boolean }): FenceResolution` | 围栏正文 | `{ value, processed, spec }` | tier-1 任意时刻、tier-2 仅 `settled` |
 | 围栏快捷 | `resolveFenceSpec(raw, options): GenuiSpec \| null` | 同上 | spec 或 `null` | 浏览器与宿主共用 |
@@ -402,13 +402,14 @@ type PrototypeRenderer = ComponentType<PrototypeDispatchProps>
 
 **本轮处理（决定 E，切片 5，归卡尺）**：给校验错误与诊断加稳定 `code`。
 - **已落地（切片 5）**：`GenuiDiagnostic.code` + 五个原型诊断 code（`unknown-goto-target` / `modal-unreachable` / `nested-modal` / `screen-budget` / `unknown-initial`）；新增诊断判定一律读 code。
-- **未落地**：`errors: string[]` 仍是文本，`isIntentionalBudgetCut` / `errorNodePath` / `partialRepairGenuiSpec` 仍按前缀与精确匹配判定。**因此这四类字符串的修改仍然视同契约变更**，直到错误侧也带上 code。
+- **已落地（决定 F 配套）**：管线错误增加 `GenuiProcessResult.errorDetails[] = { code, message }`，`code` 取 `budget-nodes` / `dropped-nodes` / `unknown-type` / `invalid-schema`；`isIntentionalBudgetCut` 改为读 `code`，不再 `startsWith` 文案。错误文案到 code 的映射收在 `genuiErrorCode()` 一处。
+- **未落地**：`errors: string[]` 仍为兼容保留（有外部消费者按字符串展示）；`errorNodePath` 与 `partialRepairGenuiSpec` 的 `details must not contain more entries than rows` 精确匹配仍读文案。**这两处文案的修改仍视同契约变更**。
 
 ### 4.5 三档边界分散在六个入口，缺一条端到端契约测试
 
 归一、修复、校验、管线、坏节点清理、围栏解析各自实现一部分档位判定；现有测试集中在 `validation.test.ts`（187 行）与 `screens.test.ts`（111 行），**没有**「同一份 fixture 依次走完 救 → 丢 → 降级 三档」的端到端用例。任何人单独改一个入口，都能让档位语义分叉而不被拦住。
 
-**本轮处理（决定 F，归卡尺）**：补一条端到端契约测试——同一组 fixture 依次走「救 → 丢 → 降级」，只断言出口行为（渲染出的 spec、被丢掉的节点、是否退回代码块、`renderable` 判定），不断言内部函数与调用顺序。fixture 设计见 §5.4。
+**本轮处理（决定 F，归卡尺）**：**已完成**。`src/client/genui-runtime/tiers.test.ts` 按 §5.4 的三档执行，只断言出口（`errorDetails` 的 code、`isRenderableProcess`、`repaired` 树、`resolveFenceSpec` 的 null），不测内部函数与调用顺序；另加一条反向对照：预算截断（`budget-nodes`）必须**可渲染**，防止「判定读 code」改动后长原型被整体降级。
 
 ### 4.6 文档与实现已经不一致（漂移正在发生）
 
