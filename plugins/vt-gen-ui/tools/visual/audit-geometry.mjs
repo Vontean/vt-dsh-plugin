@@ -42,9 +42,9 @@
  */
 import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -122,6 +122,9 @@ const targets = pages.length > 0 ? pages : DEFAULT_PAGES
 function auditInPage(config) {
   const TOL = 1 // 判定“同一坐标/贴着”的容差（px）
   const violations = []
+  // 未验证的新判定走 warning 通道：只报警，不进退出码。
+  // 一条规则要先有「它红过、而红是对的」的记录，才有资格阻断别人。
+  const warnings = []
   const notes = []
   const gaps = [] // 每一面的实测间距，用于证明断言量过而不是空跑
   const sel = config.selectors
@@ -207,7 +210,7 @@ function auditInPage(config) {
       if (Math.abs(value - G) > 0.1) bad.push({ side, name, value })
     }
     if (bad.length > 0) {
-      violations.push({
+      warnings.push({
         rule: 'padding-not-G',
         target: label(page),
         detail: `pageBody padding ${bad
@@ -393,7 +396,7 @@ function auditInPage(config) {
         const value = round(num(raw))
         spacingSeen.add(value)
         if (SPACING.has(value) || NEGATIVE_BLEED.has(value)) continue
-        violations.push({
+        warnings.push({
           rule: 'spacing-not-whitelist',
           target: label(el),
           detail: `${cssName} = ${raw}（要求 ∈ {0,4,8,12,16,24}，负值仅允许 -16/-24）`,
@@ -419,6 +422,7 @@ function auditInPage(config) {
     skips,
     notes,
     spacingSeen: [...spacingSeen].sort((a, b) => a - b),
+    warnings,
     violations,
   }
 }
@@ -560,6 +564,33 @@ if (!existsSync(CHROME)) {
   process.exit(2)
 }
 
+/* ---- 产物指纹：整轮审计必须跑在同一份构建产物上 ---- */
+// 今天 64 条假红全部出在被替换掉的旧构建上：审计若不能自证「量的是哪份产物」，
+// 任何人拿到的数都不可复核。所以运行前后各取一次 size + mtime，不一致即环境失败。
+// 只在开头查一次不够：另一个构建可能在测量中途替换产物。
+const PRODUCTS = ['lib/client.js', 'lib/index.js'].map(rel => join(ROOT, rel))
+
+const readProducts = () => {
+  const entries = []
+  for (const file of PRODUCTS) {
+    if (!existsSync(file)) return { missing: relative(ROOT, file), entries }
+    const stat = statSync(file)
+    entries.push({
+      file: relative(ROOT, file),
+      size: stat.size,
+      mtime: new Date(stat.mtimeMs).toISOString(),
+      mtimeMs: stat.mtimeMs,
+    })
+  }
+  return { missing: null, entries }
+}
+
+const productsBefore = readProducts()
+if (productsBefore.missing !== null) {
+  console.error(`缺构建产物：${productsBefore.missing}（先 pnpm build 再审计）`)
+  process.exit(2)
+}
+
 const reports = []
 let failed = false
 
@@ -629,11 +660,43 @@ for (const page of targets) {
   }
 }
 
+/* ---- 运行后再取一次：测量期间产物被换掉，这一轮的数字全部作废 ---- */
+const productsAfter = readProducts()
+const drifted = []
+if (productsAfter.missing !== null) {
+  drifted.push({ missing: productsAfter.missing })
+} else {
+  for (let index = 0; index < productsBefore.entries.length; index++) {
+    const before = productsBefore.entries[index]
+    const after = productsAfter.entries[index]
+    if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) drifted.push({ before, after })
+  }
+}
+if (drifted.length > 0) {
+  console.error('审计期间构建产物被替换，本次数字作废（exit 2）')
+  for (const drift of drifted) {
+    if (drift.missing !== undefined) {
+      console.error(`  ${drift.missing}：运行后消失`)
+      continue
+    }
+    console.error(`  ${drift.before.file}`)
+    console.error(`    运行前 size=${drift.before.size} mtime=${drift.before.mtime}（mtimeMs=${drift.before.mtimeMs}）`)
+    console.error(`    运行后 size=${drift.after.size} mtime=${drift.after.mtime}（mtimeMs=${drift.after.mtimeMs}）`)
+  }
+  process.exit(2)
+}
+const fingerprintLine = `产物指纹一致：${productsBefore.entries
+  .map(entry => `${entry.file} ${entry.size}B @ ${entry.mtime}`)
+  .join('，')}`
+
 if (asJson) {
+  // stdout 留给 JSON，环境信息走 stderr。
+  console.error(fingerprintLine)
   console.log(JSON.stringify(reports, null, 2))
 } else {
+  console.log(fingerprintLine)
   const render = report => {
-    const { page, counts, violations, notes, skipped } = report
+    const { page, counts, violations, warnings, notes, skipped } = report
     if (skipped !== undefined) {
       console.log(`· ${page}：跳过 —— ${skipped}`)
       return
@@ -651,12 +714,14 @@ if (asJson) {
       console.log(`  A 已量 ${measured.length} 面，最小间距 ${minGap.gap}px（${minGap.page} · ${minGap.side}）`)
     }
     for (const note of notes) console.log(`  · ${note}`)
-    if (violations.length === 0) {
-      console.log('  无违规')
-      return
-    }
-    for (const violation of violations) {
+    if (violations.length === 0) console.log('  无违规')
+    else for (const violation of violations) {
       console.log(`  ✗ [${violation.rule}] ${violation.target} — ${violation.detail}`)
+    }
+    // warning 必须独立于「有没有违规」打印：零违规但有告警的情形正是它存在的意义。
+    // `!` 而不是 `✗`：这是未验证的判定，红了先看是不是它判错。
+    for (const warning of warnings ?? []) {
+      console.log(`  ! [${warning.rule}] ${warning.target} — ${warning.detail}`)
     }
   }
 
@@ -680,6 +745,11 @@ if (asJson) {
 == fixture 缺口（手写探针，不改退出码）：${fixtureHits} 条 ==`)
   for (const report of sketchReports) render(report)
   if (fixtureHits === 0) console.log('· 无')
+
+  const warningHits = runtimeReports.reduce((total, report) => total + (report.warnings?.length ?? 0), 0)
+  console.log(`
+== 未验证判定（只报警，不改退出码）：${warningHits} 条 ==`)
+  if (warningHits === 0) console.log('· 无')
 
   console.log(failed ? '\n审计失败：存在实现违规' : '\n审计通过：实现无违规（fixture 缺口单列）')
 }
