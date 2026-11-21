@@ -11,6 +11,7 @@ import { COMPONENT_SCHEMAS, GENUI_SPEC_SCHEMA, PROTOTYPE_TYPES } from './definit
 import type { PrototypeType } from './definitions.ts'
 import type { ComponentSchema } from './model.ts'
 import { CATALOG_CATEGORIES, CATALOG_DOCS, SCREEN_SPEC_DOC } from './docs.ts'
+import { CATALOG_RULES } from './rules.ts'
 import type { CatalogCategory, CatalogDoc } from './docs.ts'
 
 export { PROTOTYPE_TYPES }
@@ -159,4 +160,21 @@ export function composeSkillContent(skillBody: string): string {
 /** The system prompt paragraph advertising the optional multi-screen machine. */
 export function prototypeScreensPrompt(): string {
   return SCREEN_SPEC_DOC.prompt
+}
+
+/**
+ * The system prompt's complete `Rules:` block, rendered from `CATALOG_RULES`.
+ *
+ * Prompt behavior depends on this text, so the default rendering is
+ * byte-identical to the block it replaced (golden file:
+ * `__fixtures__/rules.golden.txt`): `Rules:` header, one `- ` bullet per rule,
+ * no trailing newline. `renderUiTool: false` drops the tool-channel rule
+ * exactly where the host used to strip it.
+ */
+export function rulesPrompt(options: { renderUiTool?: boolean } = {}): string {
+  const renderUiTool = options.renderUiTool !== false
+  const bullets = CATALOG_RULES
+    .filter(rule => rule.requiresTool !== true || renderUiTool)
+    .map(rule => `- ${rule.section}`)
+  return ['Rules:', ...bullets].join('\n')
 }
