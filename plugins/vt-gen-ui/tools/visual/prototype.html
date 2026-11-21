@@ -24,14 +24,16 @@
    ───────────────────────────────────────────────────────────────────────── */
 
 .pr-probe {
-  --proto-line-rule: var(--dsl-g-border);          /* 分隔线：border-l1  浅 4% / 深 6% */
-  --proto-line-frame: var(--dsl-g-border-strong);  /* 结构线：border-l2  浅 10% / 深 12% */
+  --proto-line-rule: var(--dsl-g-border);          /* 分隔：border-l1  浅 4% / 深 6% */
+  --proto-line-frame: var(--dsl-g-border-strong);  /* 容器/结构：border-l2  浅 10% / 深 12% */
+  --proto-line-button: var(--dsw-alias-border-l3);  /* 按钮：border-l3  浅 12% / 深 16% */
+  --proto-line-control: var(--dsw-alias-border-l4); /* 输入控件：border-l4  浅 16% / 深 20% */
   --proto-surface-card: var(--dsw-alias-bg-layer-2, var(--dsl-g-surface));
   --proto-surface-inset: var(--dsw-alias-markdown-code-block, var(--dsl-g-surface));
   --proto-surface-float: var(--dsw-alias-bg-layer-3, var(--dsl-g-surface));
   --proto-fill-placeholder: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);
-  /* 遮罩用 static 近黑：它必须两个主题都是"压暗"，不能用会随主题翻转的 label/背景色 */
-  --proto-scrim: color-mix(in srgb, var(--dsw-static-neutral-bluish-1000) 48%, transparent);
+  /* 遮罩直接吃宿主：浅 24% / 深 50%，宿主已按主题分档 */
+  --proto-scrim: var(--dsw-alias-bg-mask-1);
   --proto-pad-x: 24px;
   --proto-radius-page: var(--dsl-g-radius-surface);   /* 12 */
   --proto-radius-control: var(--dsl-g-radius-control); /* 8 */
@@ -54,13 +56,15 @@
 .pr-frame { position: relative; padding-top: 9px; margin-top: 40px; }
 .pr-frame-label {
   position: absolute; top: 0; left: 12px; z-index: 2;   /* 必须高于 page 的定位层级 */
+  max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis;
   display: inline-flex; align-items: center; height: 18px; padding: 0 6px;
   border-radius: var(--proto-radius-sm);
-  background: var(--dsw-alias-bg-base);            /* 用「线后面的面」把虚线切开 */
+  background: var(--proto-badge-bg, var(--dsw-alias-bg-base));  /* 线后面的面：顶层=会话底，嵌套=父级卡片面 */
   font-size: 12px; line-height: 18px; font-weight: 500;
   color: var(--dsw-alias-label-secondary);
 }
 .pr-page {
+  --proto-badge-bg: var(--proto-surface-card);   /* 嵌套角标用父级的面（§12.4 B3） */
   position: relative; z-index: 0;                  /* 浮层在页面框内定位，不逃到视口 */
   container: proto-page / inline-size;
   background: var(--proto-surface-card);
@@ -140,7 +144,7 @@
 .pr-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 4px;
   height: 32px; padding: 0 12px;
-  border: 1px solid var(--proto-line-frame); border-radius: var(--proto-radius-control);
+  border: 1px solid var(--proto-line-button); border-radius: var(--proto-radius-control);
   background: transparent; color: var(--dsw-alias-label-primary);
   font-size: 13px; line-height: 20px; font-weight: 500;
   cursor: pointer;
@@ -222,7 +226,7 @@
 .pr-field__label { margin-bottom: 8px; font-size: 13px; line-height: 20px; font-weight: 500; }
 .pr-field__input {
   display: flex; align-items: center; height: 32px; padding: 0 8px;
-  border: 1px solid var(--proto-line-frame); border-radius: var(--proto-radius-control);
+  border: 1px solid var(--proto-line-control); border-radius: var(--proto-radius-control);
   background: transparent; color: var(--dsw-alias-label-primary);
   font-size: 13px; line-height: 20px; font-family: inherit;
 }
@@ -232,7 +236,7 @@
 .pr-field[data-invalid] .pr-field__msg { color: var(--dsw-alias-state-error-primary); }
 .pr-field[data-disabled] .pr-field__label { color: var(--dsw-alias-label-dimmed, var(--dsw-alias-label-caption)); }
 .pr-field[data-disabled] .pr-field__input {
-  background: var(--proto-surface-inset); border-color: var(--proto-line-rule);
+  background: var(--proto-surface-inset); border-color: var(--proto-line-frame);
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -299,7 +303,7 @@
   }
   .pr-nav--side .pr-nav__group { display: none; }
   /* 独立成块：只换方向，四边框与圆角保持 */
-  .pr-nav--side.pr-nav--block { border-right: 1px solid var(--proto-line-rule); }
+  .pr-nav--side.pr-nav--block { border-right: 1px solid var(--proto-line-frame); }
   .pr-nav--bottom .pr-nav__item { height: 48px; }
 }
 
@@ -319,7 +323,7 @@
   background: var(--proto-surface-float);
   box-shadow: var(--dsl-g-shadow-float);
 }
-.pr-dialog__title { font-size: 15px; line-height: 22px; font-weight: 600; letter-spacing: 0; }
+.pr-dialog__title { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: 0; }
 .pr-dialog__body { margin-top: 8px; font-size: 13px; line-height: 20px; letter-spacing: 0; color: var(--dsw-alias-label-primary); }
 .pr-dialog__actions { margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px; }
 
@@ -348,7 +352,7 @@
 .pr-nav--side.pr-nav--block {
   width: 200px; max-width: 100%;
   margin: 16px var(--proto-pad-x) 0;
-  border: 1px solid var(--proto-line-rule);
+  border: 1px solid var(--proto-line-frame);
   border-radius: var(--proto-radius-control);
 }
 
@@ -362,6 +366,16 @@
   .pr-split[data-divider="true"] { gap: 16px; }
   .pr-split[data-divider="true"] > * + * { border-left: 0; padding-left: 0; }
 }
+
+/* ── 规则 A：内容列只有一个左边缘（§12.3） ── */
+.pr-page-body { padding-inline: var(--proto-pad-x); }
+.pr-page-body > [data-bleed="true"] { margin-inline: calc(-1 * var(--proto-pad-x)); }
+.pr-text { margin: 12px 0; font-size: 14px; line-height: 20px; color: var(--dsw-alias-label-primary); }
+
+/* ── 规则 B：只有屏幕画虚线，嵌套区域是实线（§12.4） ── */
+.pr-page--nested { border-style: solid; }
+.pr-frame--nested { margin-top: 0; }
+.pr-split--demo { margin: 16px 0 24px; }
 
 /* 手机形态：一个 360 宽的页面，用来看底部标签与窄容器收缩 */
 .pr-phone { width: 360px; max-width: 100%; }
@@ -588,7 +602,7 @@
           <span class="pr-row__media"></span>
           <span class="pr-row__body">
             <span class="pr-row__title">遮罩之下的内容仍然可辨结构</span>
-            <span class="pr-row__desc">48% 近黑遮罩，两个主题都不翻转</span>
+            <span class="pr-row__desc">遮罩取宿主 bg-mask-1，浅 24% / 深 50%</span>
           </span>
         </div>
         <div class="pr-row">
@@ -626,6 +640,22 @@
         <div class="pr-field">
           <label class="pr-field__label">负责人</label>
           <div class="pr-field__input">未指定</div>
+        </div>
+      </div>
+      <div class="pr-rows" style="padding-top: 8px;">
+        <div class="pr-row">
+          <span class="pr-row__media"></span>
+          <span class="pr-row__body">
+            <span class="pr-row__title">面板只压住页面下半部分</span>
+            <span class="pr-row__desc">标题栏仍然可见，说明这是页内浮层</span>
+          </span>
+        </div>
+        <div class="pr-row">
+          <span class="pr-row__media"></span>
+          <span class="pr-row__body">
+            <span class="pr-row__title">遮罩用宿主的 bg-mask-1</span>
+            <span class="pr-row__desc">浅色 24% / 深色 50%，不是我们自定的百分比</span>
+          </span>
         </div>
       </div>
       <div class="pr-overlay" data-variant="sheet" role="dialog" aria-modal="true" aria-label="指派负责人">
@@ -669,6 +699,57 @@
     <div class="pr-split" data-divider="true" style="align-items: stretch;">
       <div style="padding: 16px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary);">左栏内容。并排时两栏之间是 1px 分隔线，间距由线的两侧内边距 16 承担。</div>
       <div style="padding: 16px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary);">右栏内容。堆叠后线消失、恢复 16px 间距，不留一条悬空的横线。</div>
+    </div>
+  </div>
+
+  <!-- 屏 8：内容列对齐 + 嵌套区域 -->
+  <div class="pr-frame">
+    <span class="pr-frame-label">屏 8 · 内容列与嵌套区域</span>
+    <div class="pr-page">
+      <header class="pr-header">
+        <div class="pr-header__text">
+          <h2 class="pr-title">我的一天</h2>
+          <p class="pr-sub">标题、直排 text、字段标签必须共用一条左边缘</p>
+        </div>
+      </header>
+      <div class="pr-page-body">
+        <p class="pr-text">直排 text 不再贴外框：左右缩进只由页面内容列提供，组件不各自决定。</p>
+        <div class="pr-field">
+          <label class="pr-field__label">截止时间</label>
+          <div class="pr-field__input pr-field__input--placeholder">选择日期</div>
+        </div>
+        <div class="pr-rows" data-bleed="true" style="margin-top: 12px;">
+          <div class="pr-row">
+            <span class="pr-row__media"></span>
+            <span class="pr-row__body">
+              <span class="pr-row__title">行是贴边型：hover 底与分隔线铺满整宽</span>
+              <span class="pr-row__desc">内容仍对齐 24，靠负外边距把盒子拉回外框</span>
+            </span>
+          </div>
+        </div>
+        <div class="pr-split pr-split--demo">
+          <div class="pr-frame pr-frame--nested">
+            <span class="pr-frame-label">方案 A · 空态</span>
+            <div class="pr-page pr-page--nested">
+              <div class="pr-empty" style="padding-top: 16px; padding-bottom: 16px;">
+                <div class="pr-empty__graphic"></div>
+                <div class="pr-empty__title">还没有内容</div>
+              </div>
+            </div>
+          </div>
+          <div class="pr-frame pr-frame--nested">
+            <span class="pr-frame-label">方案 B · 列表</span>
+            <div class="pr-page pr-page--nested">
+              <div class="pr-rows" data-bleed="true">
+                <div class="pr-row" style="min-height: 40px;">
+                  <span class="pr-row__media" style="width: 32px; height: 32px;"></span>
+                  <span class="pr-row__body"><span class="pr-row__title">嵌套区域用实线</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
