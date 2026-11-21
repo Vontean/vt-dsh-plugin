@@ -978,7 +978,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 | 章节 | 内容 |
 | --- | --- |
-| §14（新增） | 可断言条文：22 条（G1–G13 几何、L1–L3 线、T1–T2 文本、S1–S4 结构），附「jsdom 测不了几何」的分档 |
+| §14（新增） | 可断言条文：24 条（G1–G15 几何、L1–L3 线、T1–T2 文本、S1–S4 结构），附「jsdom 测不了几何」的分档 |
 | §12.3 | 页面四向留白定值（`G` = 24 / 窄 16）；`data-bleed` 改方向串；导航按 chrome 抵消顶/底 |
 | §6.7 | 不变式「同一位置只允许一条线」：divider 是补线，栏内有 `page` 时不生效 |
 | §12.6.1 | 补录本轮三条分歧判定 |
@@ -1127,7 +1127,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 **组件不写页面级内边距（四向）**：`empty` / `loading` 原来的 `padding-block: 24` 改为 0——它们是内容，边距由 gutter 给。保留的只有「组件内部」的 padding：卡片内部 16、控件内部 8、行内 8。
 
-**首/末子元素的外边距必须抑制**：内容列的首个子元素的 `margin-block-start` 与末个子元素的 `margin-block-end` 不得叠加到 `G` 上。容器层改对不等于结果对——静态探针把 `.pr-page-body` 改成四向 `padding` 之后，首个子元素自带的 `margin-block-start: 12` 还是把「页头底 → 首内容」顶成了 36，末个子元素的 `margin-block-end: 24` 把「末内容 → 框底」顶成了 49。谁给首个子元素加边距，这个毛病就会复发；判据见 §14 G13。
+**首/末子元素的外边距必须抑制**：内容列的首个子元素的 `margin-block-start` 与末个子元素的 `margin-block-end` 不得叠加到 `G` 上。容器层改对不等于结果对——静态探针把 `.pr-page-body` 改成四向 `padding` 之后，首个子元素自带的 `margin-block-start: 12` 还是把「页头底 → 首内容」顶成了 36，末个子元素的 `margin-block-end: 24` 把「末内容 → 框底」顶成了 49。谁给首个子元素加边距，这个毛病就会复发；判据见 §14 G15。
 
 **为什么是 24 / 16**：与左边缘同值，一屏只有一个边距数字；16 在 390 宽下保住内容宽度；32 会让标题栏与内容之间出现两个层级。
 
@@ -1172,7 +1172,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 .pageBody > :last-child { margin-block-end: 0; }
 ```
 
-**可断言形式**：G13（相邻块净距 = `G`）、G14（子元素 `margin-block` = 0）。
+**可断言形式**：G13（相邻块净距 = `G`）、G14（子元素 `margin-block` = 0）、G15（首末子元素外边距被抑制，实测距离仍 = `G`）。
 
 ### 12.4 规则 B：角标属于「屏幕」，虚线只有一层
 
@@ -1303,7 +1303,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 | G6 | 标题顶 − `P` 顶 = `G`；标题栏底 − 首内容顶 = `G` | 标题栏 `padding-block-start = G`、`padding-block-end = 0`、`padding-inline = G` | 同上；「不是 2G」这个反例由 `padding-block-end = 0` 直接锁住，不需要量两个 rect |
 | G9 | 白名单 {0, 4, 8, 12, 16, 24} | 增加负值 {−24, −16}；装饰几何豁免 | 贴边抵消必须用 `-G`（§12.3），旧白名单让实现只能违规；页面外框 9px、角标 6px 是让位与描边偏移，不是排版间距 |
 
-新增 G13（相邻块净距 = `G`）、G14（`pageBody` 子元素 `margin-block` = 0）——见 §12.3.1。
+新增 G13（相邻块净距 = `G`）、G14（`pageBody` 子元素 `margin-block` = 0）——见 §12.3.1；新增 G15（首末子元素外边距被抑制，距离仍 = `G`）——见本表上方那条理由段。
 
 
 ---
@@ -1366,6 +1366,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 | G12 | 给定 `modal`：浮层 rect 与 `page` 内框 rect 四边差均为 0（覆盖且不越框） | §6.8 | rect |
 | G13 | 给定 `[data-page-body]` 的任意两个相邻兄弟块：二者 `margin` 之间的净垂直距离 = `G`（由 `gap` 给，不叠组件外边距） | §12.3.1 | rect 差值 |
 | G14 | 给定 `[data-page-body]` 的直接子元素：`margin-block-start` 与 `margin-block-end` 计算值均为 0（贴边抵消的负外边距除外） | §12.3.1 | 计算样式 |
+| G15 | 给定 `page` 内容列的首个子元素与末个子元素：其 `margin-block-start` / `margin-block-end` 必须被抑制，不得叠加到 `G` 上——页头底 → 首内容顶 = `G`，末内容底 → `P` 底 = `G` | §12.3 | rect 差值 + 计算样式 |
 
 **为什么 G1 / G6 用 padding 口径而不是距离口径**：距离口径（元素外框到内沿 = `G`）在**子元素自带外边距**或**页面有标题栏**时与 padding 不等价——量到 36 时无法判断是 padding 错了还是外边距漏了。padding 是唯一可归因的量；距离由 `padding` + `0 外边距` 推导得出，作为推论成立而不单独断言。
 
@@ -1376,9 +1377,8 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 | `.pr-frame` / `page` 外框上边距 | 9 | 给角标让位（角标高 18，压在框线上） |
 | 角标的 `top` / `left` / 内边距 | 0 / 12 / 6 | 角标是骑在框线上的标签，落在 4 的倍数之外 |
 | 焦点环外扩 | 2 | 唯一允许的非 1px 描边厚度（§5.2） |
-| G13 | 给定 `page` 内容列的首个子元素与末个子元素：其 `margin-block-start` / `margin-block-end` 必须被抑制，不得叠加到 `G` 上——页头底 → 首内容顶 = `G`，末内容底 → `P` 底 = `G` | §12.3 | rect 差值 + 计算样式 |
 
-G13 的理由：容器层改对了不等于结果对。静态探针曾把 `.pr-page-body` 改成四向 `padding`，但首个子元素自带 `margin-block-start: 12`、末个自带 `margin-block-end: 24`，实测「页头底 → 首内容」变成 `G + 12 = 36`、「末内容 → 框底」变成 `G + 24 = 49`，两档间距又回来了。**这和漏掉上下留白是同一类错误，只是从容器层下沉到了子元素层**——所以必须有一条断言盯着子元素，而不是只看容器的 `padding` 值。
+G15 的理由：容器层改对了不等于结果对。静态探针曾把 `.pr-page-body` 改成四向 `padding`，但首个子元素自带 `margin-block-start: 12`、末个自带 `margin-block-end: 24`，实测「页头底 → 首内容」变成 `G + 12 = 36`、「末内容 → 框底」变成 `G + 24 = 49`，两档间距又回来了。**这和漏掉上下留白是同一类错误，只是从容器层下沉到了子元素层**——所以必须有一条断言盯着子元素，而不是只看容器的 `padding` 值。
 
 **线（同一位置只允许一条）**
 
@@ -1409,7 +1409,7 @@ G13 的理由：容器层改对了不等于结果对。静态探针曾把 `.pr-p
 | 档 | 可测的断言 | 在哪测 |
 | --- | --- | --- |
 | 计算样式 / DOM / 对比度 | T1、T2、S1–S4、L1–L3 | jsdom（vitest）够用 |
-| 几何 | G1–G13 | **jsdom 不布局，测不了**；要在 headless Chrome / Playwright 里量 `getBoundingClientRect`，或复用 `tools/visual` 的截图管线 |
+| 几何 | G1–G15 | **jsdom 不布局，测不了**；要在 headless Chrome / Playwright 里量 `getBoundingClientRect`，或复用 `tools/visual` 的截图管线 |
 
 **断言写法约定**
 
