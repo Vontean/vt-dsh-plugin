@@ -567,7 +567,7 @@ git status --porcelain plugins/vt-gen-ui/lib   # 必须输出为空
 
 | # | 隐患 | 证据 | 影响 | 建议 |
 | --- | --- | --- | --- | --- |
-| H1 | **工具链版本浮动**：`tsdown ^0.22.2`、`lightningcss ^1.25.0`、`typescript ^5.6.0`，实际解析 0.22.14 / 1.33.0 / 5.9.3 | `package.json` devDeps；`pnpm-lock.yaml` | 换机/重装可能换到别的 rolldown，minify 输出变化 → 整包产物大 diff、无法判断「视觉有没有改」；`scaffold.md` §4.4 明确要求精确锁 | **已排期**：下一个统一构建窗口里去掉 `^`、干净重建、整批提交产物（同窗口还做 R3 四项核对） |
+| H1 | **工具链版本浮动**（✅ 2026-11-22 已锁，提交 `bec4ef8`） | `plugins/vt-gen-ui/package.json` devDeps；`pnpm-lock.yaml` | 换机/重装可能换到别的 rolldown，minify 输出变化 → 整包产物大 diff、无法判断「视觉有没有改」 | 已改为精确版本 `tsdown 0.22.14` / `lightningcss 1.33.0` / `typescript 5.9.3`，lockfile 的 specifier 与 version 同步（`rolldown` 是 tsdown 的传递依赖，随之一并固定）。验收：持锁 `pnpm build` 后 `lib/**` **零差异**，即锁定是 no-op。**残留**：`three`(`^0.180.0`)、`echarts`(`^5.6.0`)、`echarts-wordcloud`、`react-dom` 仍是区间——它们决定 `lib/assets/` 里 3D/图表产物的字节，要彻底可复现需第二个决策 |
 | H2 | **node shim 与 tsconfig 口径矛盾**：shim 注释称 `types: []`、无 `@types/node`，实际 `tsconfig` 有 `types:["node"]` + devDep | `src/plugin/node-shims.d.ts:1-8` vs `tsconfig.json:12-14` | 后来人照错的那份改，会删掉真的类型来源或留下双份声明 | 二选一并删掉另一份（建议留 `@types/node`） |
 | H3 | **宿主侧零测试**：`src/plugin/**` 没有任何 `*.test.ts`；`vitest` 里只有 `shared/catalog/catalog.test.ts`，没有 `primitives-stub` 之外的自修/工具契约测试 | `find src/plugin src/shared -name "*.test.*"` | 自修预算、指纹账本、工具协议、参数解包四条最容易回归的逻辑**没有网**；`pnpm build` 通过不代表行为对 | 宿主侧测试是本 Bot 的职责范围，建议补：`planFenceFeedback` 的纯函数表、`specOf` 四种形状、`validate_dsh_ui` 协议字段 |
 | H4 | **共享 `lib/` + 单工作区**：产物入库、HMR 轮询、link 安装直读 | `.gitignore` 注释、`git ls-files lib`=129、profile symlink；盘点期间已实测到混合产物（`modal*.d.ts` 00:11 vs `client.js` 00:03） | 提交带入他人在制品；并发构建互相破坏（见 §4.8）；`lib` 批次不一致时行为与源码对不上 | 执行 §4 R1–R5，尤其 R3 的批次一致性检查 |
