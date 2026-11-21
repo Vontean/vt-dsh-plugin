@@ -209,6 +209,8 @@ const SPLIT_RATIOS = [
 	"2:1",
 	"1:2"
 ];
+/** Modal shapes: a centred confirmation dialog or a bottom sheet. */
+const MODAL_VARIANTS = ["dialog", "sheet"];
 /** Table cell renderers (`table.types`, one entry per column). */
 const TABLE_CELL_TYPES = [
 	"text",
@@ -438,7 +440,8 @@ const COMPONENT_SCHEMAS = {
 		full: "boolean",
 		small: "boolean",
 		icon: "string",
-		action: "string"
+		action: "string",
+		close: "boolean"
 	}, {}, { enums: { tone: BUTTON_TONES } }),
 	callout: schema(["content"], {
 		...nodeFields,
@@ -902,7 +905,20 @@ const COMPONENT_SCHEMAS = {
 	}, {
 		panes: "items",
 		columns: "items"
-	}, { enums: { ratio: SPLIT_RATIOS } })
+	}, { enums: { ratio: SPLIT_RATIOS } }),
+	modal: schema(["title"], {
+		...nodeFields,
+		trigger: "string",
+		title: "string",
+		variant: "string",
+		open: "boolean",
+		dismissible: "boolean",
+		items: "nodes",
+		actions: "nodes"
+	}, {
+		heading: "title",
+		label: "title"
+	}, { enums: { variant: MODAL_VARIANTS } })
 };
 const GENUI_NATIVE_TYPES = new Set(Object.keys(COMPONENT_SCHEMAS));
 // src/client/spec.ts
@@ -1379,7 +1395,10 @@ function normalizeNode(value, path, warnings) {
 	} else if (type === "empty") {
 		if (out.actions !== void 0) out.actions = normalizeNodeArray(out.actions, `${path}.actions`);
 	} else if (type === "split") out.items = normalizeNodeArray(out.items, `${path}.items`);
-	else if (type === "list" && Array.isArray(out.items)) out.items = out.items.map((child, index) => {
+	else if (type === "modal") {
+		if (out.items !== void 0) out.items = normalizeNodeArray(out.items, `${path}.items`);
+		if (out.actions !== void 0) out.actions = normalizeNodeArray(out.actions, `${path}.actions`);
+	} else if (type === "list" && Array.isArray(out.items)) out.items = out.items.map((child, index) => {
 		if (isNode$1(child)) return normalizeNodeValue(child, `${path}.items[${index}]`);
 		if (Array.isArray(child) && child.length === 1 && typeof child[0] === "string") return child[0];
 		const holder = record$1(child);
@@ -1526,19 +1545,22 @@ function isNode(value) {
 	const candidate = record(value);
 	return candidate !== void 0 && typeof candidate.type === "string";
 }
-function visitNativeNodes(value, path, visit) {
+function visitNativeNodes(value, path, visit, inModal = false) {
 	if (!isNode(value)) return;
 	const type = value.type;
 	const definition = COMPONENT_SCHEMAS[type];
 	if (definition === void 0) return;
-	visit(value, path, definition);
-	const children = (child, childPath) => visitNativeNodes(child, childPath, visit);
+	visit(value, path, definition, inModal);
+	const children = (child, childPath) => visitNativeNodes(child, childPath, visit, inModal || type === "modal");
 	if ((type === "row" || type === "col" || type === "grid" || type === "card" || type === "page" || type === "field-group" || type === "split") && Array.isArray(value.items)) {
 		value.items.forEach((child, index) => children(child, `${path}.items[${index}]`));
 		if (type === "page" && Array.isArray(value.actions)) value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`));
 	} else if (type === "list-row" && Array.isArray(value.actions)) value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`));
 	else if (type === "empty" && Array.isArray(value.actions)) value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`));
-	else if (type === "list" && Array.isArray(value.items)) value.items.forEach((child, index) => children(child, `${path}.items[${index}]`));
+	else if (type === "modal") {
+		if (Array.isArray(value.items)) value.items.forEach((child, index) => children(child, `${path}.items[${index}]`));
+		if (Array.isArray(value.actions)) value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`));
+	} else if (type === "list" && Array.isArray(value.items)) value.items.forEach((child, index) => children(child, `${path}.items[${index}]`));
 	else if (type === "tabs" && Array.isArray(value.tabs)) value.tabs.forEach((tab, index) => {
 		const holder = record(tab);
 		if (holder === void 0) return;
@@ -1643,6 +1665,33 @@ function diagnoseUnknownGenuiFields(value) {
 	}
 	return warnings;
 }
+/**
+* Report modals nested inside a modal. Repair drops them (a focus trap inside
+* a focus trap is unreachable), so without this diagnostic the model would
+* never learn that half its panel vanished.
+*/
+function diagnoseNestedModals(value) {
+	const warnings = [];
+	const root = record(value);
+	if (root === void 0) return warnings;
+	const visit = (node, path, _definition, inModal) => {
+		if (node.type !== "modal" || !inModal) return;
+		warnings.push({
+			kind: "dropped",
+			path,
+			message: `${path}: 弹层不能嵌套，内层 modal 已丢弃（只保留最外层）`,
+			type: "modal"
+		});
+	};
+	if (Array.isArray(root.items) && !isComponentRoot(root)) root.items.forEach((item, index) => visitNativeNodes(item, `items[${index}]`, visit));
+	else if (typeof root.type === "string") visitNativeNodes(root, "spec", visit);
+	const screens = record(root.screens);
+	if (screens !== void 0 && !isComponentRoot(root)) for (const [screenId, nodes] of Object.entries(screens)) {
+		if (!Array.isArray(nodes)) continue;
+		nodes.forEach((item, index) => visitNativeNodes(item, `screens.${screenId}[${index}]`, visit));
+	}
+	return warnings;
+}
 // src/client/walk-spec.ts
 /** 遍历完整 GenUI 组件树，并提供每个组件在 spec 中的路径。 */
 function walkGenuiNodes(spec, visitor) {
@@ -1672,6 +1721,10 @@ function walkGenuiNodes(spec, visitor) {
 				break;
 			case "split":
 				walk(node.items, `${at}.items`, depth + 1);
+				break;
+			case "modal":
+				if (node.items !== void 0) walk(node.items, `${at}.items`, depth + 1);
+				if (node.actions !== void 0) walk(node.actions, `${at}.actions`, depth + 1);
 				break;
 			case "tabs":
 				node.tabs.forEach((tab, tabIndex) => walk(tab.items, `${at}.tabs[${tabIndex}].items`, depth + 1));
@@ -2179,6 +2232,25 @@ function repairNodeFields(value, ctx, depth) {
 				...opt("required", v.required === true ? true : void 0)
 			};
 		}
+		case "modal": {
+			if (ctx.modalDepth > 0) return null;
+			const title = str(v.title, GENUI_LIMITS.maxString);
+			if (title === void 0) return null;
+			ctx.modalDepth += 1;
+			const items = Array.isArray(v.items) ? repairItems(v.items, ctx, depth + 1) : void 0;
+			const actions = Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : void 0;
+			ctx.modalDepth -= 1;
+			return {
+				type: "modal",
+				title,
+				...opt("trigger", str(v.trigger, 120)),
+				...opt("variant", enu(v.variant, MODAL_VARIANTS)),
+				...opt("open", v.open === true ? true : void 0),
+				...opt("dismissible", v.dismissible === false ? false : void 0),
+				...opt("items", items),
+				...opt("actions", actions)
+			};
+		}
 		case "empty": {
 			const title = str(v.title, GENUI_LIMITS.maxString);
 			if (title === void 0) return null;
@@ -2212,7 +2284,8 @@ function repairNodeFields(value, ctx, depth) {
 				...opt("full", v.full === true ? true : void 0),
 				...opt("small", v.small === true ? true : void 0),
 				...opt("icon", str(v.icon, 64)),
-				...opt("action", str(v.action, 200))
+				...opt("action", str(v.action, 200)),
+				...opt("close", v.close === true ? true : void 0)
 			};
 		}
 		case "input": return {
@@ -3139,7 +3212,10 @@ function repairCanonicalGenuiSpec(value) {
 	const hasItems = Array.isArray(v.items);
 	const rawScreens = obj(v.screens);
 	if (!hasItems && rawScreens === void 0) return null;
-	const ctx = { remaining: GENUI_LIMITS.maxNodes };
+	const ctx = {
+		remaining: GENUI_LIMITS.maxNodes,
+		modalDepth: 0
+	};
 	let screens;
 	if (rawScreens !== void 0) {
 		const entries = Object.entries(rawScreens).slice(0, GENUI_LIMITS.maxScreens);
@@ -3195,6 +3271,9 @@ function countGenuiNodes(value, cap = Number.POSITIVE_INFINITY) {
 			else if ((v.type === "row" || v.type === "col" || v.type === "grid" || v.type === "card" || v.type === "page" || v.type === "field-group" || v.type === "split") && Array.isArray(v.items)) {
 				walk(v.items);
 				if (v.type === "page" && Array.isArray(v.actions)) walk(v.actions);
+			} else if (v.type === "modal") {
+				if (Array.isArray(v.items)) walk(v.items);
+				if (Array.isArray(v.actions)) walk(v.actions);
 			} else if ((v.type === "list-row" || v.type === "empty") && Array.isArray(v.actions)) walk(v.actions);
 			else if (v.type === "file-tree") {} else if (v.type === "list" && Array.isArray(v.items)) for (const li of v.items) {
 				if (count >= cap) return;
@@ -3236,6 +3315,7 @@ const GENUI_NODE_TYPES = GENUI_NATIVE_TYPES;
 function visitDeclaredGenuiNodes(value, cap, visit, options = {}) {
 	const familyCaps = options.familyCaps !== false;
 	let count = 0;
+	let modalDepth = 0;
 	const declared = (candidate) => {
 		const o = obj(candidate);
 		return o !== void 0 && typeof o.type === "string" && GENUI_NODE_TYPES.has(o.type);
@@ -3251,6 +3331,7 @@ function visitDeclaredGenuiNodes(value, cap, visit, options = {}) {
 		if (count >= cap || !declared(item)) return;
 		const v = obj(item);
 		if (v === void 0) return;
+		if (v.type === "modal" && modalDepth > 0) return;
 		count += 1;
 		visit(v, at);
 		if (v.type === "tabs" && Array.isArray(v.tabs)) {
@@ -3262,6 +3343,14 @@ function visitDeclaredGenuiNodes(value, cap, visit, options = {}) {
 		} else if ((v.type === "row" || v.type === "col" || v.type === "grid" || v.type === "card" || v.type === "page" || v.type === "field-group" || v.type === "split") && Array.isArray(v.items)) {
 			walk(v.items, `${at}.items`);
 			if (v.type === "page" && Array.isArray(v.actions)) walk(v.actions, `${at}.actions`);
+		} else if (v.type === "modal") {
+			modalDepth += 1;
+			try {
+				if (Array.isArray(v.items)) walk(v.items, `${at}.items`);
+				if (Array.isArray(v.actions)) walk(v.actions, `${at}.actions`);
+			} finally {
+				modalDepth -= 1;
+			}
 		} else if ((v.type === "list-row" || v.type === "empty") && Array.isArray(v.actions)) walk(v.actions, `${at}.actions`);
 		else if (v.type === "list" && Array.isArray(v.items)) for (let row = 0; row < v.items.length; row++) walkNode(v.items[row], `${at}.items[${row}]`);
 		else if (v.type === "table" && Array.isArray(v.details)) {
@@ -3400,7 +3489,11 @@ function processGenuiSpec(value) {
 	const errors = validation.errors.filter((error) => !error.includes(": unknown type "));
 	if (repaired !== null && errors.length === 0) errors.push(...analyzeSubmissionRegistry(repaired).diagnostics);
 	if (declaredNativeCount > renderedNativeCount) errors.push(`repair dropped ${declaredNativeCount - renderedNativeCount} declared native node(s): declared ${declaredNativeCount}, rendered ${renderedNativeCount}`);
-	const warnings = [...normalized.warnings, ...diagnoseUnknownGenuiFields(normalized.value)];
+	const warnings = [
+		...normalized.warnings,
+		...diagnoseUnknownGenuiFields(normalized.value),
+		...diagnoseNestedModals(normalized.value)
+	];
 	if (uncappedDeclaredCount > declaredNativeCount) warnings.push({
 		kind: "truncated",
 		path: "spec",
@@ -3851,6 +3944,15 @@ function validateNode(value, depth, at, errors, walk) {
 			else walk(v.items, depth + 1, `${at}.items`);
 			isStr("desc");
 			isStr("error");
+			break;
+		case "modal":
+			if (typeof v.title !== "string") errors.push(`${at}: type 'modal' requires title (string)`);
+			isStr("trigger");
+			isStr("variant");
+			if (v.items !== void 0 && !Array.isArray(v.items)) errors.push(`${at}: type 'modal' requires items (array) when present`);
+			else if (Array.isArray(v.items)) walk(v.items, depth + 1, `${at}.items`);
+			if (v.actions !== void 0 && !Array.isArray(v.actions)) errors.push(`${at}: type 'modal' requires actions (array) when present`);
+			else if (Array.isArray(v.actions)) walk(v.actions, depth + 1, `${at}.actions`);
 			break;
 		case "empty":
 			if (typeof v.title !== "string") errors.push(`${at}: type 'empty' requires title (string)`);
@@ -5429,11 +5531,15 @@ function missingBodyCorrectionText(turn, attempt = 1, renderUiToolEnabled = true
 * @param source - 本次请求的 provider stream。
 * @param state - 当前回合状态；缺省时没有可用提醒，保留宿主重试。
 * @param feedbackEnabled - 同回合修正是否启用。关闭时没有提醒可用，保持原有改写行为。
+* @param gate - 宿主判定；缺省时惰性导入 `@deepseek-ai/dsh-llm`（测试注入用）。
 * @returns 原始 stream；仅在提醒已发出、或提醒不可用时改写 reasoning-only 终止。
 */
-async function* retryReasoningOnlyGenuiStream(options, source, state, feedbackEnabled = true) {
-	const { EMPTY_RESPONSE_CODE, isAgentLoopRequest } = await import("@deepseek-ai/dsh-llm");
-	if (!isAgentLoopRequest(options)) {
+async function* retryReasoningOnlyGenuiStream(options, source, state, feedbackEnabled = true, gate) {
+	const resolved = gate ?? await import("@deepseek-ai/dsh-llm").then((module) => ({
+		isAgentLoopRequest: module.isAgentLoopRequest,
+		emptyResponseCode: module.EMPTY_RESPONSE_CODE
+	}));
+	if (!resolved.isAgentLoopRequest(options)) {
 		yield* source;
 		return;
 	}
@@ -5465,7 +5571,7 @@ async function* retryReasoningOnlyGenuiStream(options, source, state, feedbackEn
 					kind: "error",
 					failure: {
 						message: "GenUI turn completed with reasoning only and no deliverable response",
-						code: EMPTY_RESPONSE_CODE
+						code: resolved.emptyResponseCode
 					}
 				}
 			};
@@ -5800,7 +5906,8 @@ const CATALOG_CATEGORIES = [
 			"link",
 			"tabs",
 			"accordion",
-			"field-group"
+			"field-group",
+			"modal"
 		],
 		tail: "（row.justify / col.width / card.flat 见图元）"
 	},
@@ -6073,6 +6180,14 @@ const CATALOG_DOCS = {
 		gotcha: ["label 与 items 都必填"],
 		usage: "items 放控件（input/select/…）；desc 是提示，error 是错误文案，必填时加 `required:true`。"
 	},
+	modal: {
+		category: "interactive",
+		summary: "确认层/底部面板：trigger 打开，标题+内容+操作区，关闭后焦点归位。",
+		promptInline: "（确认层/底部面板）",
+		quickRef: "{\"type\":\"modal\",\"trigger\":\"删除\",\"title\",\"items\":[...],\"actions\":[...]}",
+		gotcha: ["弹层必填 title，关闭按钮写 close:true；弹层不能嵌套"],
+		usage: "variant 取 dialog/sheet；open:true 只用于静态展示，不抢焦点；dismissible:false 时只能点操作区按钮关闭；触发器只负责打开。"
+	},
 	mermaid: {
 		category: "advanced",
 		summary: "Mermaid 图（流程/时序/甘特/ER 等 30+ 图型）。",
@@ -6232,46 +6347,70 @@ function prototypeScreensPrompt() {
 const ASSET_ROUTE_PATH = "/plugins/dsh-vt-gen-ui/assets";
 /** Safe flat file names only: no slashes, no traversal, js assets only. */
 const ASSET_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.js$/;
-/** The handler itself (registered via the optional webServer probe). */
-async function serveGenuiAsset(req, res) {
-	if (req.method !== "GET" && req.method !== "HEAD") {
-		res.writeHead(405);
-		res.end();
-		return;
-	}
+/**
+* Decide which asset file a request addresses.
+*
+* Pure on purpose: the routing rules (method, prefix, flat `.js`-only name,
+* traversal rejection) are the security surface of this route, so they are
+* testable without a server or build output.
+*
+* @param method - request method (only GET/HEAD are served).
+* @param rawUrl - raw request URL, decoded before matching.
+* @returns the file to serve, or the status the route answers.
+*/
+function resolveAssetRequest(method, rawUrl) {
+	if (method !== "GET" && method !== "HEAD") return { status: 405 };
 	let pathname;
 	try {
-		pathname = decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname);
+		pathname = decodeURIComponent(new URL(rawUrl ?? "/", "http://x").pathname);
 	} catch {
-		res.writeHead(400);
-		res.end();
-		return;
+		return { status: 400 };
 	}
-	const rel = pathname.startsWith(`${ASSET_ROUTE_PATH}/`) ? pathname.slice(29) : null;
-	if (rel === null) {
-		res.writeHead(404);
-		res.end();
-		return;
-	}
-	const file = rel.slice(1);
-	if (!ASSET_FILE_RE.test(file)) {
-		res.writeHead(404);
-		res.end();
-		return;
-	}
-	try {
-		const dir = fileURLToPath(new URL("./assets/", import.meta.url));
-		const body = await readFile(join(dir, file));
-		res.writeHead(200, {
-			"content-type": "text/javascript; charset=utf-8",
-			"cache-control": "no-cache"
-		});
-		res.end(body);
-	} catch {
-		res.writeHead(404);
-		res.end();
-	}
+	if (!pathname.startsWith(`/plugins/dsh-vt-gen-ui/assets/`)) return { status: 404 };
+	const file = pathname.slice(30);
+	return ASSET_FILE_RE.test(file) ? {
+		status: 200,
+		file
+	} : { status: 404 };
 }
+/** Read one asset by flat file name from this package's lib/assets directory. */
+function readPackageAsset(file) {
+	const dir = fileURLToPath(new URL("./assets/", import.meta.url));
+	return readFile(join(dir, file));
+}
+/**
+* Build the asset route handler.
+*
+* The reader is injectable so the route's observable contract — status codes,
+* headers, and the missing-asset degradation — is testable without the
+* package's build output on disk.
+*
+* @param read - reads one flat asset file name.
+* @returns the HTTP handler registered on the host webserver.
+*/
+function createAssetHandler(read) {
+	return async (req, res) => {
+		const decision = resolveAssetRequest(req.method, req.url);
+		if (decision.status !== 200) {
+			res.writeHead(decision.status);
+			res.end();
+			return;
+		}
+		try {
+			const body = await read(decision.file);
+			res.writeHead(200, {
+				"content-type": "text/javascript; charset=utf-8",
+				"cache-control": "no-cache"
+			});
+			res.end(body);
+		} catch {
+			res.writeHead(404);
+			res.end();
+		}
+	};
+}
+/** The handler itself (registered via the optional webServer probe). */
+const serveGenuiAsset = createAssetHandler(readPackageAsset);
 const RENDER_UI_TOOL_GUIDANCE = "- Tool channel: render_ui 工具把同一 spec 渲染为工具行卡片；围栏用于回答内联 UI。";
 /** The fence language description injected into every assembled system prompt.
 *  Deliberately slim: the `genui` skill carries the full component→field
@@ -6413,4 +6552,4 @@ function apply(ctx, config) {
 		}), "dsh-genui: asset route");
 	});
 }
-export { GENUI_SECTION_TEXT, apply, composeGenuiSkillContent, inject, name };
+export { ASSET_FILE_RE, ASSET_ROUTE_PATH, GENUI_SECTION_TEXT, apply, bundledSkillProvider, composeGenuiSkillContent, createAssetHandler, inject, name, resolveAssetRequest };

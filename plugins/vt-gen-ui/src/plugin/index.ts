@@ -38,53 +38,84 @@ import {
  */
 
 /** Route prefix under /plugins; anything under it is this plugin's asset. */
-const ASSET_ROUTE_PATH = '/plugins/dsh-vt-gen-ui/assets'
+export const ASSET_ROUTE_PATH = '/plugins/dsh-vt-gen-ui/assets'
 
 /** Safe flat file names only: no slashes, no traversal, js assets only. */
-const ASSET_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
+export const ASSET_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 
-/** The handler itself (registered via the optional webServer probe). */
-async function serveGenuiAsset(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    res.writeHead(405)
-    res.end()
-    return
-  }
+/** One request's asset decision; status 200 carries the flat file to serve. */
+export type AssetRequestDecision =
+  | { readonly status: 200; readonly file: string }
+  | { readonly status: 400 | 404 | 405 }
+
+/**
+ * Decide which asset file a request addresses.
+ *
+ * Pure on purpose: the routing rules (method, prefix, flat `.js`-only name,
+ * traversal rejection) are the security surface of this route, so they are
+ * testable without a server or build output.
+ *
+ * @param method - request method (only GET/HEAD are served).
+ * @param rawUrl - raw request URL, decoded before matching.
+ * @returns the file to serve, or the status the route answers.
+ */
+export function resolveAssetRequest(method: string | undefined, rawUrl: string | undefined): AssetRequestDecision {
+  if (method !== 'GET' && method !== 'HEAD') return { status: 405 }
   let pathname: string
   try {
-    pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname)
+    pathname = decodeURIComponent(new URL(rawUrl ?? '/', 'http://x').pathname)
   } catch {
-    res.writeHead(400)
-    res.end()
-    return
+    return { status: 400 }
   }
-  const rel = pathname.startsWith(`${ASSET_ROUTE_PATH}/`) ? pathname.slice(ASSET_ROUTE_PATH.length) : null
-  if (rel === null) {
-    res.writeHead(404)
-    res.end()
-    return
-  }
-  const file = rel.slice(1)
-  if (!ASSET_FILE_RE.test(file)) {
-    res.writeHead(404)
-    res.end()
-    return
-  }
-  try {
-    // lib/index.js → ./assets/ = <pkg>/lib/assets/ (the tsdown asset outDir).
-    const dir = fileURLToPath(new URL('./assets/', import.meta.url))
-    const body = await readFile(join(dir, file))
-    res.writeHead(200, {
-      'content-type': 'text/javascript; charset=utf-8',
-      'cache-control': 'no-cache',
-    })
-    res.end(body)
-  } catch {
-    // Missing asset (old build) — a loud 404; the client shows its fallback.
-    res.writeHead(404)
-    res.end()
+  if (!pathname.startsWith(`${ASSET_ROUTE_PATH}/`)) return { status: 404 }
+  const file = pathname.slice(ASSET_ROUTE_PATH.length + 1)
+  return ASSET_FILE_RE.test(file) ? { status: 200, file } : { status: 404 }
+}
+
+/** Read one asset by flat file name from this package's lib/assets directory. */
+function readPackageAsset(file: string): Promise<Buffer> {
+  // lib/index.js → ./assets/ = <pkg>/lib/assets/ (the tsdown asset outDir).
+  const dir = fileURLToPath(new URL('./assets/', import.meta.url))
+  return readFile(join(dir, file))
+}
+
+/**
+ * Build the asset route handler.
+ *
+ * The reader is injectable so the route's observable contract — status codes,
+ * headers, and the missing-asset degradation — is testable without the
+ * package's build output on disk.
+ *
+ * @param read - reads one flat asset file name.
+ * @returns the HTTP handler registered on the host webserver.
+ */
+export function createAssetHandler(
+  read: (file: string) => Promise<Buffer>,
+): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  return async (req, res) => {
+    const decision = resolveAssetRequest(req.method, req.url)
+    if (decision.status !== 200) {
+      res.writeHead(decision.status)
+      res.end()
+      return
+    }
+    try {
+      const body = await read(decision.file)
+      res.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'no-cache',
+      })
+      res.end(body)
+    } catch {
+      // Missing asset (old build) — a loud 404; the client shows its fallback.
+      res.writeHead(404)
+      res.end()
+    }
   }
 }
+
+/** The handler itself (registered via the optional webServer probe). */
+const serveGenuiAsset = createAssetHandler(readPackageAsset)
 
 const RENDER_UI_TOOL_GUIDANCE = '- Tool channel: render_ui 工具把同一 spec 渲染为工具行卡片；围栏用于回答内联 UI。'
 
@@ -170,7 +201,7 @@ export function composeGenuiSkillContent(skillBody: string): string {
 }
 
 /** Register through the provider path so source=bundled also gets bundled precedence. */
-function bundledSkillProvider(): SkillProvider {
+export function bundledSkillProvider(): SkillProvider {
   const moduleDirectory = dirname(fileURLToPath(new URL(import.meta.url)))
   const path = basename(moduleDirectory) === 'plugin'
     ? resolve(moduleDirectory, '../../SKILL.md')

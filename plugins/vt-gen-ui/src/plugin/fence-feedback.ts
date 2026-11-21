@@ -319,6 +319,19 @@ export function missingBodyCorrectionText(turn: number, attempt = 1, renderUiToo
 }
 
 /**
+ * The host helpers the reasoning-only gate needs.
+ *
+ * Production resolves them through a lazy `import('@deepseek-ai/dsh-llm')` (the
+ * node half deliberately imports no `@deepseek-ai/*` values at module load);
+ * tests inject this gate so the rewrite branch is reachable without a live
+ * agent loop — `isAgentLoopRequest` answers from a WeakSet of real requests.
+ */
+export interface ReasoningOnlyGate {
+  readonly isAgentLoopRequest: (request: GenerateOptions) => boolean
+  readonly emptyResponseCode: string
+}
+
+/**
  * 将 GenUI 回合中仅含 reasoning 的完整响应转换为宿主已有的可重试空响应错误。
  *
  * 只有回合边界确实还能发送交付提醒时，才放行原始 stop，
@@ -330,16 +343,21 @@ export function missingBodyCorrectionText(turn: number, attempt = 1, renderUiToo
  * @param source - 本次请求的 provider stream。
  * @param state - 当前回合状态；缺省时没有可用提醒，保留宿主重试。
  * @param feedbackEnabled - 同回合修正是否启用。关闭时没有提醒可用，保持原有改写行为。
+ * @param gate - 宿主判定；缺省时惰性导入 `@deepseek-ai/dsh-llm`（测试注入用）。
  * @returns 原始 stream；仅在提醒已发出、或提醒不可用时改写 reasoning-only 终止。
  */
-async function* retryReasoningOnlyGenuiStream(
+export async function* retryReasoningOnlyGenuiStream(
   options: GenerateOptions,
   source: AsyncIterable<StreamChunk>,
   state?: SessionFeedback,
   feedbackEnabled = true,
+  gate?: ReasoningOnlyGate,
 ): AsyncGenerator<StreamChunk> {
-  const { EMPTY_RESPONSE_CODE, isAgentLoopRequest } = await import('@deepseek-ai/dsh-llm')
-  if (!isAgentLoopRequest(options)) {
+  const resolved: ReasoningOnlyGate = gate ?? await import('@deepseek-ai/dsh-llm').then(module => ({
+    isAgentLoopRequest: module.isAgentLoopRequest,
+    emptyResponseCode: module.EMPTY_RESPONSE_CODE,
+  }))
+  if (!resolved.isAgentLoopRequest(options)) {
     yield* source
     return
   }
@@ -381,7 +399,7 @@ async function* retryReasoningOnlyGenuiStream(
           kind: 'error',
           failure: {
             message: 'GenUI turn completed with reasoning only and no deliverable response',
-            code: EMPTY_RESPONSE_CODE,
+            code: resolved.emptyResponseCode,
           },
         },
       }

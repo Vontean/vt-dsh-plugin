@@ -216,7 +216,7 @@
   },
   "scripts": {
     "build": "rm -rf lib && tsc -p tsconfig.json && tsdown",
-    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit --emitDeclarationOnly false && tsc -p tsconfig.test.json",
     "check": "pnpm typecheck && pnpm test && pnpm build",
     "test": "vitest run",
     "test:watch": "vitest"
