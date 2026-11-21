@@ -172,20 +172,25 @@ describe('nav', () => {
     }} />)
     const slot = root.querySelector('[data-genui-icon-field]')!
     expect(slot.getAttribute('data-genui-icon-field')).toBe('nav-icon')
+    // The raw value rides on the element so the audit can judge it without
+    // reading the spec: a catalogue name must produce an svg.
+    expect(slot.getAttribute('data-genui-icon-name')).toBe('Cube')
     expect(slot.querySelector('svg')).not.toBeNull()
     // The glyph is decorative next to the label; it must not double-announce.
     expect(slot.closest('[aria-hidden="true"]')).not.toBeNull()
   })
 
-  test('a non-catalogue string stays text', () => {
+  test('a non-catalogue string stays text, with its value recorded', () => {
     // Emoji and initials are legitimate media values; they are not icons and
-    // must not be swallowed by the glyph path.
+    // must not be swallowed by the glyph path. The name attribute is still
+    // written, so the audit's rule stays "catalogue name ⇒ svg, else text".
     const root = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{
       type: 'nav', items: [{ label: '收藏', icon: '★' }],
     }} />)
-    expect(root.querySelector('[data-genui-icon-field]')).toBeNull()
-    expect(root.querySelector('svg')).toBeNull()
-    expect(root.querySelector('nav')!.textContent).toContain('★')
+    const slot = root.querySelector('[data-genui-icon-field]')!
+    expect(slot.getAttribute('data-genui-icon-name')).toBe('★')
+    expect(slot.querySelector('svg')).toBeNull()
+    expect(slot.textContent).toBe('★')
   })
 })
 
@@ -228,14 +233,17 @@ describe('list-row', () => {
     }} />)
     const slot = glyph.querySelector('[data-genui-icon-field]')!
     expect(slot.getAttribute('data-genui-icon-field')).toBe('media')
+    expect(slot.getAttribute('data-genui-icon-name')).toBe('Cube')
     expect(slot.querySelector('svg')).not.toBeNull()
     expect(glyph.querySelector('[data-genui="list-row"]')!.textContent).not.toContain('Cube')
 
     const initial = render(<ListRowNode path="items[0]" renderChildren={renderChildren} node={{
       type: 'list-row', title: '王小鲸', media: '王',
     }} />)
-    expect(initial.querySelector('[data-genui-icon-field]')).toBeNull()
-    expect(initial.querySelector('[data-genui="list-row"]')!.textContent).toContain('王')
+    const initialSlot = initial.querySelector('[data-genui-icon-field]')!
+    expect(initialSlot.getAttribute('data-genui-icon-name')).toBe('王')
+    expect(initialSlot.querySelector('svg')).toBeNull()
+    expect(initialSlot.textContent).toBe('王')
   })
 
   test('rows bleed inline only, so hover and separators span the frame', () => {
@@ -400,6 +408,7 @@ describe('empty', () => {
     }} />)
     const slot = root.querySelector('[data-genui-icon-field]')!
     expect(slot.getAttribute('data-genui-icon-field')).toBe('empty-icon')
+    expect(slot.getAttribute('data-genui-icon-name')).toBe('Cube')
     expect(slot.querySelector('svg')).not.toBeNull()
     expect(root.textContent).not.toContain('Cube')
   })

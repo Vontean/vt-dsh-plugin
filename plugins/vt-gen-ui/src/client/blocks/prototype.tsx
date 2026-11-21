@@ -46,11 +46,22 @@ export interface PrototypeRenderProps<N> {
  * One implementation for all three slots: the earlier defect was the same
  * "is this an icon?" decision made in one place and not in another.
  *
- * The wrapper carries `data-genui-icon-field`, a contract hook: the geometry
- * audit can assert "every marked icon field renders an svg" generically
- * instead of hard-coding field names per component (the H9 switch problem).
- * It is set from the NAME being a catalogue entry, not from the glyph being
- * downloaded, so a missing lazy asset fails the audit instead of hiding.
+ * The wrapper carries two contract hooks so the geometry audit can decide
+ * without reading the spec or keeping a field whitelist (the H9 switch
+ * problem):
+ *
+ * - `data-genui-icon-field` marks the slot (`media` / `nav-icon` / `empty-icon`);
+ * - `data-genui-icon-name` records the raw value that was judged.
+ *
+ * The audit rule is then one unambiguous sentence: if the recorded name is a
+ * catalogue entry, the element MUST contain an svg; otherwise text is allowed
+ * (an avatar initial or emoji is a legitimate value). Keeping the name on the
+ * text fallback too is what makes the original bug detectable — if this
+ * helper ever degrades to printing the string, `name="Cube"` stays on the
+ * element and the audit goes red instead of passing silently.
+ *
+ * Both attributes are derived from the NAME being a catalogue entry, not from
+ * the glyph being downloaded, so a missing lazy asset fails the audit too.
  */
 function renderIconField(
   value: string | undefined,
@@ -60,10 +71,9 @@ function renderIconField(
   if (value === undefined) return null
   const text = value.trim()
   if (text === '') return null
-  if (!isKnownIcon(text)) return text
   return (
-    <span data-genui-icon-field={field}>
-      <IconGlyph name={text} size={size} />
+    <span data-genui-icon-field={field} data-genui-icon-name={text}>
+      {isKnownIcon(text) ? <IconGlyph name={text} size={size} /> : text}
     </span>
   )
 }

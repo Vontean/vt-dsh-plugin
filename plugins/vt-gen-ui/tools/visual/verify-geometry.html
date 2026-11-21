@@ -45,8 +45,8 @@
     ] }],
     // 图标字段：三处图标槽都应出 svg 并带契约标记；首字母仍是文字
     icons: [{ type: 'page', title: '图标字段', items: [
-      { type: 'nav', variant: 'top', items: [{ label: '资源', icon: 'Cube', active: true }, { label: '设置' }] },
-      { type: 'list-row', title: '图标资源', desc: 'media 写图标名', media: 'Cube' },
+      { type: 'nav', variant: 'top', items: [{ label: '设置', icon: 'Settings', active: true }, { label: '分组' }] },
+      { type: 'list-row', title: '图标资源', desc: 'media 写图标名', media: 'Check' },
       { type: 'list-row', title: '首字母仍是文字', desc: '不是图标名就按原样渲染', media: '王' },
       { type: 'empty', icon: 'Cube', title: '还没有资源', desc: 'empty 的图形位同样接图标' },
     ] }],
@@ -157,22 +157,24 @@
           return lefts;
         })(),
         // 图标槽取证：带标记的必须真的渲染出 svg，且尺寸与槽匹配
+        // 审计规则的无歧义形式：name 在图录里 ⇒ 必须含 svg；否则允许文字。
+        // 这里把 name 一并报出来，便于核对是哪一边。
         iconFields: [...host.querySelectorAll('[data-genui-icon-field]')].map(slot => {
           const svg = slot.querySelector('svg');
           const box = slot.parentElement;
           return {
             field: slot.getAttribute('data-genui-icon-field'),
+            name: slot.getAttribute('data-genui-icon-name'),
             hasSvg: svg !== null,
             svgSize: svg === null ? null : `${px(rect(svg).width)}x${px(rect(svg).height)}`,
             boxSize: box === null ? null : `${px(rect(box).width)}x${px(rect(box).height)}`,
             text: slot.textContent,
           };
         }),
-        // 同一容器里没被当图标渲染的 media（首字母）应仍是文字
-        plainMedia: [...host.querySelectorAll('[data-genui="list-row"]')]
-          .map(row => row.firstElementChild)
-          .filter(box => box !== null && box.querySelector('[data-genui-icon-field]') === null)
-          .map(box => box.textContent),
+        // 走文字兜底的那些槽（未知名字），其 name 应不在图录内
+        fallbackText: [...host.querySelectorAll('[data-genui-icon-field]')]
+          .filter(slot => slot.querySelector('svg') === null)
+          .map(slot => `${slot.getAttribute('data-genui-icon-name')}→${slot.textContent}`),
         split: split === null ? null : {
           divider: split.getAttribute('data-divider'),
           gap: getComputedStyle(split).columnGap,
