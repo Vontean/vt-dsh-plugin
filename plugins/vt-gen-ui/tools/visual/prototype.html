@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · 原型通道视觉规则探针</title>
+<!-- 真实宿主 token 镜像（与 app.asar 提取值一致） -->
+<link rel="stylesheet" href="./theme.css" />
+<!-- 真实插件 token 段：探针与线上跑同一套 --dsl-g-*，不是复制品 -->
+<link rel="stylesheet" href="../../src/client/GenuiBlock.module.css" />
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   原型通道视觉规则探针（对应 docs/specs/prototype-visual-rules.md）
+
+   作用：把规范里的每个取值渲染出来，浅色/深色各截一次，确认它们在真实
+   token 下成立。它验证的是「取值与观感」，不是组件实现。
+
+   类名统一加 pr- 前缀：GenuiBlock.module.css 里已有 .row/.card/.list 等同名
+   类，探针需要避开；CSS Modules 落地时类名会被 hash，不存在这个冲突。
+
+   本页只允许出现两处「自己算」的颜色：
+     · --proto-fill-placeholder  = label-primary 7%（灰阶块，深浅自适应）
+     · --proto-surface-inset     = markdown-code-block（宿主自带的内嵌面）
+   其余全部走 --dsl-g-* 或 --dsw-alias-*。
+   ───────────────────────────────────────────────────────────────────────── */
+
+.pr-probe {
+  --proto-line-rule: var(--dsl-g-border);          /* 分隔线：border-l1  浅 4% / 深 6% */
+  --proto-line-frame: var(--dsl-g-border-strong);  /* 结构线：border-l2  浅 10% / 深 12% */
+  --proto-surface-card: var(--dsw-alias-bg-layer-2, var(--dsl-g-surface));
+  --proto-surface-inset: var(--dsw-alias-markdown-code-block, var(--dsl-g-surface));
+  --proto-surface-float: var(--dsw-alias-bg-layer-3, var(--dsl-g-surface));
+  --proto-fill-placeholder: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);
+  /* 遮罩用 static 近黑：它必须两个主题都是"压暗"，不能用会随主题翻转的 label/背景色 */
+  --proto-scrim: color-mix(in srgb, var(--dsw-static-neutral-bluish-1000) 48%, transparent);
+  --proto-pad-x: 24px;
+  --proto-radius-page: var(--dsl-g-radius-surface);   /* 12 */
+  --proto-radius-control: var(--dsl-g-radius-control); /* 8 */
+  --proto-radius-sm: var(--dsl-g-radius-sm);           /* 6 */
+  --proto-dur-pulse: 1.6s;
+
+  container: proto-root / inline-size;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 40px 0 64px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* 探针自身不是交付物：标题只用来看截图上下文 */
+.pr-probe > h1 { margin: 0 0 4px; font-size: 18px; line-height: 24px; font-weight: 600; }
+.pr-probe > p.lead { margin: 0 0 32px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+
+/* ── 页面外框：唯一的整块虚线，语义是「这块是模拟出来的屏幕」 ── */
+.pr-frame { position: relative; padding-top: 9px; margin-top: 40px; }
+.pr-frame-label {
+  position: absolute; top: 0; left: 12px; z-index: 2;   /* 必须高于 page 的定位层级 */
+  display: inline-flex; align-items: center; height: 18px; padding: 0 6px;
+  border-radius: var(--proto-radius-sm);
+  background: var(--dsw-alias-bg-base);            /* 用「线后面的面」把虚线切开 */
+  font-size: 12px; line-height: 18px; font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+.pr-page {
+  position: relative; z-index: 0;                  /* 浮层在页面框内定位，不逃到视口 */
+  container: proto-page / inline-size;
+  background: var(--proto-surface-card);
+  border: 1px dashed var(--proto-line-frame);
+  border-radius: var(--proto-radius-page);
+  overflow: clip;                                  /* clip 而不是 hidden：不产生滚动容器，不裁焦点环外扩以外的内容 */
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── nav ── */
+.pr-nav { display: flex; align-items: center; gap: 8px; }
+.pr-nav--top {
+  height: 48px; padding: 0 var(--proto-pad-x);
+  border-bottom: 1px solid var(--proto-line-rule);
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none;
+}
+.pr-nav--top::-webkit-scrollbar { display: none; }
+.pr-nav__title { font-size: 13px; line-height: 20px; font-weight: 600; }
+.pr-nav__spacer { flex: 1; }
+.pr-nav__item {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 32px; padding: 0 8px; border-radius: var(--proto-radius-control);
+  font-size: 13px; line-height: 20px; font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent; border: 0; cursor: pointer;
+  transition: background-color var(--dsl-g-dur-fast) var(--dsl-g-ease-out);
+}
+.pr-nav__item:hover { background: var(--dsl-g-hover); }
+.pr-nav__item[data-active] {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsl-g-hover);
+}
+.pr-nav__icon { display: inline-flex; width: 16px; height: 16px; color: currentColor; }
+.pr-nav__icon svg { width: 16px; height: 16px; }
+
+.pr-shell { display: flex; align-items: stretch; }
+.pr-main { flex: 1 1 auto; min-width: 0; }
+.pr-nav--side {
+  width: 200px; flex: 0 0 200px;
+  padding: 8px; gap: 4px; flex-direction: column; align-items: stretch;
+  background: var(--proto-surface-inset);
+  border-right: 1px solid var(--proto-line-rule);
+}
+.pr-nav--side .pr-nav__item { justify-content: flex-start; }
+.pr-nav--side .pr-nav__item[data-active] {
+  background: var(--proto-surface-card);              /* 灰底上抬一档，深浅两主题都成立 */
+  color: var(--dsw-alias-label-primary);
+}
+.pr-nav--side .pr-nav__group {
+  padding: 8px 8px 4px; font-size: 12px; line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.pr-nav--bottom {
+  border-top: 1px solid var(--proto-line-rule); padding: 0;
+}
+.pr-nav--bottom .pr-nav__item {
+  flex: 1 1 0; height: 52px; flex-direction: column; justify-content: center;
+  gap: 4px; border-radius: 0; font-size: 12px; line-height: 18px;
+}
+.pr-nav--bottom .pr-nav__item[data-active] {
+  background: transparent; color: var(--dsw-alias-label-primary);
+}
+.pr-nav--bottom .pr-nav__item[data-active] .pr-nav__icon { color: var(--dsl-g-accent); }
+
+/* ── page header ── */
+.pr-header {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 16px var(--proto-pad-x);
+}
+.pr-header__text { flex: 1 1 auto; min-width: 0; }
+.pr-title { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; }
+.pr-sub { margin: 4px 0 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.pr-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+
+/* ── 按钮：外观层低保真——主操作只靠灰底 + 字重，不用品牌色实心 ── */
+.pr-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  height: 32px; padding: 0 12px;
+  border: 1px solid var(--proto-line-frame); border-radius: var(--proto-radius-control);
+  background: transparent; color: var(--dsw-alias-label-primary);
+  font-size: 13px; line-height: 20px; font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dsl-g-dur-fast) var(--dsl-g-ease-out);
+}
+.pr-btn:hover { background: var(--dsl-g-hover); }
+.pr-btn--primary { background: var(--dsl-g-hover); font-weight: 600; }
+.pr-btn--primary:hover { background: var(--dsl-g-hover-strong); }
+.pr-btn[data-disabled] {
+  color: var(--dsw-alias-label-dimmed, var(--dsw-alias-label-caption));
+  border-color: var(--proto-line-rule);
+  background: transparent; cursor: not-allowed;
+}
+.pr-btn[data-disabled]:hover { background: transparent; }
+
+/* ── list-row ── */
+.pr-rows { display: flex; flex-direction: column; }
+.pr-row {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 56px; padding: 8px var(--proto-pad-x);
+  border-top: 1px solid var(--proto-line-rule);
+  text-align: left; width: 100%; background: transparent; border-inline: 0; border-bottom: 0;
+  color: inherit; cursor: pointer;
+  transition: background-color var(--dsl-g-dur-fast) var(--dsl-g-ease-out);
+}
+.pr-rows > .pr-row:first-child { border-top: 0; }
+.pr-row:hover { background: var(--dsl-g-hover); }
+.pr-row[data-active] { background: var(--dsl-g-hover); }
+.pr-row[data-disabled] { cursor: not-allowed; color: var(--dsw-alias-label-dimmed, var(--dsw-alias-label-caption)); }
+.pr-row[data-disabled]:hover { background: transparent; }
+.pr-row__media {
+  flex: 0 0 auto; width: 40px; height: 40px;
+  border-radius: var(--proto-radius-control);
+  background: var(--proto-fill-placeholder);
+}
+.pr-row__body { flex: 1 1 auto; min-width: 0; }
+.pr-row__title {
+  display: block;
+  font-size: 14px; line-height: 20px; font-weight: 400;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pr-row__desc {
+  display: block;
+  margin-top: 4px; font-size: 13px; line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pr-row__trail {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+  font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary);
+}
+.pr-row__chev { display: inline-flex; width: 16px; height: 16px; color: var(--dsw-alias-label-caption); }
+
+/* ── 未定内容：虚线框（有边界的区域）与灰阶块（无边界的内容） ── */
+.pr-ph-box {
+  display: flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--proto-line-frame); border-radius: var(--proto-radius-control);
+  background: var(--proto-fill-placeholder);
+  font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary);
+}
+.pr-ph-lines { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pr-ph-line { height: 12px; border-radius: var(--proto-radius-sm); background: var(--proto-fill-placeholder); }
+.pr-ph-line--100 { width: 100%; }
+.pr-ph-line--72 { width: 72%; }
+.pr-ph-line--56 { width: 56%; }
+.pr-section { padding: 16px var(--proto-pad-x); border-top: 1px solid var(--proto-line-rule); }
+.pr-section__head {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px;
+}
+.pr-section__title { font-size: 13px; line-height: 20px; font-weight: 600; }
+.pr-section__meta { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.pr-wire { display: flex; gap: 12px; align-items: flex-start; }
+.pr-wire .pr-ph-box { width: 96px; height: 64px; flex: 0 0 auto; }
+
+/* ── field-group ── */
+.pr-form { display: flex; flex-direction: column; gap: 16px; padding: 16px var(--proto-pad-x); }
+.pr-field { display: flex; flex-direction: column; }
+.pr-field__label { margin-bottom: 8px; font-size: 13px; line-height: 20px; font-weight: 500; }
+.pr-field__input {
+  display: flex; align-items: center; height: 32px; padding: 0 8px;
+  border: 1px solid var(--proto-line-frame); border-radius: var(--proto-radius-control);
+  background: transparent; color: var(--dsw-alias-label-primary);
+  font-size: 13px; line-height: 20px; font-family: inherit;
+}
+.pr-field__input--placeholder { color: var(--dsw-alias-label-tertiary); }
+.pr-field__msg { margin-top: 4px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.pr-field[data-invalid] .pr-field__input { border-color: var(--dsw-alias-state-error-primary); }
+.pr-field[data-invalid] .pr-field__msg { color: var(--dsw-alias-state-error-primary); }
+.pr-field[data-disabled] .pr-field__label { color: var(--dsw-alias-label-dimmed, var(--dsw-alias-label-caption)); }
+.pr-field[data-disabled] .pr-field__input {
+  background: var(--proto-surface-inset); border-color: var(--proto-line-rule);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── empty / loading ──（都是真实状态：没有整块虚线，只有内容槽是占位） */
+.pr-empty {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 8px; padding: 24px var(--proto-pad-x);
+}
+.pr-empty__graphic {
+  width: 40px; height: 40px; margin-bottom: 4px;
+  border-radius: var(--proto-radius-control);
+  background: var(--proto-fill-placeholder);
+}
+.pr-empty__title { font-size: 14px; line-height: 20px; font-weight: 500; }
+.pr-empty__desc { font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.pr-empty .pr-btn { margin-top: 8px; }
+
+.pr-skel { display: flex; flex-direction: column; gap: 8px; }
+.pr-skel__row { display: flex; align-items: center; gap: 12px; padding: 8px var(--proto-pad-x); }
+.pr-skel__media { width: 40px; height: 40px; flex: 0 0 auto; border-radius: var(--proto-radius-control); background: var(--proto-fill-placeholder); }
+.pr-skel__lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
+.pr-skel__line { height: 12px; border-radius: var(--proto-radius-sm); background: var(--proto-fill-placeholder); }
+.pr-skel__line--72 { width: 72%; }
+.pr-skel--pulse .pr-skel__media,
+.pr-skel--pulse .pr-skel__line { animation: pr-pulse var(--proto-dur-pulse) var(--dsl-g-ease-out) infinite; }
+@keyframes pr-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) {
+  .pr-skel--pulse .pr-skel__media,
+  .pr-skel--pulse .pr-skel__line { animation: none; }
+  .pr-nav__item, .pr-btn, .pr-row { transition: none; }
+}
+
+/* ── split：只做比例与间距，自己不画线不铺面 ── */
+.pr-split { display: flex; gap: 16px; align-items: stretch; }
+.pr-split > * { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+.pr-split > * > .pr-page { flex: 1 1 auto; }
+.pr-split[data-ratio="2:1"] > *:first-child { flex-grow: 2; }
+.pr-split[data-ratio="1:2"] > *:last-child { flex-grow: 2; }
+.pr-note {
+  margin-top: 8px; font-size: 12px; line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 窄容器：两级容器查询，width 由容器自己决定，不看视口 ──
+   split 可能直接挂在原型根上（两方案并排），所以它查 pr-root；
+   page 内部的收缩查 pr-page。容器查询的规则不能作用于容器自身，
+   因此页内边距在「page 的直接子元素」上覆盖变量，向下继承。 */
+@container proto-root (max-width: 600px) {
+  .pr-split { flex-direction: column; }
+  .pr-split > * { flex-grow: 0; }
+}
+@container proto-page (max-width: 600px) {
+  .pr-page > * { --proto-pad-x: 16px; }
+  .pr-header { gap: 12px; }
+  /* 弹层只收缩内边距，形态与居中不变 */
+  .pr-dialog { padding: 16px; }
+}
+@container proto-page (max-width: 560px) {
+  .pr-shell { flex-direction: column; }
+  .pr-nav--side {
+    width: auto; flex: 0 0 auto; flex-direction: row; align-items: center;
+    padding: 8px; gap: 4px; overflow-x: auto;
+    border-right: 0; border-bottom: 1px solid var(--proto-line-rule);
+  }
+  .pr-nav--side .pr-nav__group { display: none; }
+  /* 独立成块：只换方向，四边框与圆角保持 */
+  .pr-nav--side.pr-nav--block { border-right: 1px solid var(--proto-line-rule); }
+  .pr-nav--bottom .pr-nav__item { height: 48px; }
+}
+
+/* ── 浮层（切片 2）：遮罩 + 容器内定位，不逃出 page 外框 ── */
+.pr-overlay {
+  position: absolute; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: var(--proto-scrim);
+}
+.pr-overlay[data-variant="sheet"] { align-items: flex-end; padding: 0; }
+
+.pr-dialog {
+  width: 100%; max-width: 360px;
+  padding: 24px;
+  border-radius: var(--proto-radius-page);
+  background: var(--proto-surface-float);
+  box-shadow: var(--dsl-g-shadow-float);
+}
+.pr-dialog__title { font-size: 15px; line-height: 22px; font-weight: 600; letter-spacing: 0; }
+.pr-dialog__body { margin-top: 8px; font-size: 13px; line-height: 20px; letter-spacing: 0; color: var(--dsw-alias-label-primary); }
+.pr-dialog__actions { margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px; }
+
+.pr-sheet {
+  width: 100%;
+  padding: 16px var(--proto-pad-x) 24px;
+  border-radius: var(--proto-radius-page) var(--proto-radius-page) 0 0;
+  background: var(--proto-surface-float);
+  box-shadow: var(--dsl-g-shadow-float);
+}
+
+/* 危险操作：文字吃 error，深浅两主题都由 token 翻转 */
+.pr-btn--danger { color: var(--dsw-alias-state-error-primary); border-color: var(--dsw-alias-state-error-primary); font-weight: 600; }
+.pr-btn--danger:hover { background: transparent; }
+
+.pr-btn--ghost { border-color: transparent; }
+.pr-btn--ghost:hover { background: var(--dsl-g-hover); }
+
+/* 焦点环：只在键盘导航时出现，不用 :focus 硬画 */
+.pr-btn:focus-visible, .pr-nav__item:focus-visible {
+  outline: 2px solid var(--dsl-g-accent);
+  outline-offset: 2px;
+}
+
+/* ── 侧栏独立成块：一块缩进对齐内容的内嵌面，不是贴边的"栏" ── */
+.pr-nav--side.pr-nav--block {
+  width: 200px; max-width: 100%;
+  margin: 16px var(--proto-pad-x) 0;
+  border: 1px solid var(--proto-line-rule);
+  border-radius: var(--proto-radius-control);
+}
+
+/* ── 骨架节奏：块内相邻文本条宽度必须不同 ── */
+.pr-skel--block { padding: 16px var(--proto-pad-x); }
+
+/* ── split 可选分隔线：仅并排时出现，堆叠即移除 ── */
+.pr-split[data-divider="true"] { gap: 0; }
+.pr-split[data-divider="true"] > * + * { border-left: 1px solid var(--proto-line-frame); padding-left: 16px; }
+@container proto-root (max-width: 600px) {
+  .pr-split[data-divider="true"] { gap: 16px; }
+  .pr-split[data-divider="true"] > * + * { border-left: 0; padding-left: 0; }
+}
+
+/* 手机形态：一个 360 宽的页面，用来看底部标签与窄容器收缩 */
+.pr-phone { width: 360px; max-width: 100%; }
+</style>
+</head>
+<body>
+<div class="block pr-probe">
+
+  <h1>原型通道视觉规则探针</h1>
+  <p class="lead">用真实的 --dsl-g-* 与宿主 alias 渲染规范里的每个取值。虚线只出现在两处：屏幕外框、内容未定区域。</p>
+
+  <!-- 屏 1：顶栏导航 + 标题栏 + 列表行 + 占位区 -->
+  <div class="pr-frame">
+    <span class="pr-frame-label">屏 1 · 任务列表</span>
+    <div class="pr-page">
+      <nav class="pr-nav pr-nav--top">
+        <span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></span>
+        <span class="pr-nav__title">任务</span>
+        <span class="pr-nav__spacer"></span>
+        <button class="pr-nav__item" data-active>全部</button>
+        <button class="pr-nav__item">进行中</button>
+        <button class="pr-nav__item">已完成</button>
+      </nav>
+
+      <header class="pr-header">
+        <div class="pr-header__text">
+          <h2 class="pr-title">今天要处理的任务</h2>
+          <p class="pr-sub">12 项 · 最近更新 3 分钟前</p>
+        </div>
+        <div class="pr-actions">
+          <button class="pr-btn">筛选</button>
+          <button class="pr-btn pr-btn--primary">新建</button>
+        </div>
+      </header>
+
+      <div class="pr-rows">
+        <button class="pr-row">
+          <span class="pr-row__media"></span>
+          <span class="pr-row__body">
+            <span class="pr-row__title">复核原型通道的 token 映射</span>
+            <span class="pr-row__desc">与宿主 alias 逐一对照，确认没有自造灰阶</span>
+          </span>
+          <span class="pr-row__trail">今天 14:30</span>
+          <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+        </button>
+        <button class="pr-row">
+          <span class="pr-row__media"></span>
+          <span class="pr-row__body">
+            <span class="pr-row__title">小尺寸内容位用灰块，不勾虚线</span>
+            <span class="pr-row__desc">虚线只给 64px 以上的区域框；40px 的虚线框读起来像噪点</span>
+          </span>
+          <span class="pr-row__trail">待分配</span>
+          <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+        </button>
+        <button class="pr-row" data-active>
+          <span class="pr-row__media"></span>
+          <span class="pr-row__body">
+            <span class="pr-row__title">选中行：只用一层浅色面，不加边框</span>
+            <span class="pr-row__desc">状态靠 data-active，不靠传 className</span>
+          </span>
+          <span class="pr-row__trail">进行中</span>
+          <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+        </button>
+        <button class="pr-row" data-disabled>
+          <span class="pr-row__media"></span>
+          <span class="pr-row__body">
+            <span class="pr-row__title">禁用行：文字降一档，行为不变</span>
+            <span class="pr-row__desc">不用整体 opacity，避免把分隔线也一起淡掉</span>
+          </span>
+          <span class="pr-row__trail">已归档</span>
+          <span class="pr-row__chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+        </button>
+      </div>
+
+      <section class="pr-section">
+        <div class="pr-section__head">
+          <span class="pr-section__title">内容区（结构待定）</span>
+          <span class="pr-section__meta">虚线 = 区域未定，灰块 = 内容未定</span>
+        </div>
+        <div class="pr-wire">
+          <div class="pr-ph-box">图</div>
+          <div class="pr-ph-lines">
+            <div class="pr-ph-line pr-ph-line--100"></div>
+            <div class="pr-ph-line pr-ph-line--72"></div>
+            <div class="pr-ph-line pr-ph-line--56"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- 双栏对比：split + 两个状态页（empty / loading） -->
+  <div class="pr-split" data-ratio="1:1" style="margin-top: 40px;">
+    <div class="pr-frame" style="margin-top: 9px;">
+      <span class="pr-frame-label">方案 A · 空态</span>
+      <div class="pr-page">
+        <header class="pr-header">
+          <div class="pr-header__text">
+            <h2 class="pr-title">收件箱</h2>
+            <p class="pr-sub">0 项待处理</p>
+          </div>
+          <div class="pr-actions"><button class="pr-btn pr-btn--primary">新建</button></div>
+        </header>
+        <div class="pr-empty" style="border-top: 1px solid var(--proto-line-rule);">
+          <div class="pr-empty__graphic"></div>
+          <div class="pr-empty__title">还没有待处理的消息</div>
+          <div class="pr-empty__desc">新消息会出现在这里</div>
+          <button class="pr-btn">刷新</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pr-frame" style="margin-top: 9px;">
+      <span class="pr-frame-label">方案 B · 加载态</span>
+      <div class="pr-page">
+        <header class="pr-header">
+          <div class="pr-header__text">
+            <h2 class="pr-title">收件箱</h2>
+            <p class="pr-sub">正在读取…</p>
+          </div>
+          <div class="pr-actions"><button class="pr-btn pr-btn--primary">新建</button></div>
+        </header>
+        <div class="pr-skel pr-skel--pulse" style="border-top: 1px solid var(--proto-line-rule); padding-top: 8px; padding-bottom: 16px;">
+          <div class="pr-skel__row">
+            <span class="pr-skel__media"></span>
+            <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 88%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
+          </div>
+          <div class="pr-skel__row">
+            <span class="pr-skel__media"></span>
+            <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 76%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
+          </div>
+          <div class="pr-skel__row">
+            <span class="pr-skel__media"></span>
+            <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 72%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="pr-note">窄于 600px 时两栏堆叠；split 自身不画线、不铺面，只负责比例与 16px 间距。</p>
+
+  <!-- 屏 3：表单（field-group 三态） -->
+  <div class="pr-frame">
+    <span class="pr-frame-label">屏 3 · 新建任务</span>
+    <div class="pr-page">
+      <nav class="pr-nav pr-nav--top">
+        <span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></span>
+        <span class="pr-nav__title">新建任务</span>
+        <span class="pr-nav__spacer"></span>
+      </nav>
+
+      <div class="pr-form">
+        <div class="pr-field">
+          <label class="pr-field__label">任务名称</label>
+          <div class="pr-field__input">复核原型通道的 token 映射</div>
+          <span class="pr-field__msg">一句话说明要交付什么</span>
+        </div>
+        <div class="pr-field" data-invalid>
+          <label class="pr-field__label">截止时间</label>
+          <div class="pr-field__input pr-field__input--placeholder">选择日期</div>
+          <span class="pr-field__msg" role="alert">截止时间不能早于今天</span>
+        </div>
+        <div class="pr-field" data-disabled>
+          <label class="pr-field__label">负责人</label>
+          <div class="pr-field__input">由创建者指定</div>
+          <span class="pr-field__msg">创建后不可修改</span>
+        </div>
+      </div>
+
+      <div class="pr-actions" style="padding: 16px var(--proto-pad-x); border-top: 1px solid var(--proto-line-rule); justify-content: flex-end;">
+        <button class="pr-btn">取消</button>
+        <button class="pr-btn pr-btn--primary">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 屏 4：侧栏导航 + 底部标签（手机形态，容器 360） -->
+  <div class="pr-frame" style="width: 360px; max-width: 100%;">
+    <span class="pr-frame-label">屏 4 · 我的（360）</span>
+    <div class="pr-page">
+      <div class="pr-shell">
+        <nav class="pr-nav pr-nav--side">
+          <span class="pr-nav__group">工作区</span>
+          <button class="pr-nav__item" data-active><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>概览</button>
+          <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>任务</button>
+          <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></span>日程</button>
+        </nav>
+        <div class="pr-main">
+          <header class="pr-header">
+            <div class="pr-header__text">
+              <h2 class="pr-title">我的</h2>
+              <p class="pr-sub">侧栏在 560 以下转成横向条</p>
+            </div>
+          </header>
+          <div class="pr-skel" style="padding-bottom: 16px;">
+            <div class="pr-skel__row">
+              <span class="pr-skel__media"></span>
+              <span class="pr-skel__lines"><span class="pr-skel__line" style="width: 70%"></span><span class="pr-skel__line pr-skel__line--72"></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <nav class="pr-nav pr-nav--bottom">
+        <button class="pr-nav__item" data-active><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>概览</button>
+        <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>任务</button>
+        <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>我的</button>
+      </nav>
+    </div>
+  </div>
+
+
+  <!-- 屏 5：确认层（dialog） -->
+  <div class="pr-frame">
+    <span class="pr-frame-label">屏 5 · 确认层（dialog）</span>
+    <div class="pr-page">
+      <nav class="pr-nav pr-nav--top">
+        <span class="pr-nav__title">任务</span>
+        <span class="pr-nav__spacer"></span>
+        <button class="pr-nav__item" data-active>全部</button>
+        <button class="pr-nav__item">进行中</button>
+      </nav>
+      <div class="pr-rows" style="padding: 16px 0 24px;">
+        <div class="pr-row">
+          <span class="pr-row__media"></span>
+          <span class="pr-row__body">
+            <span class="pr-row__title">遮罩之下的内容仍然可辨结构</span>
+            <span class="pr-row__desc">48% 近黑遮罩，两个主题都不翻转</span>
+          </span>
+        </div>
+        <div class="pr-row">
+          <span class="pr-row__media"></span>
+          <span class="pr-row__body">
+            <span class="pr-row__title">浮层只覆盖页面框，不盖住对话</span>
+            <span class="pr-row__desc">position: absolute + page 的 overflow: clip</span>
+          </span>
+        </div>
+      </div>
+      <div class="pr-overlay" data-variant="dialog" role="dialog" aria-modal="true" aria-label="删除任务">
+        <div class="pr-dialog">
+          <div class="pr-dialog__title">删除这个任务？</div>
+          <div class="pr-dialog__body">删除后无法恢复，关联的 3 条记录会同时移除。</div>
+          <div class="pr-dialog__actions">
+            <button class="pr-btn">取消</button>
+            <button class="pr-btn pr-btn--danger">删除</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 屏 6：底部面板（sheet） -->
+  <div class="pr-frame">
+    <span class="pr-frame-label">屏 6 · 底部面板（sheet）</span>
+    <div class="pr-page">
+      <header class="pr-header">
+        <div class="pr-header__text">
+          <h2 class="pr-title">任务详情</h2>
+          <p class="pr-sub">面板贴底，顶部圆角 12，操作仍右对齐</p>
+        </div>
+      </header>
+      <div class="pr-form">
+        <div class="pr-field">
+          <label class="pr-field__label">负责人</label>
+          <div class="pr-field__input">未指定</div>
+        </div>
+      </div>
+      <div class="pr-overlay" data-variant="sheet" role="dialog" aria-modal="true" aria-label="指派负责人">
+        <div class="pr-sheet">
+          <div class="pr-dialog__title">指派负责人</div>
+          <div class="pr-dialog__body">选择一位成员接手这个任务。</div>
+          <div class="pr-dialog__actions">
+            <button class="pr-btn">取消</button>
+            <button class="pr-btn pr-btn--primary">指派</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 屏 7：侧栏独立成块 + 骨架节奏 -->
+  <div class="pr-frame">
+    <span class="pr-frame-label">屏 7 · 侧栏独立成块 + 骨架</span>
+    <div class="pr-page">
+      <header class="pr-header">
+        <div class="pr-header__text">
+          <h2 class="pr-title">我的</h2>
+          <p class="pr-sub">侧栏没有内容并排时，是一块缩进对齐的内嵌面</p>
+        </div>
+      </header>
+      <nav class="pr-nav pr-nav--side pr-nav--block">
+        <button class="pr-nav__item" data-active><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>概览</button>
+        <button class="pr-nav__item"><span class="pr-nav__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>任务</button>
+      </nav>
+      <div class="pr-skel pr-skel--block">
+        <div class="pr-ph-line pr-ph-line--100"></div>
+        <div class="pr-ph-line pr-ph-line--72" style="width: 88%"></div>
+        <div class="pr-ph-line pr-ph-line--56" style="width: 72%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- split 可选分隔线：仅并排时出现 -->
+  <div class="pr-frame" style="margin-top: 40px;">
+    <span class="pr-frame-label">split · 分隔线（data-divider）</span>
+    <div class="pr-split" data-divider="true" style="align-items: stretch;">
+      <div style="padding: 16px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary);">左栏内容。并排时两栏之间是 1px 分隔线，间距由线的两侧内边距 16 承担。</div>
+      <div style="padding: 16px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary);">右栏内容。堆叠后线消失、恢复 16px 间距，不留一条悬空的横线。</div>
+    </div>
+  </div>
+
+</div>
+<script>
+  // theme.css 里深色靠 body[data-ds-dark-theme]；截图脚本用 ?theme=dark 切换。
+  const params = new URLSearchParams(location.search);
+  document.body.setAttribute('data-theme', params.get('theme') === 'dark' ? 'dark' : 'light');
+  if (params.get('theme') === 'dark') document.body.setAttribute('data-ds-dark-theme', '');
+  // 无头 Chrome 的视口最小宽度是 500px，窄屏只能靠收窄原型根来模拟。
+  const w = Number(params.get('w'));
+  if (w > 0) document.querySelector('.pr-probe').style.maxWidth = w + 'px';
+</script>
+</body>
+</html>

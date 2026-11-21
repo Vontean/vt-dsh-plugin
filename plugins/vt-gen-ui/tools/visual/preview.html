@@ -55,7 +55,24 @@
         { key: '协议', value: 'dsh-ui fence（50 个 type）' }
       ] },
       { type: 'code', lang: 'sh', code: 'pnpm build   # 改 CSS → 构建 → 浏览器热替换' },
-      { type: 'callout', tone: 'info', content: '迭代回路已打通：改 CSS → pnpm build → 浏览器秒级热替换。' }
+      { type: 'callout', tone: 'info', content: '迭代回路已打通：改 CSS → pnpm build → 浏览器秒级热替换。' },
+      // 原型通道四个组件（slice 1）：结构、data-* 状态与深浅色。
+      { type: 'page', title: '团队设置', subtitle: '3 名成员 · 最近更新 2 小时前', actions: [
+        { type: 'button', label: '邀请成员', small: true, action: 'invite' }
+      ], items: [
+        { type: 'nav', variant: 'top', items: [{ label: '概览', active: true }, { label: '成员' }, { label: '账单' }] },
+        { type: 'nav', variant: 'tabs', items: [{ label: '全部', active: true }, { label: '进行中' }, { label: '已完成' }] },
+        { type: 'list-row', title: '王小鲸', desc: '产品设计师', meta: '2 小时前', media: '王', actions: [
+          { type: 'button', label: '查看', small: true, action: 'open-row' }
+        ] },
+        { type: 'list-row', title: '林一舟', desc: '前端工程师', meta: '昨天', media: '林' },
+        { type: 'field-group', label: '团队名称', desc: '显示在邀请页上', required: true, items: [
+          { type: 'input', value: '设计组', id: 'team-name' }
+        ] },
+        { type: 'field-group', label: '邀请邮箱', desc: '多个邮箱用逗号分隔', error: '邮箱格式不正确', required: true, items: [
+          { type: 'input', value: 'not-an-email', id: 'invite-email' }
+        ] }
+      ] }
     ]
   };
 </script>

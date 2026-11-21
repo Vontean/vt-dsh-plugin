@@ -9,8 +9,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${OUT:-/tmp/vt-gen-ui-preview}"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-PAGES=("${@:-preview charts consistency mermaid}")
-[ "$#" -gt 0 ] || PAGES=(preview charts consistency mermaid)
+PAGES=("${@:-preview charts consistency mermaid prototype}")
+[ "$#" -gt 0 ] || PAGES=(preview charts consistency mermaid prototype)
 
 [ -x "$CHROME" ] || { echo "找不到 Chrome：$CHROME" >&2; exit 1; }
 [ -f "$ROOT/lib/assets/standalone-runtime.js" ] || { echo "缺少构建产物，先跑 pnpm build" >&2; exit 1; }
@@ -21,8 +21,10 @@ for page in "${PAGES[@]}"; do
   [ "$page" = "charts" ] && height=8200
   [ "$page" = "consistency" ] && height=4200
   [ "$page" = "mermaid" ] && height=4600
+  [ "$page" = "prototype" ] && height=3500
   for theme in light dark; do
-    "$CHROME" --headless=new --disable-gpu --hide-scrollbars \
+    "$CHROME" --headless=new --disable-gpu --hide-scrollbars --no-sandbox \
+      --user-data-dir="$OUT/.chrome-profile" \
       --force-device-scale-factor=2 --window-size=860,"$height" \
       --virtual-time-budget=12000 \
       --screenshot="$OUT/$page-$theme.png" \

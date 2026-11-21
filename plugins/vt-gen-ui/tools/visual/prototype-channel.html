@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · 原型通道组件（slice 1）</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  /* 只放容器，不干扰被预览的样式。 */
+  html, body { margin: 0; background: var(--dsw-alias-bg-base); }
+  #root { max-width: 780px; margin: 0 auto; padding: 24px 20px 40px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  // 原型通道四个组件：page / nav / list-row / field-group。
+  // 固定 fixture 用来在浅色、深色下检查结构、data-* 状态与 token 取值。
+  window.__SPEC__ = {
+    items: [
+      { type: 'page', title: '团队设置', subtitle: '3 名成员 · 最近更新 2 小时前', actions: [
+        { type: 'button', label: '邀请成员', small: true, action: 'invite' }
+      ], items: [
+        { type: 'nav', variant: 'top', items: [
+          { label: '概览', active: true }, { label: '成员' }, { label: '账单' }
+        ] },
+        { type: 'nav', variant: 'side', items: [
+          { label: '常规', active: true }, { label: '权限' }, { label: '通知' }
+        ] },
+        { type: 'nav', variant: 'tabs', items: [
+          { label: '全部', active: true }, { label: '进行中' }, { label: '已完成' }
+        ] },
+        { type: 'list-row', title: '王小鲸', desc: '产品设计师', meta: '2 小时前', media: '王', actions: [
+          { type: 'button', label: '查看', small: true, action: 'open-row' }
+        ] },
+        { type: 'list-row', title: '林一舟', desc: '前端工程师', meta: '昨天', media: '林' },
+        { type: 'field-group', label: '团队名称', desc: '显示在邀请页上', required: true, items: [
+          { type: 'input', value: '设计组', id: 'team-name' }
+        ] },
+        { type: 'field-group', label: '邀请邮箱', desc: '多个邮箱用逗号分隔', error: '邮箱格式不正确', required: true, items: [
+          { type: 'input', value: 'not-an-email', id: 'invite-email' }
+        ] }
+      ] }
+    ]
+  };
+</script>
+<script src="../../lib/assets/standalone-runtime.js"></script>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+  window.__GenuiStandalone__.mount(document.getElementById('root'), {
+    format: 'dsh-genui',
+    version: 1,
+    spec: window.__SPEC__,
+    presentation: { locale: 'zh', theme }
+  });
+</script>
+</body>
+</html>

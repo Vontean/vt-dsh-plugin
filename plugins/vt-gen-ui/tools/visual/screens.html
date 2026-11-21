@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · 屏幕状态机</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  html, body { margin: 0; background: var(--dsw-alias-bg-base); }
+  #root { max-width: 780px; margin: 0 auto; padding: 24px 20px 40px; display: grid; gap: 24px; }
+  .fixture-label { font: 500 12px/18px system-ui, sans-serif; color: var(--dsw-alias-label-secondary); margin: 0; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="screen-a"></div>
+  <div id="screen-b"></div>
+</div>
+<script>
+  // 同一个多屏 spec 挂两次：左边停在列表屏，右边自动点进详情屏以展示返回条。
+  window.__SPEC__ = {
+    initial: 'list',
+    screens: {
+      list: [
+        { type: 'page', title: '收件箱', subtitle: '3 条未读', items: [
+          { type: 'nav', variant: 'tabs', items: [{ label: '全部', active: true }, { label: '未读' }] },
+          { type: 'list-row', title: '王小鲸', desc: '原型通道验收通过', meta: '2 小时前', media: '王' },
+          { type: 'list-row', title: '林一舟', desc: '视觉规则已合并', meta: '昨天', media: '林' },
+          { type: 'button', label: '查看详情', action: 'unused', goto: 'detail' }
+        ] }
+      ],
+      detail: [
+        { type: 'page', title: '原型通道验收', subtitle: '来自王小鲸', items: [
+          { type: 'text', content: '这是一屏低保真详情：切屏在本地完成，不产生消息。' },
+          { type: 'field-group', label: '备注', desc: '仅本地填写，切屏后保留', items: [
+            { type: 'input', value: '结构对，可以出高保真', id: 'note' }
+          ] }
+        ] }
+      ]
+    }
+  };
+</script>
+<script src="../../lib/assets/standalone-runtime.js"></script>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+  const mount = id => window.__GenuiStandalone__.mount(document.getElementById(id), {
+    format: 'dsh-genui',
+    version: 1,
+    spec: window.__SPEC__,
+    presentation: { locale: 'zh', theme }
+  });
+  mount('screen-a');
+  const second = mount('screen-b');
+  // 自动进入详情屏，让截图里出现「返回」条（仅视觉 fixture，不是产品行为）。
+  setTimeout(() => {
+    const host = document.getElementById('screen-b');
+    [...host.querySelectorAll('button')].find(button => button.textContent.includes('查看详情'))?.click();
+  }, 300);
+</script>
+</body>
+</html>
