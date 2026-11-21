@@ -13,18 +13,32 @@
 <style>
 /* 结构规则专用（§12.3 / §12.4）。基础组件样式在 prototype.css，不要在这里重复。 */
 /* ── 规则 A：内容列只有一个左边缘（§12.3） ── */
-.pr-page-body { padding-inline: var(--proto-pad-x); }
-.pr-page-body > [data-bleed="true"] { margin-inline: calc(-1 * var(--proto-pad-x)); }
+/* 四向留白都取 G：留白只由内容列给，组件不各自决定（§12.3 G1–G6）。 */
+.pr-page-body { padding: var(--proto-gutter); }
+.pr-page-body > [data-bleed~="inline"] { margin-inline: calc(-1 * var(--proto-gutter)); }
+/* 贴边型组件（list-row / nav top / nav tabs）比 inline 多两条前置条件：
+   仅首/末子元素生效；有标题栏时顶部不抵消。这里手写结构按等价语义给出。 */
+.pr-page-body > [data-bleed~="block-end"]:last-child { margin-block-end: calc(-1 * var(--proto-gutter)); }
+/* 顶部抵消只给「没有标题栏」的页面：有标题栏时导航贴的是标题，不是页面框。 */
+.pr-page:not(:has(> .pr-header)) > .pr-page-body > [data-bleed~="block-start"]:first-child {
+  margin-block-start: calc(-1 * var(--proto-gutter));
+}
+/* 内容列的上下留白只由 pageBody 给：首/末子元素自带的外边距不得泄漏进 gutter，
+   否则「页头底 → 首内容」会变成 G + 12 = 36，两档间距又回来了。 */
+.pr-page-body > :first-child { margin-block-start: 0; }
+.pr-page-body > :last-child { margin-block-end: 0; }
+/* 页头：上 G、左右 G、下 0——让「标题 → 首个内容」是 G，不是 2G。 */
+.pr-page > .pr-header { padding: var(--proto-gutter) var(--proto-gutter) 0; }
 .pr-text { margin: 12px 0; font-size: 14px; line-height: 20px; color: var(--dsw-alias-label-primary); }
 
 /* ── 规则 B：只有屏幕画虚线，嵌套区域是实线（§12.4） ── */
 .pr-page--nested { border-style: solid; }
 .pr-frame--nested { margin-top: 0; }
 .pr-split--demo { margin: 16px 0 24px; }
-/* 组件不自带「页面级」水平内边距：缩进由 pageBody 提供（§12.3）。
-   这里只清掉 empty/loading 的兜底值，避免与 pageBody 相加。 */
+/* 组件不自带「页面级」内边距：四向缩进由 pageBody 提供（§12.3）。
+   这里把 empty/loading 的兜底 padding 全清零，避免与 pageBody 相加（24+24=48）。 */
 .pr-page-body > .pr-empty,
-.pr-page-body > .pr-loading { padding-inline: 0; }
+.pr-page-body > .pr-loading { padding: 0; }
 </style>
 </head>
 <body>
@@ -47,7 +61,7 @@
           <label class="pr-field__label">截止时间</label>
           <div class="pr-field__input pr-field__input--placeholder">选择日期</div>
         </div>
-        <div class="pr-rows" data-bleed="true" style="margin-top: 12px;">
+        <div class="pr-rows" data-bleed="inline" style="margin-top: 12px;">
           <div class="pr-row">
             <span class="pr-row__media"></span>
             <span class="pr-row__body">
@@ -61,7 +75,7 @@
             <span class="pr-frame-label">方案 A</span>
             <div class="pr-page pr-page--nested">
               <div class="pr-page-body">
-                <div class="pr-empty" style="padding-top: 16px; padding-bottom: 16px;">
+                <div class="pr-empty">
                   <div class="pr-empty__graphic"></div>
                   <div class="pr-empty__title">还没有内容</div>
                 </div>
@@ -72,7 +86,7 @@
             <span class="pr-frame-label">方案 B</span>
             <div class="pr-page pr-page--nested">
               <div class="pr-page-body">
-                <div class="pr-rows" data-bleed="true">
+                <div class="pr-rows" data-bleed="inline">
                   <div class="pr-row" style="min-height: 40px;">
                     <span class="pr-row__media" style="width: 32px; height: 32px;"></span>
                     <span class="pr-row__body"><span class="pr-row__title">嵌套区域用实线</span></span>

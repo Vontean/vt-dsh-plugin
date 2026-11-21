@@ -29,7 +29,7 @@
   --proto-fill-placeholder: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);
   /* 遮罩直接吃宿主：浅 24% / 深 50%，宿主已按主题分档 */
   --proto-scrim: var(--dsw-alias-bg-mask-1);
-  --proto-pad-x: 24px;
+  --proto-gutter: 24px;
   --proto-radius-page: var(--dsl-g-radius-surface);   /* 12 */
   --proto-radius-control: var(--dsl-g-radius-control); /* 8 */
   --proto-radius-sm: var(--dsl-g-radius-sm);           /* 6 */
@@ -72,7 +72,7 @@
 /* ── nav ── */
 .pr-nav { display: flex; align-items: center; gap: 8px; }
 .pr-nav--top {
-  height: 48px; padding: 0 var(--proto-pad-x);
+  height: 48px; padding: 0 var(--proto-gutter);
   border-bottom: 1px solid var(--proto-line-rule);
   overflow-x: auto; overflow-y: hidden;
   scrollbar-width: none;
@@ -128,7 +128,7 @@
 /* ── page header ── */
 .pr-header {
   display: flex; align-items: flex-start; gap: 16px;
-  padding: 16px var(--proto-pad-x);
+  padding: 16px var(--proto-gutter);
 }
 .pr-header__text { flex: 1 1 auto; min-width: 0; }
 .pr-title { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; }
@@ -159,7 +159,7 @@
 .pr-rows { display: flex; flex-direction: column; }
 .pr-row {
   display: flex; align-items: center; gap: 12px;
-  min-height: 56px; padding: 8px var(--proto-pad-x);
+  min-height: 56px; padding: 8px var(--proto-gutter);
   border-top: 1px solid var(--proto-line-rule);
   text-align: left; width: 100%; background: transparent; border-inline: 0; border-bottom: 0;
   color: inherit; cursor: pointer;
@@ -206,7 +206,7 @@
 .pr-ph-line--100 { width: 100%; }
 .pr-ph-line--72 { width: 72%; }
 .pr-ph-line--56 { width: 56%; }
-.pr-section { padding: 16px var(--proto-pad-x); border-top: 1px solid var(--proto-line-rule); }
+.pr-section { padding: 16px var(--proto-gutter); border-top: 1px solid var(--proto-line-rule); }
 .pr-section__head {
   display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px;
 }
@@ -216,7 +216,7 @@
 .pr-wire .pr-ph-box { width: 96px; height: 64px; flex: 0 0 auto; }
 
 /* ── field-group ── */
-.pr-form { display: flex; flex-direction: column; gap: 16px; padding: 16px var(--proto-pad-x); }
+.pr-form { display: flex; flex-direction: column; gap: 16px; padding: 16px var(--proto-gutter); }
 .pr-field { display: flex; flex-direction: column; }
 .pr-field__label { margin-bottom: 8px; font-size: 13px; line-height: 20px; font-weight: 500; }
 .pr-field__input {
@@ -238,7 +238,7 @@
 /* ── empty / loading ──（都是真实状态：没有整块虚线，只有内容槽是占位） */
 .pr-empty {
   display: flex; flex-direction: column; align-items: center; text-align: center;
-  gap: 8px; padding: 24px var(--proto-pad-x);
+  gap: 8px; padding: 24px var(--proto-gutter);
 }
 .pr-empty__graphic {
   width: 40px; height: 40px; margin-bottom: 4px;
@@ -250,7 +250,7 @@
 .pr-empty .pr-btn { margin-top: 8px; }
 
 .pr-skel { display: flex; flex-direction: column; gap: 8px; }
-.pr-skel__row { display: flex; align-items: center; gap: 12px; padding: 8px var(--proto-pad-x); }
+.pr-skel__row { display: flex; align-items: center; gap: 12px; padding: 8px var(--proto-gutter); }
 .pr-skel__media { width: 40px; height: 40px; flex: 0 0 auto; border-radius: var(--proto-radius-control); background: var(--proto-fill-placeholder); }
 .pr-skel__lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
 .pr-skel__line { height: 12px; border-radius: var(--proto-radius-sm); background: var(--proto-fill-placeholder); }
@@ -284,7 +284,7 @@
   .pr-split > * { flex-grow: 0; }
 }
 @container proto-page (max-width: 600px) {
-  .pr-page > * { --proto-pad-x: 16px; }
+  .pr-page > * { --proto-gutter: 16px; }
   .pr-header { gap: 12px; }
   /* 弹层只收缩内边距，形态与居中不变 */
   .pr-dialog { padding: 16px; }
@@ -324,7 +324,7 @@
 
 .pr-sheet {
   width: 100%;
-  padding: 16px var(--proto-pad-x) 24px;
+  padding: 16px var(--proto-gutter) 24px;
   border-radius: var(--proto-radius-page) var(--proto-radius-page) 0 0;
   background: var(--proto-surface-float);
   box-shadow: var(--dsl-g-shadow-float);
@@ -346,13 +346,13 @@
 /* ── 侧栏独立成块：一块缩进对齐内容的内嵌面，不是贴边的"栏" ── */
 .pr-nav--side.pr-nav--block {
   width: 200px; max-width: 100%;
-  margin: 16px var(--proto-pad-x) 0;
+  margin: 16px var(--proto-gutter) 0;
   border: 1px solid var(--proto-line-frame);
   border-radius: var(--proto-radius-control);
 }
 
 /* ── 骨架节奏：块内相邻文本条宽度必须不同 ── */
-.pr-skel--block { padding: 16px var(--proto-pad-x); }
+.pr-skel--block { padding: 16px var(--proto-gutter); }
 
 /* ── split 可选分隔线：仅并排时出现，堆叠即移除 ── */
 .pr-split[data-divider="true"] { gap: 0; }
