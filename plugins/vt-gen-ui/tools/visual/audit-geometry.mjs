@@ -583,6 +583,21 @@ for (const page of targets) {
     })
     continue
   }
+  if (fixture.kind === 'sketch') {
+    // 手写页量的是画师的画法，不是实现（§12.6）。当前四条规则都是渲染产物类，
+    // 在它上面跑等于给设计意图打分：结论无意义，还会把实现的真实问题稀释成噪声。
+    // 以后接「结构不变量」类断言（§14 G2 左边缘一致）时才让它重新参与。
+    reports.push({
+      page,
+      kind: fixture.kind,
+      skipped: '手写探针只表达设计意图；渲染产物类断言只跑 runtime 页（§12.6）',
+      counts: { pages: 0, bodies: 0, skipped: 0, bordered: 0, iconFields: 0, styled: 0 },
+      gaps: [],
+      notes: [],
+      violations: [],
+    })
+    continue
+  }
   const profileDir = await mkdtemp(join(tmpdir(), 'vt-geometry-'))
   const url = `file://${file}?theme=light`
   const driver = await ChromePage.open(CHROME, url, profileDir)
