@@ -85,6 +85,18 @@ const SELECTORS = {
 }
 
 /**
+ * 断言按类分档（§12.6）：
+ * - 渲染产物类（内容贴框、真实叠线、图标字形、间距取值）：手写页没有实现，
+ *   量它等于给设计意图打分 → 只跑 runtime 页，并决定退出码。
+ * - 结构不变量类（pageBody padding = G）：两种页都成立 → 手写页也跑，
+ *   它的发现记为 fixture 缺口，不进退出码。
+ */
+const RULES_BY_KIND = {
+  runtime: ['padding-not-G', 'content-touches-frame', 'double-line', 'icon-not-svg', 'spacing-not-whitelist'],
+  sketch: ['padding-not-G'],
+}
+
+/**
  * 图标目录：两半都要，缺一半判定会静默失效。
  * - `lib/assets/icons.js`：按需下载的字形（已构建资产）。
  * - `src/client/icons/icon-names-full.ts`：全部规范名，其中 64 个是随包内联的，
@@ -128,6 +140,9 @@ function auditInPage(config) {
   const notes = []
   const gaps = [] // 每一面的实测间距，用于证明断言量过而不是空跑
   const sel = config.selectors
+  // 规则集从驱动侧传入（JSON 不能带 Set），页面内再还原成 Set。
+  const rules = new Set(config.rules ?? [])
+  const runs = rule => rules.has(rule)
 
   const rectOf = el => el.getBoundingClientRect()
   const styleOf = el => getComputedStyle(el)
@@ -209,7 +224,7 @@ function auditInPage(config) {
       // 0.1px 只是百分比 padding 被布局取整时的余量，不是放宽阈值。
       if (Math.abs(value - G) > 0.1) bad.push({ side, name, value })
     }
-    if (bad.length > 0) {
+    if (bad.length > 0 && runs('padding-not-G')) {
       warnings.push({
         rule: 'padding-not-G',
         target: label(page),
@@ -250,6 +265,7 @@ function auditInPage(config) {
         )
         continue
       }
+      if (!runs('content-touches-frame')) continue
       violations.push({
         rule: 'content-touches-frame',
         target: label(page),
@@ -290,7 +306,7 @@ function auditInPage(config) {
   }
 
   // 不看亲缘关系：两条线落在同一坐标就是同一位置画了两条线，中间隔着一层 DOM 也一样。
-  for (let i = 0; i < bordered.length; i++) {
+  for (let i = 0; i < bordered.length && runs('double-line'); i++) {
     for (let j = i + 1; j < bordered.length; j++) {
       const a = bordered[i]
       const b = bordered[j]
@@ -315,11 +331,13 @@ function auditInPage(config) {
 
   /* ---- C. 图标字段：目录内必须是 svg，目录外允许文字 ---- */
   const knownIcons = new Set(config.iconCatalogue ?? [])
-  const iconFields = [...document.querySelectorAll(sel.iconSlots.join(', '))].filter(el => {
-    if (!visible(el)) return false
-    // 骨架屏的占位块不是图标槽位：它按设计就是一块灰底，不该有 svg。
-    return !/skel/i.test(String(el.className ?? ''))
-  })
+  const iconFields = runs('icon-not-svg')
+    ? [...document.querySelectorAll(sel.iconSlots.join(', '))].filter(el => {
+        if (!visible(el)) return false
+        // 骨架屏的占位块不是图标槽位：它按设计就是一块灰底，不该有 svg。
+        return !/skel/i.test(String(el.className ?? ''))
+      })
+    : []
   let iconKnown = 0
   let iconKnownSvg = 0
   let iconUnknown = 0
@@ -355,9 +373,12 @@ function auditInPage(config) {
   }
 
   // 图标断言的自证：目录内的名字有几个真的画出了 svg，目录外有几个按设计保留文字。
-  notes.push(
-    `C 图标槽 ${iconFields.length}：目录内 ${iconKnown}（有 svg ${iconKnownSvg}）、目录外 ${iconUnknown}（允许文字）`,
-  )
+  // 手写页不跑这条（它没有实现），所以也只有 runtime 页打这行。
+  if (runs('icon-not-svg')) {
+    notes.push(
+      `C 图标槽 ${iconFields.length}：目录内 ${iconKnown}（有 svg ${iconKnownSvg}）、目录外 ${iconUnknown}（允许文字）`,
+    )
+  }
 
   /* ---- D. 间距白名单（§14 G9） ---- */
   const SPACING = new Set([0, 4, 8, 12, 16, 24])
@@ -376,7 +397,7 @@ function auditInPage(config) {
   ]
   let styled = 0
   const spacingSeen = new Set()
-  for (const root of document.querySelectorAll(sel.page)) {
+  for (const root of runs('spacing-not-whitelist') ? document.querySelectorAll(sel.page) : []) {
     for (const el of [root, ...root.querySelectorAll('*')]) {
       if (!visible(el)) continue
       // §12.4 的「屏幕」层（虚线外框 + 角标）不是原型内容：外框的 9px 是给角标让位、
@@ -614,21 +635,6 @@ for (const page of targets) {
     })
     continue
   }
-  if (fixture.kind === 'sketch') {
-    // 手写页量的是画师的画法，不是实现（§12.6）。当前四条规则都是渲染产物类，
-    // 在它上面跑等于给设计意图打分：结论无意义，还会把实现的真实问题稀释成噪声。
-    // 以后接「结构不变量」类断言（§14 G2 左边缘一致）时才让它重新参与。
-    reports.push({
-      page,
-      kind: fixture.kind,
-      skipped: '手写探针只表达设计意图；渲染产物类断言只跑 runtime 页（§12.6）',
-      counts: { pages: 0, bodies: 0, skipped: 0, bordered: 0, iconFields: 0, styled: 0 },
-      gaps: [],
-      notes: [],
-      violations: [],
-    })
-    continue
-  }
   const profileDir = await mkdtemp(join(tmpdir(), 'vt-geometry-'))
   const url = `file://${file}?theme=light`
   const driver = await ChromePage.open(CHROME, url, profileDir)
@@ -639,6 +645,7 @@ for (const page of targets) {
         kind: fixture.kind,
         selectors: SELECTORS[fixture.kind],
         iconCatalogue: ICON_CATALOGUE,
+        rules: RULES_BY_KIND[fixture.kind],
       })})`,
     )
     if (fixture.kind === 'runtime') {
@@ -730,7 +737,11 @@ if (asJson) {
   const runtimeHits = runtimeReports.reduce((total, report) => total + report.violations.length, 0)
   // 手写页「没有 pageBody」「漏画图标」都是探针自身的缺口，一并计入这一栏。
   const fixtureHits = sketchReports.reduce(
-    (total, report) => total + report.violations.length + (report.skips?.length ?? 0),
+    (total, report) =>
+      total
+      + report.violations.length
+      + (report.warnings?.length ?? 0)
+      + (report.skips?.length ?? 0),
     0,
   )
 
