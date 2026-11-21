@@ -274,10 +274,10 @@
 | 4 | 标题与副文本、主文本与副文本、标签与提示 |
 | 8 | 图标与文字、尾部元素之间、侧栏项之间、角标内边距 |
 | 12 | 行内媒体与文本、区段标题与内容、区段头内部 |
-| 16 | `page` 标题栏内边距（上下）、区段内边距（上下）、控件之间、`split` 栏间距 |
-| 24 | 页面水平内边距（宽容器）、区段之间的分隔节奏 |
+| 16 | `page` 标题栏上内边距、区段内边距（上下）、控件之间、`split` 栏间距 |
+| 24 | 页面四向 gutter（宽容器）、`pageBody` 兄弟块间距 |
 
-窄容器（`≤600`）把页面水平内边距从 24 降到 16，**其余间距不变**——收缩只发生在容器边距上，不动内部节奏。
+窄容器（`≤600`）把**容器尺度的两个数**——四向 gutter 与兄弟块间距——从 24 降到 16，**组内节奏不变**：收缩只发生在容器边距上，不动内部节奏（§12.3.1）。
 
 ### 4.4 圆角
 
@@ -1133,6 +1133,47 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 **可断言形式**：见 §14 的 G1–G6。一句话版本——**页面边缘到元素的距离 ∈ {G, 0}**，且 `G` 在同一容器宽度内恒定。
 
+### 12.3.1 规则 A 续：块间垂直间距
+
+**结论（一句）**：`pageBody` 里**相邻兄弟块之间也只有一个数字 `G`**，由 `gap` 给；组件不再自带 `block` 方向的页面级外边距。
+
+| 位置 | 宽容器 | 窄容器（容器 ≤600） |
+| --- | --- | --- |
+| 兄弟块之间（`pageBody` 的 `gap`） | **24** | **16** |
+| 首个块之上 / 末个块之下 | 由 padding 给，`gap` 不参与 | 同 |
+| 贴边块与相邻块之间 | 24（抵消只动左右，不改 `gap`） | 16 |
+| 组内（同一组件内部） | 4 / 8 / 12 / 16，组长自己负责（§4.3） | 不变 |
+
+**为什么是 `G` 而不是 16**：
+
+1. §4.3 的刻度表里，24 本来写的就是「区段之间的分隔节奏」——这不是新造一档，是把条文用 `gap` 落实。
+2. 一屏只有一个边距数字：边缘 24、块间 24，读数不需要判断「这里算边缘还是算块」。
+3. 16 已经占用了「组内」语义（控件之间、标题与内容、`split` 栏间距）。块间也用 16，会让「块」与「组」在视觉上读不出层级——那正是低保真线面语言唯一还能用的层级手段。
+4. 窄容器同步降到 16，因为收缩规则只发生在**容器尺度**（§4.3 末句），内部节奏不缩。剩 16 是因为窄屏下 24 要吃掉 6% 宽度。
+
+**贴边块怎么处理**：
+
+- `block-start` 抵消只对 `:first-child` 生效，首块之前本来就没有 `gap`，所以导航贴框顶照旧是 0。
+- `block-end` 同理，末块之后没有 `gap`。
+- `inline` 抵消只动 `margin-inline`，垂直方向完整参与 `gap`——贴边块上下与普通块同距。
+- `gap` 不叠外边距：`gap` 是块与块的净距，组件自己的 `margin-block` 必须是 0（G14）。要更紧的关系就**合并成一个组件**，用组内的 `gap`，不要在 `pageBody` 上写逐块特判——那会把「一个数字」变成「一堆例外」。
+
+**实现**
+
+```css
+.pageBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--proto-gutter);
+  padding: var(--proto-gutter);
+}
+/* 首/末子元素不得带外边距，否则与 gap 相加（§14 G14） */
+.pageBody > :first-child { margin-block-start: 0; }
+.pageBody > :last-child { margin-block-end: 0; }
+```
+
+**可断言形式**：G13（相邻块净距 = `G`）、G14（子元素 `margin-block` = 0）。
+
 ### 12.4 规则 B：角标属于「屏幕」，虚线只有一层
 
 **结论**：角标和虚线都跟着「屏幕」这一层走，不跟「区域」走。
@@ -1184,7 +1225,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 | 文件 | 改什么 |
 | --- | --- |
-| `plugins/vt-gen-ui/src/client/blocks/Prototype.module.css` | 差异 21（描边 l2）、22（`pageBody` 缩进 + `[data-bleed]` 负边距 + 去掉组件级页面缩进）、23/24（嵌套 page 实线、角标背景变量、角标 `max-width`） |
+| `plugins/vt-gen-ui/src/client/blocks/Prototype.module.css` | 差异 21（描边 l2）、22（`pageBody` 缩进 + `[data-bleed]` 负边距 + 去掉组件级页面缩进）、23/24（嵌套 page 实线、角标背景变量、角标 `max-width`）、**27（`pageBody` 加 `gap` = gutter + 子元素 `margin-block: 0`，§12.3.1）** |
 | `plugins/vt-gen-ui/src/client/blocks/prototype.tsx` | `data-bleed` 标记、嵌套 page 的深度属性、`page.label` 读取、角标「深度 0 或 有 label」的渲染条件、只在有角标时预留 9px |
 | `plugins/vt-gen-ui/src/client/spec.ts` | `GenuiPage` 增加可选 `label` |
 | `plugins/vt-gen-ui/src/shared/catalog/` | `page.label` 字段定义（可选、字符串、建议长度上限） |
@@ -1253,6 +1294,17 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 | 角标文案上限 | 本文建议 12 字 + 省略号；最终长度等真实长标题出现后再定 |
 | 根级直排组件 | 不在 `page` 里时没有统一缩进（§12.3），是否需要给 `prototypeRoot` 补缩进，等出现真实用法再定 |
 | `page.label` 与自动屏号同时存在 | 本文规定 `label` 优先（自动屏号被覆盖）。若评审希望两者都显示（「屏 1 · 方案 A」），需要额外规则 |
+
+### 12.9 本轮条文修正（口径变更，不是新增规则）
+
+| 条文 | 原口径 | 现口径 | 为什么改 |
+| --- | --- | --- | --- |
+| G1 | 首个非贴边子元素外框顶 − `P` 顶 = `G` | `[data-page-body]` 的 `padding` 四边 = `G` | 距离在「有标题栏」或「子元素带外边距」时与 padding 不等价；量到 36 分不清是谁错了。padding 可归因，距离降为推论 |
+| G6 | 标题顶 − `P` 顶 = `G`；标题栏底 − 首内容顶 = `G` | 标题栏 `padding-block-start = G`、`padding-block-end = 0`、`padding-inline = G` | 同上；「不是 2G」这个反例由 `padding-block-end = 0` 直接锁住，不需要量两个 rect |
+| G9 | 白名单 {0, 4, 8, 12, 16, 24} | 增加负值 {−24, −16}；装饰几何豁免 | 贴边抵消必须用 `-G`（§12.3），旧白名单让实现只能违规；页面外框 9px、角标 6px 是让位与描边偏移，不是排版间距 |
+
+新增 G13（相邻块净距 = `G`）、G14（`pageBody` 子元素 `margin-block` = 0）——见 §12.3.1。
+
 
 ---
 
