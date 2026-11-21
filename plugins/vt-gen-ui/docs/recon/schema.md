@@ -259,7 +259,7 @@ raw fence body
 | type | 必填 | 可选字段（含默认） | 语义 / 状态 |
 | --- | --- | --- | --- |
 | `page` | `items` | `title`、`subtitle`、`actions`(nodes) | `<section>`；有标题时 `aria-labelledby` 指向标题；`data-orientation="vertical"`；窄容器（≤600px）收紧内边距（24→16）；`position: relative` 为浮层做定位上下文；多屏 spec 里屏根 page 外再包一层「屏 N · 标题」角标（`z-index: 2`，在 page 之外以免被 `overflow: clip` 裁掉） |
-| `nav` | `items` | `label`、`variant`: top(默认)/side/tabs | `<nav>` + `aria-label`（缺省走 i18n「导航」）；当前项 `data-active="true"` + `aria-current="page"`，**不**用 `role="tab"`（三种形态都是页面导航）；点击只做视觉选中。side 是独立成块形态：缩进 `--proto-pad-x`、四边描边、圆角 8；≤560px 只改方向，不换形态 |
+| `nav` | `items` | `label`、`variant`: top(默认)/side/tabs | `<nav>` + `aria-label`（缺省走 i18n「导航」）；当前项 `data-active="true"` + `aria-current="page"`，**不**用 `role="tab"`（三种形态都是页面导航）；点击只做视觉选中。side 是独立成块形态：缩进 `--proto-gutter`、四边描边、圆角 8；≤560px 只改方向，不换形态 |
 | `list-row` | `title` | `desc`、`meta`、`media`、`actions`(nodes) | `role="listitem"`；`aria-label` 合并 title/desc/meta；有 actions 时 `data-state="interactive"` |
 | `field-group` | `label`、`items` | `desc`、`error`、`required` | `role="group"` + `aria-labelledby`；`desc`/`error` 进 `aria-describedby`；错误态 `data-invalid="true"`/`data-state="invalid"`，错误文案 `role="alert"` |
 | `empty` | `title` | `desc`、`icon`、`actions`(nodes) | `role="group"` + `aria-labelledby`；图形位 `aria-hidden`（可省）；真实状态，**不画虚线框** |
