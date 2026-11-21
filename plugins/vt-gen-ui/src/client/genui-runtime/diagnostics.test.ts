@@ -64,6 +64,17 @@ describe('D2 modal-unreachable', () => {
     expect(result.repaired?.items).toHaveLength(0)
   })
 
+  test('a nested modal reports nested-modal only, not unreachable', () => {
+    const result = processGenuiSpec({
+      items: [{
+        type: 'modal', title: '外层', open: true,
+        items: [{ type: 'modal', title: '内层', items: [{ type: 'text', content: 'x' }] }],
+      }],
+    })
+    expect(codesOf(result.warnings)).toContain('nested-modal')
+    expect(codesOf(result.warnings)).not.toContain('modal-unreachable')
+  })
+
   test('either trigger or open keeps the modal', () => {
     for (const modal of [
       { type: 'modal', title: 'A', trigger: '打开' },

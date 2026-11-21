@@ -254,8 +254,9 @@ export function diagnoseNestedModals(value: unknown): GenuiDiagnostic[] {
  */
 export function diagnoseUnreachableModals(value: unknown): GenuiDiagnostic[] {
   const warnings: GenuiDiagnostic[] = []
-  visitSpecNodes(value, (node, path) => {
-    if (node.type !== 'modal' || isReachableModal(node)) return
+  visitSpecNodes(value, (node, path, _definition, inModal) => {
+    // 嵌套 modal 已由 nested-modal 报过并丢弃；再报一条 unreachable 是噪声。
+    if (node.type !== 'modal' || inModal || isReachableModal(node)) return
     warnings.push({
       kind: 'dropped',
       code: 'modal-unreachable',
