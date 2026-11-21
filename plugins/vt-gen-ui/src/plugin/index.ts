@@ -159,6 +159,16 @@ ${rulesPrompt({ renderUiTool })}`
 }
 
 /**
+ * The tool-enabled rendering of the section, kept as a constant.
+ *
+ * It is the same string `genuiSectionText(true)` produces: the constant exists
+ * so callers (and the registration contract test) that only need the default
+ * form keep a stable export. Hosts that disable `render_ui` call
+ * {@link genuiSectionText} with `false` instead of stripping a line.
+ */
+export const GENUI_SECTION_TEXT = genuiSectionText(true)
+
+/**
  * Register the GenUI output-language section and the render_ui tool.
  * @param ctx - cordis context.
  */
