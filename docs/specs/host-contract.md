@@ -463,6 +463,17 @@ rm -rf /Users/mac/Project/DSH/vt-dsh-plugin/.git/vt-build.lock
 锁放 `.git/` 下：不污染工作区、不进版本控制、所有人共享同一路径。锁超过 15 分钟视为失效，
 由主 Bot 核查后清理并记录；**不要删别人的锁**。
 
+**锁持有期间的红线（硬，违反按事故处理）**：除持锁者外，任何会话都不得执行
+`rm -rf plugins/vt-gen-ui/lib`、`pnpm build` / `pnpm check`、裸 `tsc -p tsconfig.json`。
+
+原因是这三件事都会**改写共享产物**，而且 `rm -rf lib` 会在拿不到锁的情况下先把别人的批次清空——
+锁本身的判别力随之失效。2026-11-22 这条被破了两次：一次是锁内出现并发 `rm -rf lib`，
+一次是 `git add plugins/vt-gen-ui/lib` 撞上刚被清空的目录，结果 131 个产物文件以 `deleted` 形态进了提交
+（已用 `git reset --mixed` + `git checkout -- lib` 撤销并恢复）。
+
+配套习惯：**`git add` 之后先看 `git diff --cached --stat`**。131 个文件全标 `deleted` 是一眼能看出来的信号；
+看见 `deleted` 就不要提交，先查是谁清了 `lib`。
+
 ### R2（硬）构建前先过类型门：树不绿就不构建
 
 ```sh
@@ -485,9 +496,10 @@ node scripts/check-client-bundles.mjs      # ④ 拼接连通性预检（几秒�
 ```sh
 cd plugins/vt-gen-ui && pnpm build        # 失败即停，不要重试第二次
 find lib -iname "*test*" -o -iname "*__tests__*"   # ① 必须 0 命中
-# ② 批次一致性：全量构建顺序是 rm → tsc(.d.ts) → tsdown(.js)，
-#    所以 lib 里不该有任何文件比 lib/client.js 更新。非空 = 只跑了 tsc 或构建中途断了。
-find lib -type f -newer lib/client.js | head
+# ② 批次一致性：只查类型声明是否比 bundle 新。
+#    全量构建顺序是 rm → tsc(.d.ts) → tsdown(.js)，所以 lib 里不该有任何 .d.ts 比 lib/index.js 更新。
+#    非空 = 只跑了 tsc 或构建中途断了。
+find lib -name "*.d.ts" -newer lib/index.js | head
 ls -l lib/index.js lib/client.js lib/assets/*.js   # ③ 产物齐全：2 个 js + 6 个资产
 cd ../.. && node scripts/check-client-bundles.mjs  # ④ 拼接可用、id/VERSION 与包名一致
 ```
@@ -496,8 +508,13 @@ cd ../.. && node scripts/check-client-bundles.mjs  # ④ 拼接可用、id/VERSI
 tsdown 只从入口出发、测试不被 import；最后用上面那条 `find` 直接查产物。
 `lib/client.js` 里 grep 到 `it(` 之类是 minified 标识符，不是测试代码。
 
-**② 是这一轮新加的检查**：改动前 `typecheck` 会 emit，于是 `lib` 里会出现「`.d.ts` 比 `client.js` 新」的混合状态
-——看起来什么都没坏，但类型产物描述的是尚未打包的源码。构建者的产物必须**同一批次**生成。
+**② 防的是「类型声明与 bundle 断批」**：改动前 `typecheck` 会 emit，于是 `lib` 里会出现
+「`.d.ts` 比 `client.js` 新」的混合状态——看起来什么都没坏，但类型产物描述的是尚未打包的源码。
+
+判据只取 `*.d.ts` 与 `lib/index.js` 两个端点，**把 `lib/assets/**` 排除在比较之外**：
+六个资产由 tsdown 并行打包，彼此落盘先后有 100–170 ms 的自然偏差，
+那个偏差不是「断批」信号。用「任意文件比 `client.js` 新」当判据，资产时序会稳定误报；
+用 `.d.ts` 比 `index.js` 新，才正好对准「tsc 已经写完类型、tsdown 还没打包」这一个真实故障窗口。
 
 **核对产物差异只用自己的改动解释。** `git status plugins/vt-gen-ui/lib` 里若出现「我没有改对应源码」的产物变化，
 先停下来查是谁的改动、要不要等它完成再构建，不要直接提交。
