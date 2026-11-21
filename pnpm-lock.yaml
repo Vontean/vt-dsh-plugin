@@ -207,7 +207,7 @@ importers:
         specifier: ^0.185.4
         version: 0.185.4
       echarts:
-        specifier: ^5.6.0
+        specifier: 5.6.0
         version: 5.6.0
       echarts-wordcloud:
         specifier: 2.1.0
@@ -225,7 +225,7 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
       three:
-        specifier: ^0.180.0
+        specifier: 0.180.0
         version: 0.180.0
       tsdown:
         specifier: 0.22.14
