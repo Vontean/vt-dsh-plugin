@@ -26,6 +26,8 @@
   --proto-radius-page: var(--dsl-g-radius-surface);
   --proto-radius-control: var(--dsl-g-radius-control);
   --proto-radius-sm: var(--dsl-g-radius-sm);
+  /* The one new duration (§6.6): no existing --dsl-g-dur-* is a slow breath. */
+  --proto-dur-pulse: 1.6s;
 }
 
 /* Page inset lives on the root/page only: components must inherit the value
@@ -49,6 +51,9 @@
  * signal meaning "this rectangle is a simulated screen". */
 .page {
   container: proto-page / inline-size;
+  /* Positioning context for the slice-4 overlays; the corner badge sits
+   * outside this box precisely because the page clips its own overflow. */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -206,13 +211,19 @@
   min-width: 100%;
 }
 
-/* Side rail: 200 wide, inset surface, hairline on the right. */
+/* Side rail as a standalone block (§6.2.1): inset surface inside its own
+ * frame, inset by the page gutter on BOTH sides so the right edge does not
+ * run out to the outer frame. 200 is a maximum — the block narrows with the
+ * container instead of turning into a different component. */
 .nav[data-orientation='side'] {
   width: 200px;
-  flex: 0 0 200px;
+  max-width: 100%;
+  flex: 0 0 auto;
+  margin: 16px var(--proto-pad-x) 0;
   padding: 8px;
   background: var(--proto-surface-inset);
-  border-right: 1px solid var(--proto-line-rule);
+  border: 1px solid var(--proto-line-rule);
+  border-radius: var(--proto-radius-control);
 }
 
 .nav[data-orientation='side'] .navList {
@@ -433,6 +444,189 @@
   border-color: var(--dsw-alias-state-error-primary);
 }
 
+/* ---- screen frame + corner badge (§3.1) --------------------------------- */
+
+/* The badge sits ON the dashed top edge, so the frame reserves 9px of top
+ * room and the badge (18 high) centres on the line. It is a sibling of the
+ * page: the page clips its own overflow, so a badge inside it would be cut. */
+.pageFrame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-top: 9px;
+  min-width: 0;
+}
+
+.pageFrame > .page {
+  flex: 1 1 auto;
+}
+
+.pageLabel {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  /* The page is a positioned layer and comes later in the DOM; without this
+   * the frame line — and with it the badge — gets covered. */
+  z-index: 2;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--proto-radius-sm);
+  /* The surface behind the line, so the dashes do not run through the text. */
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ---- empty (§6.5) ------------------------------------------------------- */
+
+/* A real state, built like production: solid tile, no dashed frame. The
+ * dashed frame means "the structure is not decided", which is what this is
+ * deliberately not saying. Rhythm: 24 / 12 / 8 / 16 / 24. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 24px var(--proto-pad-x);
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.emptyMedia {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 4px; /* 8 gap + 4 = 12 to the title */
+  border-radius: var(--proto-radius-control);
+  background: var(--proto-fill-placeholder);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 18px;
+  line-height: 24px;
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.emptyDesc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  letter-spacing: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.emptyActions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px; /* 8 gap + 8 = 16 to the description */
+}
+
+/* ---- loading (§6.6) ----------------------------------------------------- */
+
+.loading {
+  padding: 16px var(--proto-pad-x);
+  min-width: 0;
+}
+
+.loading[data-orientation='row'] {
+  padding: 8px var(--proto-pad-x);
+}
+
+.skeleton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  animation: proto-pulse var(--proto-dur-pulse) ease-out infinite;
+}
+
+.skeletonMedia {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--proto-radius-control);
+  background: var(--proto-fill-placeholder);
+}
+
+.skeletonLines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.skeletonBar {
+  height: 12px;
+  border-radius: var(--proto-radius-sm);
+  background: var(--proto-fill-placeholder);
+}
+
+/* Width buckets only (§6.6): 100 / 88 / 76 / 72 / 56. */
+.skeletonBar[data-width='100'] { width: 100%; }
+.skeletonBar[data-width='88'] { width: 88%; }
+.skeletonBar[data-width='76'] { width: 76%; }
+.skeletonBar[data-width='72'] { width: 72%; }
+.skeletonBar[data-width='56'] { width: 56%; }
+
+@keyframes proto-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* ---- split (§6.7) ------------------------------------------------------- */
+
+/* Ratio and gap only: the boundary belongs to each pane's `page`. */
+.split {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  min-width: 0;
+}
+
+.splitPane {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.splitPane > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.split[data-ratio='2:1'] > :first-child { flex-grow: 2; }
+.split[data-ratio='1:2'] > :last-child { flex-grow: 2; }
+
+/* Opt-in divider on the structural line: 4% (l1) is ~1.09:1 on white, i.e.
+ * an invisible line, which defeats the purpose of drawing one. The gap goes
+ * to 0 and the second pane's 16px padding carries the spacing instead. */
+.split[data-divider='true'] {
+  gap: 0;
+}
+
+.split[data-divider='true'] > :nth-child(2) {
+  border-left: 1px solid var(--proto-line-frame);
+  padding-left: 16px;
+}
+
 /* ---- container queries (§5.3) ------------------------------------------
  * Rules inside @container cannot style the container itself, so the page
  * narrows through its children (`--proto-pad-x` is re-declared on them and
@@ -451,16 +645,17 @@
 
 /* A nav rendered at the prototype root has no `page` ancestor, so its own
  * narrow rule queries `proto-root`. */
+/* Narrow (§6.2): only the direction changes. Frame, radius, inset and item
+ * height stay — a rail that loses its border reads as a different component,
+ * and hiding items would misrepresent the information architecture. */
 @container proto-root (max-width: 560px) {
   .nav[data-orientation='side'] {
     width: auto;
-    flex: 0 0 auto;
+    max-width: none;
     flex-direction: row;
     align-items: center;
-    gap: 4px;
     overflow-x: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--proto-line-rule);
+    scrollbar-width: none;
   }
 
   .nav[data-orientation='side'] .navList {
@@ -473,16 +668,37 @@
   }
 }
 
+/* Split stacks at the same 600px breakpoint as the page gutter (§6.7). It
+ * queries proto-root because it can sit outside a page. */
+@container proto-root (max-width: 600px) {
+  .split {
+    flex-direction: column;
+  }
+
+  .split > * {
+    flex-grow: 0;
+  }
+
+  /* Stacked, the line would hang in the gap as a stray rule; the gap comes
+   * back to 16 so the panes keep their rhythm. */
+  .split[data-divider='true'] {
+    gap: 16px;
+  }
+
+  .split[data-divider='true'] > :nth-child(2) {
+    border-left: 0;
+    padding-left: 0;
+  }
+}
+
 @container proto-page (max-width: 560px) {
   .nav[data-orientation='side'] {
     width: auto;
-    flex: 0 0 auto;
+    max-width: none;
     flex-direction: row;
     align-items: center;
-    gap: 4px;
     overflow-x: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--proto-line-rule);
+    scrollbar-width: none;
   }
 
   .nav[data-orientation='side'] .navList {
@@ -499,5 +715,10 @@
   .navItem,
   .row {
     transition: none;
+  }
+
+  /* Reduced motion means STILL, not slower (§6.6). */
+  .skeleton {
+    animation: none;
   }
 }

@@ -165,7 +165,7 @@ raw fence body
 
 ---
 
-## 3. 完整组件目录（50 个原生 type + 4 个原型通道 type）
+## 3. 完整组件目录（50 个原生 type + 7 个原型通道 type）
 
 派发入口 `renderNode`（`src/client/blocks/render-node.tsx`）：50 个原生 type 走 switch；`default` 再查 catalog 派生的原型注册表（`src/client/blocks/prototype-registry.ts`），都没有才 `return null`——**白名单外的 type 不渲染任何东西**。组件定义（字段/必填/别名）自 2026-11-21 起只有一份来源：`src/shared/catalog/definitions.ts`，本目录 §3 的字段表由它校验（`catalog.test.ts` 有基线快照）。下表「渲染实现」列若写 `render-node.tsx:NN` 表示就地渲染，否则为独立组件文件。
 
@@ -251,17 +251,20 @@ raw fence body
 | `file-tree` | `items` | `items[].name/type/children`；有 children 无 type 时自动补 `dir` | `advanced.tsx:515-566` | ✗ | 本地折叠，默认全展开 |
 | `breadcrumb` | `items` | `items[]: string` | `advanced.tsx:648-660` | ✗ | 无 |
 
-### 3.7 原型通道（slice 1，4 个 type）
+### 3.7 原型通道（slice 1–3，7 个 type）
 
 页面级低保真原型。纯加法：不改上面 50 个 type 的名字/必填字段/action 形状，围栏标签仍是 `dsh-ui`。
-字段定义见 `src/shared/catalog/definitions.ts`；渲染实现在 `src/client/blocks/prototype.tsx`，由 `prototype-registry.ts` 注册。状态统一进 `data-*`（`data-orientation` / `data-active` / `data-invalid` / `data-state`），样式层用属性选择器消费。
+字段定义见 `src/shared/catalog/definitions.ts`；渲染实现在 `src/client/blocks/prototype.tsx`，由 `prototype-registry.ts` 注册。状态统一进 `data-*`（`data-orientation` / `data-active` / `data-invalid` / `data-state` / `data-ratio` / `data-divider`），样式层用属性选择器消费。
 
 | type | 必填 | 可选字段（含默认） | 语义 / 状态 |
 | --- | --- | --- | --- |
-| `page` | `items` | `title`、`subtitle`、`actions`(nodes) | `<section>`；有标题时 `aria-labelledby` 指向标题；`data-orientation="vertical"`；窄容器（≤420px）收紧内边距 |
-| `nav` | `items` | `label`、`variant`: top(默认)/side/tabs | `<nav>` + `aria-label`；当前项 `data-active="true"`，tabs 用 `role="tablist"`/`tab`+`aria-selected`，其余用 `aria-current="page"`；点击只做视觉选中 |
+| `page` | `items` | `title`、`subtitle`、`actions`(nodes) | `<section>`；有标题时 `aria-labelledby` 指向标题；`data-orientation="vertical"`；窄容器（≤600px）收紧内边距（24→16）；`position: relative` 为浮层做定位上下文；多屏 spec 里屏根 page 外再包一层「屏 N · 标题」角标（`z-index: 2`，在 page 之外以免被 `overflow: clip` 裁掉） |
+| `nav` | `items` | `label`、`variant`: top(默认)/side/tabs | `<nav>` + `aria-label`（缺省走 i18n「导航」）；当前项 `data-active="true"` + `aria-current="page"`，**不**用 `role="tab"`（三种形态都是页面导航）；点击只做视觉选中。side 是独立成块形态：缩进 `--proto-pad-x`、四边描边、圆角 8；≤560px 只改方向，不换形态 |
 | `list-row` | `title` | `desc`、`meta`、`media`、`actions`(nodes) | `role="listitem"`；`aria-label` 合并 title/desc/meta；有 actions 时 `data-state="interactive"` |
 | `field-group` | `label`、`items` | `desc`、`error`、`required` | `role="group"` + `aria-labelledby`；`desc`/`error` 进 `aria-describedby`；错误态 `data-invalid="true"`/`data-state="invalid"`，错误文案 `role="alert"` |
+| `empty` | `title` | `desc`、`icon`、`actions`(nodes) | `role="group"` + `aria-labelledby`；图形位 `aria-hidden`（可省）；真实状态，**不画虚线框** |
+| `loading` | — | `label`、`variant`: block(默认)/row、`lines`: 1–3 | `role="status"` + `aria-busy="true"`；骨架 `aria-hidden`；条宽固定错落（100/88/76/72/56，相邻不等宽）；`prefers-reduced-motion` 下完全静止 |
+| `split` | `items` | `ratio`: 1:1(默认)/2:1/1:2、`divider` | `data-ratio`/`data-divider`；窄于 600px（容器查询 `proto-root`）堆叠为单列、gap 仍 16；分隔线默认不画，开启时用结构线（l2） |
 
 ---
 

@@ -7,7 +7,7 @@ export interface GenuiLayoutHints {
     /** Screen id to switch to when the node is activated (button). */
     goto?: string;
 }
-export type GenuiNode = (GenuiText | GenuiRow | GenuiCol | GenuiGrid | GenuiCard | GenuiButton | GenuiInput | GenuiSelect | GenuiCheckbox | GenuiLink | GenuiImage | GenuiAudio | GenuiVideo | GenuiBadge | GenuiStat | GenuiHero | GenuiProgress | GenuiDivider | GenuiList | GenuiTable | GenuiChart | GenuiTabs | GenuiAvatar | GenuiSpacer | GenuiPlot | GenuiCallout | GenuiSteps | GenuiKeyValue | GenuiDiff | GenuiJson | GenuiCode | GenuiRadio | GenuiSubmit | GenuiSwitch | GenuiSlider | GenuiTextarea | GenuiAccordion | GenuiCopy | GenuiMermaid | GenuiSvg | GenuiScene3D | GenuiTimeline | GenuiFileTree | GenuiBreadcrumb | GenuiQuiz | GenuiDiagram | GenuiIcon | GenuiBlocks | GenuiArrow | GenuiPage | GenuiNav | GenuiListRow | GenuiFieldGroup) & GenuiLayoutHints | GenuiEChart;
+export type GenuiNode = (GenuiText | GenuiRow | GenuiCol | GenuiGrid | GenuiCard | GenuiButton | GenuiInput | GenuiSelect | GenuiCheckbox | GenuiLink | GenuiImage | GenuiAudio | GenuiVideo | GenuiBadge | GenuiStat | GenuiHero | GenuiProgress | GenuiDivider | GenuiList | GenuiTable | GenuiChart | GenuiTabs | GenuiAvatar | GenuiSpacer | GenuiPlot | GenuiCallout | GenuiSteps | GenuiKeyValue | GenuiDiff | GenuiJson | GenuiCode | GenuiRadio | GenuiSubmit | GenuiSwitch | GenuiSlider | GenuiTextarea | GenuiAccordion | GenuiCopy | GenuiMermaid | GenuiSvg | GenuiScene3D | GenuiTimeline | GenuiFileTree | GenuiBreadcrumb | GenuiQuiz | GenuiDiagram | GenuiIcon | GenuiBlocks | GenuiArrow | GenuiPage | GenuiNav | GenuiListRow | GenuiFieldGroup | GenuiEmpty | GenuiLoading | GenuiSplit) & GenuiLayoutHints | GenuiEChart;
 export interface GenuiSpec {
     /** Short title shown as the card banner. */
     title?: string;
@@ -101,6 +101,47 @@ export interface GenuiFieldGroup {
     /** Marks the label with a required indicator. */
     required?: boolean;
     /** The control(s), e.g. input / select / radio. */
+    items: GenuiNode[];
+}
+/**
+ * Empty state: a *real* state, not a draft signal. A dashed frame here would
+ * read as "not designed yet", so reviewers skip the state they are meant to
+ * discuss; the graphic slot is a solid tile instead.
+ */
+export interface GenuiEmpty {
+    type: 'empty';
+    title: string;
+    desc?: string;
+    /** Glyph of the 40×40 graphic slot; omitted → no graphic at all. */
+    icon?: string;
+    /** Optional call to action (buttons, links, …). */
+    actions?: GenuiNode[];
+}
+/**
+ * Loading state: skeleton bars. `lines` is the only knob — the widths are
+ * dealt by the renderer from a fixed staggered set (100 / 88 / 76 / 72 / 56),
+ * because equal widths collapse into one straight edge and stop reading as
+ * text.
+ */
+export interface GenuiLoading {
+    type: 'loading';
+    /** `block` (text bars) or `row` (media + two bars). */
+    variant?: 'block' | 'row';
+    /** Text bars in a block skeleton, 1..3. */
+    lines?: number;
+    /** Accessible name of the busy region (defaults to the localised 加载中). */
+    label?: string;
+}
+/**
+ * Two-pane layout with a fixed ratio. Only 1:1 / 2:1 / 1:2 are offered: with
+ * no dragging, arbitrary ratios let line breaks drift between reviews.
+ * Panes stack when the prototype root narrows below 600px.
+ */
+export interface GenuiSplit {
+    type: 'split';
+    ratio?: '1:1' | '2:1' | '1:2';
+    /** Draw the 1px structural line between panes; off by default. */
+    divider?: boolean;
     items: GenuiNode[];
 }
 export interface GenuiText {

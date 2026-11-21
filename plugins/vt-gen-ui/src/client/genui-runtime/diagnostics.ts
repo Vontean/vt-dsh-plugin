@@ -33,12 +33,14 @@ function visitNativeNodes(value: unknown, path: string, visit: (node: Record<str
   visit(value, path, definition)
   const children = (child: unknown, childPath: string): void => visitNativeNodes(child, childPath, visit)
   if ((type === 'row' || type === 'col' || type === 'grid' || type === 'card'
-    || type === 'page' || type === 'field-group') && Array.isArray(value.items)) {
+    || type === 'page' || type === 'field-group' || type === 'split') && Array.isArray(value.items)) {
     value.items.forEach((child, index) => children(child, `${path}.items[${index}]`))
     if (type === 'page' && Array.isArray(value.actions)) {
       value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`))
     }
   } else if (type === 'list-row' && Array.isArray(value.actions)) {
+    value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`))
+  } else if (type === 'empty' && Array.isArray(value.actions)) {
     value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`))
   } else if (type === 'list' && Array.isArray(value.items)) {
     value.items.forEach((child, index) => children(child, `${path}.items[${index}]`))

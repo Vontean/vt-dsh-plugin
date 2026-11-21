@@ -50,6 +50,10 @@ export declare const ICON_TONES: readonly ["default", "muted", "info", "success"
 export declare const HERO_TONES: readonly ["accent", "success", "warning", "danger"];
 /** Prototype navigation shapes: a top bar, a side rail, or bottom tabs. */
 export declare const NAV_VARIANTS: readonly ["top", "side", "tabs"];
+/** Loading skeleton shapes: text bars, or a media row. */
+export declare const LOADING_VARIANTS: readonly ["block", "row"];
+/** Split ratios. Only three: with no dragging, text flow must stay predictable. */
+export declare const SPLIT_RATIOS: readonly ["1:1", "2:1", "1:2"];
 /** Table cell renderers (`table.types`, one entry per column). */
 export declare const TABLE_CELL_TYPES: readonly ["text", "num", "delta", "bar", "badge", "spark", "ring", "index", "group"];
 /** Root GenUI specification metadata used by diagnostics. */
@@ -70,5 +74,5 @@ export declare const GENUI_NATIVE_TYPES: ReadonlySet<string>;
  * binds exactly these; the prompt/reference derive layer re-exports the list.
  * Kept here (not in docs/derive) so the client bundle never pulls prompt text.
  */
-export declare const PROTOTYPE_TYPES: readonly ["page", "nav", "list-row", "field-group"];
+export declare const PROTOTYPE_TYPES: readonly ["page", "nav", "list-row", "field-group", "empty", "loading", "split"];
 export type PrototypeType = typeof PROTOTYPE_TYPES[number];

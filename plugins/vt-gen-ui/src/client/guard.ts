@@ -24,7 +24,7 @@ import {
   BADGE_TONES, BUTTON_TONES, CALLOUT_TONES, CARD_TONES, CHART_KINDS, COMPONENT_SCHEMAS, HERO_TONES,
   DIAGRAM_EDGE_KINDS, DIAGRAM_KINDS, DIAGRAM_NODE_TYPES, DIAGRAM_ROUTES, DIAGRAM_VARIANTS,
   ECHART_PRESETS, FILE_TYPES, GENUI_NATIVE_TYPES, GENUI_SPEC_SCHEMA, INPUT_TYPES,
-  ARROW_DIRS, BLOCKS_VARIANTS, BLOCK_CELL_TONES, ICON_TONES, MEDIA_ASPECT_RATIOS, MESH_SHAPES, NAV_VARIANTS, PLOT_KINDS, PROGRESS_VARIANTS, ROW_JUSTIFY, TABLE_CELL_TYPES, TEXT_ALIGNS, TEXT_SIZES, TEXT_TONES,
+  ARROW_DIRS, BLOCKS_VARIANTS, BLOCK_CELL_TONES, ICON_TONES, LOADING_VARIANTS, MEDIA_ASPECT_RATIOS, MESH_SHAPES, NAV_VARIANTS, PLOT_KINDS, PROGRESS_VARIANTS, ROW_JUSTIFY, SPLIT_RATIOS, TABLE_CELL_TYPES, TEXT_ALIGNS, TEXT_SIZES, TEXT_TONES,
 } from './genui-runtime/schema.ts'
 import type { ComponentFieldKind, ComponentRecordSchema, ComponentSchema } from './genui-runtime/schema.ts'
 import { normalizeGenuiSpec } from './genui-runtime/normalize.ts'
@@ -434,6 +434,32 @@ function repairNodeFields(value: unknown, ctx: RepairCtx, depth: number): GenuiN
         ...opt('desc', str(v.desc, GENUI_LIMITS.maxString)),
         ...opt('error', str(v.error, GENUI_LIMITS.maxString)),
         ...opt('required', v.required === true ? true : undefined),
+      }
+    }
+    case 'empty': {
+      const title = str(v.title, GENUI_LIMITS.maxString)
+      if (title === undefined) return null
+      return {
+        type: 'empty', title,
+        ...opt('desc', str(v.desc, GENUI_LIMITS.maxString)),
+        ...opt('icon', str(v.icon, 64)),
+        ...opt('actions', Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : undefined),
+      }
+    }
+    case 'loading': {
+      return {
+        type: 'loading',
+        ...opt('label', str(v.label, 120)),
+        ...opt('variant', enu(v.variant, LOADING_VARIANTS)),
+        ...opt('lines', int(v.lines, 1, 3)),
+      }
+    }
+    case 'split': {
+      return {
+        type: 'split',
+        items: repairItems(v.items, ctx, depth + 1),
+        ...opt('ratio', enu(v.ratio, SPLIT_RATIOS)),
+        ...opt('divider', v.divider === true ? true : undefined),
       }
     }
     case 'button': {
@@ -1429,12 +1455,12 @@ export function countGenuiNodes(value: unknown, cap = Number.POSITIVE_INFINITY):
           if (io !== undefined) walk(io.items)
         }
       } else if ((v.type === 'row' || v.type === 'col' || v.type === 'grid' || v.type === 'card'
-        || v.type === 'page' || v.type === 'field-group') && Array.isArray(v.items)) {
+        || v.type === 'page' || v.type === 'field-group' || v.type === 'split') && Array.isArray(v.items)) {
         // Layout containers hold real children; skipping them undercounted
         // the tree and hid silent drops from validate_dsh_ui (issue #42).
         walk(v.items)
         if (v.type === 'page' && Array.isArray(v.actions)) walk(v.actions)
-      } else if (v.type === 'list-row' && Array.isArray(v.actions)) {
+      } else if ((v.type === 'list-row' || v.type === 'empty') && Array.isArray(v.actions)) {
         walk(v.actions)
       } else if (v.type === 'file-tree') {
         // file-tree.items are data records, not GenUI children.
@@ -1519,10 +1545,10 @@ function visitDeclaredGenuiNodes(
         walkItemsOf(v.items[row], `${at}.items[${row}]`)
       }
     } else if ((v.type === 'row' || v.type === 'col' || v.type === 'grid' || v.type === 'card'
-      || v.type === 'page' || v.type === 'field-group') && Array.isArray(v.items)) {
+      || v.type === 'page' || v.type === 'field-group' || v.type === 'split') && Array.isArray(v.items)) {
       walk(v.items, `${at}.items`)
       if (v.type === 'page' && Array.isArray(v.actions)) walk(v.actions, `${at}.actions`)
-    } else if (v.type === 'list-row' && Array.isArray(v.actions)) {
+    } else if ((v.type === 'list-row' || v.type === 'empty') && Array.isArray(v.actions)) {
       walk(v.actions, `${at}.actions`)
     } else if (v.type === 'list' && Array.isArray(v.items)) {
       for (let row = 0; row < v.items.length; row++) {
@@ -2262,6 +2288,23 @@ function validateNode(value: unknown, depth: number, at: string, errors: string[
       if (!Array.isArray(v.items)) errors.push(`${at}: type 'field-group' requires items (array)`)
       else walk(v.items, depth + 1, `${at}.items`)
       isStr('desc'); isStr('error')
+      break
+    case 'empty':
+      if (typeof v.title !== 'string') errors.push(`${at}: type 'empty' requires title (string)`)
+      isStr('desc'); isStr('icon')
+      if (v.actions !== undefined && !Array.isArray(v.actions)) {
+        errors.push(`${at}: type 'empty' requires actions (array) when present`)
+      } else if (Array.isArray(v.actions)) {
+        walk(v.actions, depth + 1, `${at}.actions`)
+      }
+      break
+    case 'loading':
+      isStr('label'); isStr('variant'); isNum('lines')
+      break
+    case 'split':
+      if (!Array.isArray(v.items)) errors.push(`${at}: type 'split' requires items (array)`)
+      else walk(v.items, depth + 1, `${at}.items`)
+      isStr('ratio')
       break
     case 'echart':
       // `links` alone is a valid payload: the sankey/graph presets are driven

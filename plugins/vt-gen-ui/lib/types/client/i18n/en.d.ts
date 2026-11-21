@@ -273,6 +273,9 @@ export declare const EN: {
     readonly 'block.filteredRows': "{visible} / {total} rows after filtering";
     readonly 'block.filterMatch': "{shown} / {total} matched";
     readonly 'screens.back': "← Back";
+    readonly 'screens.frame': "Screen {n}";
+    readonly 'prototype.nav': "Navigation";
+    readonly 'prototype.loading': "Loading";
     readonly 'block.triggered': "✓ Sent";
     readonly 'block.triggeredPlain': "Sent";
     readonly 'block.audio': "Audio";

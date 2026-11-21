@@ -4,13 +4,29 @@
  * so the catalog → registry → dispatcher path is exercised, not just the
  * component functions.
  */
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, test } from 'vitest'
+import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 import { renderNode } from './render-node.tsx'
-import { FieldGroupNode, ListRowNode, NavNode, PageNode, wrapPrototypeRoot } from './prototype.tsx'
+import {
+  EmptyNode, FieldGroupNode, ListRowNode, LoadingNode, NavNode, PageNode, SplitNode, wrapPrototypeRoot,
+} from './prototype.tsx'
 import type { RenderPrototypeChildren } from './prototype.tsx'
 import { PROTOTYPE_RENDERERS } from './prototype-registry.ts'
 import { PROTOTYPE_TYPES } from '../../shared/catalog/index.ts'
+import { ScreenNavigationContext } from '../screen-navigation.tsx'
+import type { GenuiSplit } from '../spec.ts'
+import { getLocale, setLocale, type LocaleId } from '../i18n/index.ts'
+
+// The default locale comes from `navigator.languages`, which differs between
+// machines. Pin it: the accessible names asserted below are chrome text.
+let restoreLocale: LocaleId
+beforeAll(() => {
+  restoreLocale = getLocale()
+  setLocale('zh')
+})
+afterAll(() => setLocale(restoreLocale))
 
 /** Children are the dispatcher's job; the stub only proves they are rendered. */
 const renderChildren: RenderPrototypeChildren = nodes => (
@@ -73,7 +89,7 @@ describe('page', () => {
 })
 
 describe('nav', () => {
-  test('bottom tabs expose tablist/tab roles and one active tab', () => {
+  test('bottom tabs are page navigation, not a tab widget', () => {
     const root = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{
       type: 'nav',
       variant: 'tabs',
@@ -81,13 +97,24 @@ describe('nav', () => {
     }} />)
     const nav = root.querySelector('nav[data-genui="nav"]')!
     expect(nav.getAttribute('data-orientation')).toBe('tabs')
+    // A stable accessible name lets a screen reader announce the landmark.
     expect(nav.getAttribute('aria-label')).toBe('导航')
-    expect(nav.querySelector('[role="tablist"]')).not.toBeNull()
-    const tabs = [...nav.querySelectorAll('[role="tab"]')]
-    expect(tabs).toHaveLength(2)
-    expect(tabs.filter(tab => tab.getAttribute('data-active') === 'true')).toHaveLength(1)
-    expect(tabs[0]!.getAttribute('aria-selected')).toBe('true')
-    expect(tabs[1]!.getAttribute('aria-selected')).toBe('false')
+    // Page navigation: never the tab widget roles, which announce "选项卡".
+    expect(nav.querySelector('[role="tablist"]')).toBeNull()
+    expect(nav.querySelector('[role="tab"]')).toBeNull()
+    const items = [...nav.querySelectorAll('button')]
+    expect(items).toHaveLength(2)
+    expect(items.filter(item => item.getAttribute('data-active') === 'true')).toHaveLength(1)
+    expect(items[0]!.getAttribute('aria-current')).toBe('page')
+    expect(items[1]!.getAttribute('aria-current')).toBeNull()
+    expect(items[0]!.getAttribute('aria-selected')).toBeNull()
+  })
+
+  test('the landmark name can be overridden per nav', () => {
+    const root = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'nav', label: '账户分区', items: [{ label: '概览' }],
+    }} />)
+    expect(root.querySelector('nav')!.getAttribute('aria-label')).toBe('账户分区')
   })
 
   test('top nav marks the current item with aria-current', () => {
@@ -182,5 +209,166 @@ describe('field-group', () => {
     expect(group.getAttribute('data-invalid')).toBe('false')
     expect(group.getAttribute('data-state')).toBe('default')
     expect(root.querySelector('[role="alert"]')).toBeNull()
+  })
+})
+
+describe('page screen chrome', () => {
+  const screen = { go: () => {}, back: () => {}, canGoBack: false, screenId: 'list', screenIndex: 0 }
+
+  test('the screen-root page carries its screen badge outside the frame', () => {
+    const root = render(
+      <ScreenNavigationContext.Provider value={screen}>
+        <PageNode depth={0} path="items[0]" renderChildren={renderChildren} node={{
+          type: 'page', title: '收件箱', items: [],
+        }} />
+      </ScreenNavigationContext.Provider>,
+    )
+    const frame = root.querySelector('[data-genui-page-frame]')!
+    expect(frame.querySelector('[class*="pageLabel"]')!.textContent).toBe('屏 1 · 收件箱')
+    // The page clips its own overflow, so the badge must be a sibling — a
+    // badge inside the frame would have its lower half cut off.
+    expect(root.querySelector('[data-genui="page"] [class*="pageLabel"]')).toBeNull()
+  })
+
+  test('a nested page does not repeat the screen label', () => {
+    const root = render(
+      <ScreenNavigationContext.Provider value={screen}>
+        <PageNode depth={1} path="items[0].items[0]" renderChildren={renderChildren} node={{
+          type: 'page', title: '方案 A', items: [],
+        }} />
+      </ScreenNavigationContext.Provider>,
+    )
+    expect(root.querySelector('[data-genui-page-frame]')).toBeNull()
+  })
+
+  test('legacy pages render no screen chrome at all', () => {
+    const root = render(<PageNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'page', title: '普通页面', items: [],
+    }} />)
+    expect(root.querySelector('[data-genui-page-frame]')).toBeNull()
+    expect(root.querySelector('[class*="pageLabel"]')).toBeNull()
+  })
+})
+
+describe('empty', () => {
+  test('renders the graphic slot, title, description and actions', () => {
+    const root = render(<EmptyNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'empty',
+      icon: '🗂',
+      title: '还没有任务',
+      desc: '创建第一个任务后，这里会列出全部任务。',
+      actions: [{ type: 'button', label: '新建任务' }],
+    }} />)
+    const empty = root.querySelector('[data-genui="empty"]')!
+    expect(empty.getAttribute('role')).toBe('group')
+    const heading = empty.querySelector('h3')!
+    expect(heading.textContent).toBe('还没有任务')
+    expect(empty.getAttribute('aria-labelledby')).toBe(heading.id)
+    expect(empty.textContent).toContain('创建第一个任务后')
+    // The graphic slot is decoration: it must never be the only carrier.
+    expect(empty.querySelector('[class*="emptyMedia"]')!.getAttribute('aria-hidden')).toBe('true')
+    expect(empty.querySelector('[data-stub="button"]')).not.toBeNull()
+  })
+
+  test('a graphic slot is optional', () => {
+    const root = render(<EmptyNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'empty', title: '没有结果',
+    }} />)
+    expect(root.querySelector('[class*="emptyMedia"]')).toBeNull()
+    expect(root.querySelector('h3')!.textContent).toBe('没有结果')
+  })
+})
+
+describe('loading', () => {
+  const barsOf = (root: HTMLElement): Array<string | null> =>
+    [...root.querySelectorAll('[class*="skeletonBar"]')].map(bar => bar.getAttribute('data-width'))
+
+  test('a three-line block is a busy status with staggered bar widths', () => {
+    const root = render(<LoadingNode path="items[0]" renderChildren={renderChildren} node={{ type: 'loading' }} />)
+    const loading = root.querySelector('[data-genui="loading"]')!
+    expect(loading.getAttribute('role')).toBe('status')
+    expect(loading.getAttribute('aria-busy')).toBe('true')
+    expect(loading.getAttribute('aria-label')).toBe('加载中')
+    expect(loading.getAttribute('data-orientation')).toBe('block')
+    expect(root.querySelector('[class*="skeleton"]')!.getAttribute('aria-hidden')).toBe('true')
+    expect(barsOf(root)).toEqual(['100', '88', '72'])
+  })
+
+  test('bar widths stay in the bucket set and neighbours never match', () => {
+    const allowed = ['100', '88', '76', '72', '56']
+    for (const lines of [1, 2, 3, 4]) {
+      const root = render(<LoadingNode path="items[0]" renderChildren={renderChildren} node={{ type: 'loading', lines }} />)
+      const widths = barsOf(root)
+      expect(widths.length).toBeGreaterThan(0)
+      expect(widths.length).toBeLessThanOrEqual(3)
+      for (const width of widths) expect(allowed).toContain(width!)
+      for (let i = 1; i < widths.length; i++) expect(widths[i], `lines=${lines}`).not.toBe(widths[i - 1])
+    }
+  })
+
+  test('a row skeleton is a media tile plus two bars', () => {
+    const root = render(<LoadingNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'loading', variant: 'row',
+    }} />)
+    expect(root.querySelector('[data-genui="loading"]')!.getAttribute('data-orientation')).toBe('row')
+    expect(root.querySelector('[class*="skeletonMedia"]')).not.toBeNull()
+    expect(barsOf(root)).toEqual(['88', '72'])
+  })
+
+  test('the custom label wins over the localised default', () => {
+    const root = render(<LoadingNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'loading', label: '正在载入任务',
+    }} />)
+    expect(root.querySelector('[data-genui="loading"]')!.getAttribute('aria-label')).toBe('正在载入任务')
+  })
+})
+
+describe('split', () => {
+  test('exposes the ratio and one pane per child', () => {
+    const root = render(<SplitNode path="items[0]" renderChildren={renderChildren} node={{
+      type: 'split',
+      ratio: '2:1',
+      items: [
+        { type: 'page', title: '方案 A', items: [] },
+        { type: 'page', title: '方案 B', items: [] },
+      ],
+    }} />)
+    const split = root.querySelector('[data-genui="split"]')!
+    expect(split.getAttribute('data-ratio')).toBe('2:1')
+    expect(split.querySelectorAll('[class*="splitPane"]')).toHaveLength(2)
+  })
+
+  test('the divider is off unless asked for', () => {
+    const base: GenuiSplit = { type: 'split', items: [{ type: 'text', content: 'A' }, { type: 'text', content: 'B' }] }
+    const plain = render(<SplitNode path="items[0]" renderChildren={renderChildren} node={base} />)
+    expect(plain.querySelector('[data-genui="split"]')!.getAttribute('data-divider')).toBe('false')
+    expect(plain.querySelector('[data-genui="split"]')!.getAttribute('data-ratio')).toBe('1:1')
+    const divided = render(<SplitNode path="items[0]" renderChildren={renderChildren} node={{ ...base, divider: true }} />)
+    expect(divided.querySelector('[data-genui="split"]')!.getAttribute('data-divider')).toBe('true')
+  })
+})
+
+describe('style contract (no draft signals, one line width)', () => {
+  const cssSource = readFileSync(resolve(import.meta.dirname, 'Prototype.module.css'), 'utf8')
+  // Strip comments: the prose explaining WHY a draft signal is absent would
+  // otherwise match the very word the assertion forbids.
+  const section = (from: string, to: string): string =>
+    cssSource.slice(cssSource.indexOf(from), cssSource.indexOf(to)).replace(/\/\*[\s\S]*?\*\//g, '')
+
+  test('empty and loading never use the dashed "not designed" frame', () => {
+    expect(section('/* ---- empty', '/* ---- split')).not.toContain('dashed')
+  })
+
+  test('the split divider is opt-in and uses the structural line', () => {
+    const split = section('/* ---- split', '/* ---- container queries')
+    expect(split).not.toContain('dashed')
+    expect(split).toContain("[data-divider='true']")
+    expect(split).toContain('var(--proto-line-frame)')
+  })
+
+  test('the screen badge sits above the page layer', () => {
+    const badge = section('.pageLabel {', '/* ---- empty')
+    expect(badge).toContain('z-index: 2')
+    expect(section('.page {', '.pageHeader')).toContain('position: relative')
   })
 })

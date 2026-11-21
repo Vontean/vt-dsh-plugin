@@ -26,6 +26,12 @@ describe('rescue (alias)', () => {
     expect(result.errors).toEqual([])
     expect(result.repaired?.items[0]).toMatchObject({ type: 'list-row', title: '未命名' })
   })
+
+  test('empty label is adopted as title', () => {
+    const result = processGenuiSpec({ items: [{ type: 'empty', label: '没有任务' }] })
+    expect(result.errors).toEqual([])
+    expect(result.repaired?.items[0]).toMatchObject({ type: 'empty', title: '没有任务' })
+  })
 })
 
 describe('drop (missing required)', () => {
@@ -49,6 +55,12 @@ describe('drop (missing required)', () => {
   test('nav with string items is dropped', () => {
     const result = processGenuiSpec({ items: [{ type: 'nav', items: ['首页', '设置'] }] })
     expect(result.repaired?.items).toHaveLength(0)
+  })
+
+  test('empty without a title is dropped', () => {
+    const result = processGenuiSpec({ items: [{ type: 'empty', desc: '只有说明' }] })
+    expect(result.repaired?.items).toHaveLength(0)
+    expect(validateGenuiSpec(result.value).ok).toBe(false)
   })
 })
 
@@ -75,6 +87,52 @@ describe('degrade (wrong field name)', () => {
       items: [{ type: 'page', items: [{ type: 'text', content: '正文', bodyy: 'x' }] }],
     })
     expect(result.warnings.some(warning => warning.kind === 'unknown-field' && warning.field === 'bodyy')).toBe(true)
+  })
+})
+
+describe('prototype states and layout (slice 3)', () => {
+  test('split keeps its container shell and repairs its panes', () => {
+    const result = processGenuiSpec({
+      items: [{ type: 'split', items: [{ type: 'empty', title: '没有任务' }, { type: 'text', content: '正文' }] }],
+    })
+    expect(result.errors).toEqual([])
+    const split = result.repaired?.items[0] as { items: unknown[] } | undefined
+    expect(split?.items).toHaveLength(2)
+  })
+
+  test('split ratio outside the three allowed values is dropped, not kept', () => {
+    const result = processGenuiSpec({
+      items: [{ type: 'split', ratio: '3:2', items: [{ type: 'text', content: 'A' }] }],
+    })
+    expect(result.repaired?.items[0]).toMatchObject({ type: 'split' })
+    expect((result.repaired?.items[0] as { ratio?: string }).ratio).toBeUndefined()
+    const ok = processGenuiSpec({
+      items: [{ type: 'split', ratio: '2:1', items: [{ type: 'text', content: 'A' }] }],
+    })
+    expect(ok.repaired?.items[0]).toMatchObject({ type: 'split', ratio: '2:1' })
+  })
+
+  test('loading lines clamp into 1..3', () => {
+    const many = processGenuiSpec({ items: [{ type: 'loading', lines: 9 }] })
+    expect(many.repaired?.items[0]).toMatchObject({ type: 'loading', lines: 3 })
+    const none = processGenuiSpec({ items: [{ type: 'loading', lines: 0 }] })
+    expect(none.repaired?.items[0]).toMatchObject({ type: 'loading', lines: 1 })
+  })
+
+  test('unknown fields inside empty actions are still diagnosed', () => {
+    const result = processGenuiSpec({
+      items: [{ type: 'empty', title: '空', actions: [{ type: 'button', label: '新建', bogus: 1 }] }],
+    })
+    expect(result.warnings.some(warning => warning.kind === 'unknown-field' && warning.field === 'bogus')).toBe(true)
+  })
+
+  test('the node budget counts split panes and empty actions', () => {
+    expect(countGenuiNodes({
+      items: [
+        { type: 'split', items: [{ type: 'text', content: 'A' }, { type: 'text', content: 'B' }] },
+        { type: 'empty', title: '空', actions: [{ type: 'button', label: '新建' }] },
+      ],
+    })).toBe(5)
   })
 })
 

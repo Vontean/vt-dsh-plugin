@@ -39,7 +39,7 @@ export const CATALOG_CATEGORIES: readonly CatalogCategory[] = [
   {
     key: 'layout',
     label: '布局',
-    types: ['text', 'row', 'col', 'grid', 'card', 'divider', 'spacer', 'hero', 'page', 'nav'],
+    types: ['text', 'row', 'col', 'grid', 'card', 'divider', 'spacer', 'hero', 'page', 'nav', 'split'],
   },
   {
     key: 'display',
@@ -47,7 +47,7 @@ export const CATALOG_CATEGORIES: readonly CatalogCategory[] = [
     types: [
       'badge', 'stat', 'progress', 'list', 'table', 'keyvalue', 'timeline', 'file-tree', 'breadcrumb',
       'callout', 'steps', 'diff', 'json', 'code', 'copy', 'avatar', 'image', 'audio', 'video', 'icon',
-      'blocks', 'arrow', 'list-row',
+      'blocks', 'arrow', 'list-row', 'empty', 'loading',
     ],
   },
   {
@@ -99,6 +99,15 @@ export const CATALOG_DOCS: Readonly<Record<string, CatalogDoc>> = {
     quickRef: '{"type":"nav","items":[{"label","active"}]}',
     gotcha: ['items 是 [{label,active}] 记录数组，不是字符串数组'],
     usage: '聊天正文里的导航是示意：点击只在本地切换选中态，不承载路由。',
+  },
+
+  split: {
+    category: 'layout',
+    summary: '双栏布局：ratio 取 1:1/2:1/1:2，窄容器自动堆叠为单列。',
+    promptInline: '（1:1/2:1/1:2 双栏，窄容器堆叠）',
+    quickRef: '{"type":"split","ratio":"1:1","items":[...]}',
+    gotcha: ['ratio 只接受 1:1 / 2:1 / 1:2；分隔线默认不画，需要时才写 divider'],
+    usage: '各栏通常各放一个 `page`；两栏并排时等高。容器窄于 600 时堆叠，间距仍是 16。',
   },
 
   // ---- 展示 ----
@@ -164,6 +173,20 @@ export const CATALOG_DOCS: Readonly<Record<string, CatalogDoc>> = {
     promptInline: '（媒体+主副文本+尾部操作）',
     quickRef: '{"type":"list-row","title","desc"}',
     usage: 'media 是短标签或图标位；actions 放 button 等节点；一行只表达一个对象。',
+  },
+  empty: {
+    category: 'display',
+    summary: '空态：图形位（可省）+ 标题 + 说明 + 可选操作，按真实状态呈现。',
+    quickRef: '{"type":"empty","title","desc"}',
+    gotcha: ['标题是 `title`，不要只写 desc；这是真实状态，不要画成虚线草稿'],
+    usage: '「没有数据」的样子，不是「还没画完」；actions 放 button/link。',
+  },
+  loading: {
+    category: 'display',
+    summary: '加载态骨架：variant 取 block/row，lines 控制条数（≤3）。',
+    quickRef: '{"type":"loading","variant":"block","lines":3}',
+    gotcha: ['lines 最多 3 条，宽度自动错落，不要手写宽度字段'],
+    usage: '骨架按 100/88/72 错落收口；容器带 role=status + aria-busy。',
   },
 
   // ---- 图表 ----

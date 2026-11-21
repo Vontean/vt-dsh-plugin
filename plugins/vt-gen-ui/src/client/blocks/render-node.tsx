@@ -561,6 +561,7 @@ export function renderNode(
           key={key}
           node={node}
           path={path}
+          depth={depth}
           renderChildren={(children, basePath) =>
             children.map((child, index) => renderNode(child, index, onAction, depth + 1, answers, `${basePath}[${index}]`))}
         />

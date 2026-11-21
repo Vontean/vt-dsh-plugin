@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · 空态 / 骨架 / 分栏（slice 3）</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  /* 只放容器，不干扰被预览的样式。 */
+  html, body { margin: 0; background: var(--dsw-alias-bg-base); }
+  #root { max-width: 780px; margin: 0 auto; padding: 24px 20px 40px; display: grid; gap: 24px; }
+  .fixture-label { font: 500 12px/18px system-ui, sans-serif; color: var(--dsw-alias-label-secondary); margin: 0; }
+  /* 窄容器用固定宽度模拟：无头 Chrome 的视口下限约 500px，容器查询看的是
+     块根宽度，缩这个 wrapper 才是真的模拟手机宽。 */
+  #split-narrow { width: 480px; max-width: 100%; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div>
+    <p class="fixture-label">空态 + 骨架（真实状态，不画虚线）</p>
+    <div id="states"></div>
+  </div>
+  <div>
+    <p class="fixture-label">split 2:1 + divider（宽容器：并排）</p>
+    <div id="split-wide"></div>
+  </div>
+  <div>
+    <p class="fixture-label">split 1:1 + divider（窄容器 480px：应堆叠且不画线）</p>
+    <div id="split-narrow"></div>
+  </div>
+  <div>
+    <p class="fixture-label">侧栏独立成块（同一组件，只收缩）</p>
+    <div id="side"></div>
+  </div>
+</div>
+<script>
+  // 固定 fixture：浅色/深色各拍一张，检查结构、data-* 状态与 token 取值。
+  window.__SPEC_STATES__ = {
+    items: [
+      { type: 'page', title: '空态与骨架', subtitle: '历史任务为空 · 正在载入详情', items: [
+        { type: 'empty', icon: '▤', title: '还没有任务', desc: '创建第一个任务后，这里会列出全部任务。', actions: [
+          { type: 'button', label: '新建任务', small: true, action: 'new-task' }
+        ] },
+        { type: 'empty', title: '没有匹配的结果', desc: '换个关键词再试一次。' },
+        { type: 'loading', lines: 3 },
+        { type: 'loading', variant: 'row' }
+      ] }
+    ]
+  };
+
+  window.__SPEC_WIDE__ = {
+    items: [
+      { type: 'split', ratio: '2:1', divider: true, items: [
+        { type: 'page', title: '方案 A · 空态', items: [
+          { type: 'empty', title: '还没有成员', desc: '邀请成员后可以分配任务。' }
+        ] },
+        { type: 'page', title: '方案 B · 加载中', items: [
+          { type: 'loading', variant: 'row' },
+          { type: 'loading', lines: 2 }
+        ] }
+      ] }
+    ]
+  };
+
+  window.__SPEC_NARROW__ = {
+    items: [
+      { type: 'split', ratio: '1:1', divider: true, items: [
+        { type: 'page', title: '方案 A', items: [{ type: 'text', content: '左栏内容。' }] },
+        { type: 'page', title: '方案 B', items: [{ type: 'text', content: '右栏内容。' }] }
+      ] }
+    ]
+  };
+
+  window.__SPEC_SIDE__ = {
+    items: [
+      { type: 'page', title: '设置', items: [
+        { type: 'nav', variant: 'side', items: [
+          { label: '常规', active: true }, { label: '权限' }, { label: '通知' }
+        ] }
+      ] }
+    ]
+  };
+</script>
+<script src="../../lib/assets/standalone-runtime.js"></script>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+  const mount = (id, spec) => window.__GenuiStandalone__.mount(document.getElementById(id), {
+    format: 'dsh-genui',
+    version: 1,
+    spec,
+    presentation: { locale: 'zh', theme }
+  });
+  mount('states', window.__SPEC_STATES__);
+  mount('split-wide', window.__SPEC_WIDE__);
+  mount('split-narrow', window.__SPEC_NARROW__);
+  mount('side', window.__SPEC_SIDE__);
+
+  // 容器宽度要真的生效才有断言价值：把两个 split 的实际 flex-direction
+  // 写回 DOM，供 `--dump-dom` 检查（jsdom 不做容器查询）。
+  setTimeout(() => {
+    const direction = id => {
+      const split = document.querySelector(`#${id} [data-genui="split"]`);
+      return split === null ? 'missing' : getComputedStyle(split).flexDirection;
+    };
+    const check = document.createElement('div');
+    check.id = 'layout-check';
+    check.setAttribute('data-layout-check',
+      `wide:${direction('split-wide')} narrow:${direction('split-narrow')}`);
+    document.body.appendChild(check);
+  }, 600);
+</script>
+</body>
+</html>

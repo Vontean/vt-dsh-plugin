@@ -62,6 +62,10 @@ export const ICON_TONES = ['default', 'muted', 'info', 'success', 'warning', 'da
 export const HERO_TONES = ['accent', 'success', 'warning', 'danger'] as const
 /** Prototype navigation shapes: a top bar, a side rail, or bottom tabs. */
 export const NAV_VARIANTS = ['top', 'side', 'tabs'] as const
+/** Loading skeleton shapes: text bars, or a media row. */
+export const LOADING_VARIANTS = ['block', 'row'] as const
+/** Split ratios. Only three: with no dragging, text flow must stay predictable. */
+export const SPLIT_RATIOS = ['1:1', '2:1', '1:2'] as const
 /** Table cell renderers (`table.types`, one entry per column). */
 export const TABLE_CELL_TYPES = ['text', 'num', 'delta', 'bar', 'badge', 'spark', 'ring', 'index', 'group'] as const
 
@@ -394,6 +398,38 @@ export const COMPONENT_SCHEMAS: Readonly<Record<string, ComponentSchema>> = {
     error: 'string',
     required: 'boolean',
   }, { description: 'desc', hint: 'desc', help: 'desc', message: 'error' }),
+  // ---- prototype channel (slice 3): real states + two-pane layout -------
+  // `empty` and `loading` are production states, so they carry no "draft"
+  // signal: solid tiles plus `aria-busy`/`role`, never a dashed frame.
+  empty: schema(['title'], {
+    ...nodeFields,
+    title: 'string',
+    desc: 'string',
+    icon: 'string',
+    actions: 'nodes',
+  }, {
+    // Models name the headline and the body differently; adopt the common
+    // guesses instead of dropping the state (a dropped `empty` renders blank).
+    label: 'title',
+    text: 'title',
+    heading: 'title',
+    description: 'desc',
+    subtitle: 'desc',
+    content: 'desc',
+    body: 'desc',
+  }),
+  loading: schema([], {
+    ...nodeFields,
+    label: 'string',
+    variant: 'string',
+    lines: 'number',
+  }, {}, { enums: { variant: LOADING_VARIANTS } }),
+  split: schema(['items'], {
+    ...nodeFields,
+    ratio: 'string',
+    divider: 'boolean',
+    items: 'nodes',
+  }, { panes: 'items', columns: 'items' }, { enums: { ratio: SPLIT_RATIOS } }),
 } as const
 
 export const GENUI_NATIVE_TYPES: ReadonlySet<string> = new Set(Object.keys(COMPONENT_SCHEMAS))
@@ -403,5 +439,7 @@ export const GENUI_NATIVE_TYPES: ReadonlySet<string> = new Set(Object.keys(COMPO
  * binds exactly these; the prompt/reference derive layer re-exports the list.
  * Kept here (not in docs/derive) so the client bundle never pulls prompt text.
  */
-export const PROTOTYPE_TYPES = ['page', 'nav', 'list-row', 'field-group'] as const
+export const PROTOTYPE_TYPES = [
+  'page', 'nav', 'list-row', 'field-group', 'empty', 'loading', 'split',
+] as const
 export type PrototypeType = typeof PROTOTYPE_TYPES[number]

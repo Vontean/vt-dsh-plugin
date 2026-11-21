@@ -128,12 +128,18 @@ function GenuiBlockInstance({
   const backScreen = useCallback(() => {
     setScreenState(prev => goBackScreen(resolveScreen(prev)))
   }, [resolveScreen])
-  const navigation = useMemo<ScreenNavigation | undefined>(
-    () => (machineOn && resolvedScreen !== null
-      ? { go: goScreen, back: backScreen, canGoBack: resolvedScreen.stack.length > 0 }
-      : undefined),
-    [machineOn, resolvedScreen, goScreen, backScreen],
-  )
+  const navigation = useMemo<ScreenNavigation | undefined>(() => {
+    if (!machineOn || resolvedScreen === null) return undefined
+    const screenIndex = screenModel === null ? -1 : screenModel.order.indexOf(resolvedScreen.current)
+    return {
+      go: goScreen,
+      back: backScreen,
+      canGoBack: resolvedScreen.stack.length > 0,
+      screenId: resolvedScreen.current,
+      // Index only when the id is really declared; `-1` would print "屏 0".
+      ...(screenIndex >= 0 ? { screenIndex } : {}),
+    }
+  }, [machineOn, resolvedScreen, goScreen, backScreen, screenModel])
   const [answers, setAnswers] = useState<Record<string, string>>(persisted?.answers ?? {})
   const [multiAnswers, setMultiAnswers] = useState<Record<string, string[]>>(persisted?.multiAnswers ?? {})
   const [fields, setFields] = useState<Record<string, string>>(persisted?.fields ?? {})

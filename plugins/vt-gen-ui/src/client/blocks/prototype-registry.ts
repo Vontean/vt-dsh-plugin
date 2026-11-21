@@ -10,13 +10,15 @@
 import { createElement, type ComponentType } from 'react'
 import { PROTOTYPE_TYPES, type PrototypeType } from '../../shared/catalog/definitions.ts'
 import type { GenuiNode } from '../spec.ts'
-import { FieldGroupNode, ListRowNode, NavNode, PageNode } from './prototype.tsx'
+import { EmptyNode, FieldGroupNode, ListRowNode, LoadingNode, NavNode, PageNode, SplitNode } from './prototype.tsx'
 import type { PrototypeRenderProps, RenderPrototypeChildren } from './prototype.tsx'
 
 export interface PrototypeDispatchProps {
   readonly node: GenuiNode
   readonly path: string
   readonly renderChildren: RenderPrototypeChildren
+  /** Dispatch depth; 0 means a root node of the block/screen. */
+  readonly depth?: number
 }
 
 /** Rendered by React (never called directly), so each component keeps its own
@@ -36,6 +38,9 @@ export const PROTOTYPE_RENDERERS: Readonly<Record<PrototypeType, PrototypeRender
   nav: bind(NavNode),
   'list-row': bind(ListRowNode),
   'field-group': bind(FieldGroupNode),
+  empty: bind(EmptyNode),
+  loading: bind(LoadingNode),
+  split: bind(SplitNode),
 }
 
 /** True for catalog prototype types; used by tests and diagnostics. */

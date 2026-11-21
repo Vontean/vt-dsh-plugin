@@ -25,7 +25,11 @@ export function walkGenuiNodes(spec: GenuiSpec, visitor: (node: GenuiNode, path:
         if (node.actions !== undefined) walk(node.actions, `${at}.actions`, depth + 1)
         break
       case 'list-row':
+      case 'empty':
         if (node.actions !== undefined) walk(node.actions, `${at}.actions`, depth + 1)
+        break
+      case 'split':
+        walk(node.items, `${at}.items`, depth + 1)
         break
       case 'tabs':
         node.tabs.forEach((tab, tabIndex) => walk(tab.items, `${at}.tabs[${tabIndex}].items`, depth + 1))

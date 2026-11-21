@@ -201,6 +201,14 @@ const NAV_VARIANTS = [
 	"side",
 	"tabs"
 ];
+/** Loading skeleton shapes: text bars, or a media row. */
+const LOADING_VARIANTS = ["block", "row"];
+/** Split ratios. Only three: with no dragging, text flow must stay predictable. */
+const SPLIT_RATIOS = [
+	"1:1",
+	"2:1",
+	"1:2"
+];
 /** Table cell renderers (`table.types`, one entry per column). */
 const TABLE_CELL_TYPES = [
 	"text",
@@ -864,7 +872,37 @@ const COMPONENT_SCHEMAS = {
 		hint: "desc",
 		help: "desc",
 		message: "error"
-	})
+	}),
+	empty: schema(["title"], {
+		...nodeFields,
+		title: "string",
+		desc: "string",
+		icon: "string",
+		actions: "nodes"
+	}, {
+		label: "title",
+		text: "title",
+		heading: "title",
+		description: "desc",
+		subtitle: "desc",
+		content: "desc",
+		body: "desc"
+	}),
+	loading: schema([], {
+		...nodeFields,
+		label: "string",
+		variant: "string",
+		lines: "number"
+	}, {}, { enums: { variant: LOADING_VARIANTS } }),
+	split: schema(["items"], {
+		...nodeFields,
+		ratio: "string",
+		divider: "boolean",
+		items: "nodes"
+	}, {
+		panes: "items",
+		columns: "items"
+	}, { enums: { ratio: SPLIT_RATIOS } })
 };
 const GENUI_NATIVE_TYPES = new Set(Object.keys(COMPONENT_SCHEMAS));
 // src/client/spec.ts
@@ -1338,7 +1376,10 @@ function normalizeNode(value, path, warnings) {
 	} else if (type === "field-group") out.items = normalizeNodeArray(out.items, `${path}.items`);
 	else if (type === "list-row") {
 		if (out.actions !== void 0) out.actions = normalizeNodeArray(out.actions, `${path}.actions`);
-	} else if (type === "list" && Array.isArray(out.items)) out.items = out.items.map((child, index) => {
+	} else if (type === "empty") {
+		if (out.actions !== void 0) out.actions = normalizeNodeArray(out.actions, `${path}.actions`);
+	} else if (type === "split") out.items = normalizeNodeArray(out.items, `${path}.items`);
+	else if (type === "list" && Array.isArray(out.items)) out.items = out.items.map((child, index) => {
 		if (isNode$1(child)) return normalizeNodeValue(child, `${path}.items[${index}]`);
 		if (Array.isArray(child) && child.length === 1 && typeof child[0] === "string") return child[0];
 		const holder = record$1(child);
@@ -1492,10 +1533,11 @@ function visitNativeNodes(value, path, visit) {
 	if (definition === void 0) return;
 	visit(value, path, definition);
 	const children = (child, childPath) => visitNativeNodes(child, childPath, visit);
-	if ((type === "row" || type === "col" || type === "grid" || type === "card" || type === "page" || type === "field-group") && Array.isArray(value.items)) {
+	if ((type === "row" || type === "col" || type === "grid" || type === "card" || type === "page" || type === "field-group" || type === "split") && Array.isArray(value.items)) {
 		value.items.forEach((child, index) => children(child, `${path}.items[${index}]`));
 		if (type === "page" && Array.isArray(value.actions)) value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`));
 	} else if (type === "list-row" && Array.isArray(value.actions)) value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`));
+	else if (type === "empty" && Array.isArray(value.actions)) value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`));
 	else if (type === "list" && Array.isArray(value.items)) value.items.forEach((child, index) => children(child, `${path}.items[${index}]`));
 	else if (type === "tabs" && Array.isArray(value.tabs)) value.tabs.forEach((tab, index) => {
 		const holder = record(tab);
@@ -1625,7 +1667,11 @@ function walkGenuiNodes(spec, visitor) {
 				if (node.actions !== void 0) walk(node.actions, `${at}.actions`, depth + 1);
 				break;
 			case "list-row":
+			case "empty":
 				if (node.actions !== void 0) walk(node.actions, `${at}.actions`, depth + 1);
+				break;
+			case "split":
+				walk(node.items, `${at}.items`, depth + 1);
 				break;
 			case "tabs":
 				node.tabs.forEach((tab, tabIndex) => walk(tab.items, `${at}.tabs[${tabIndex}].items`, depth + 1));
@@ -2133,6 +2179,29 @@ function repairNodeFields(value, ctx, depth) {
 				...opt("required", v.required === true ? true : void 0)
 			};
 		}
+		case "empty": {
+			const title = str(v.title, GENUI_LIMITS.maxString);
+			if (title === void 0) return null;
+			return {
+				type: "empty",
+				title,
+				...opt("desc", str(v.desc, GENUI_LIMITS.maxString)),
+				...opt("icon", str(v.icon, 64)),
+				...opt("actions", Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : void 0)
+			};
+		}
+		case "loading": return {
+			type: "loading",
+			...opt("label", str(v.label, 120)),
+			...opt("variant", enu(v.variant, LOADING_VARIANTS)),
+			...opt("lines", int(v.lines, 1, 3))
+		};
+		case "split": return {
+			type: "split",
+			items: repairItems(v.items, ctx, depth + 1),
+			...opt("ratio", enu(v.ratio, SPLIT_RATIOS)),
+			...opt("divider", v.divider === true ? true : void 0)
+		};
 		case "button": {
 			const label = str(v.label, GENUI_LIMITS.maxString);
 			if (label === void 0) return null;
@@ -3123,10 +3192,10 @@ function countGenuiNodes(value, cap = Number.POSITIVE_INFINITY) {
 				const io = obj(it);
 				if (io !== void 0) walk(io.items);
 			}
-			else if ((v.type === "row" || v.type === "col" || v.type === "grid" || v.type === "card" || v.type === "page" || v.type === "field-group") && Array.isArray(v.items)) {
+			else if ((v.type === "row" || v.type === "col" || v.type === "grid" || v.type === "card" || v.type === "page" || v.type === "field-group" || v.type === "split") && Array.isArray(v.items)) {
 				walk(v.items);
 				if (v.type === "page" && Array.isArray(v.actions)) walk(v.actions);
-			} else if (v.type === "list-row" && Array.isArray(v.actions)) walk(v.actions);
+			} else if ((v.type === "list-row" || v.type === "empty") && Array.isArray(v.actions)) walk(v.actions);
 			else if (v.type === "file-tree") {} else if (v.type === "list" && Array.isArray(v.items)) for (const li of v.items) {
 				if (count >= cap) return;
 				const lo = obj(li);
@@ -3190,10 +3259,10 @@ function visitDeclaredGenuiNodes(value, cap, visit, options = {}) {
 		} else if (v.type === "accordion" && Array.isArray(v.items)) {
 			const rowCount = familyCaps ? Math.min(v.items.length, GENUI_LIMITS.maxAccordionItems) : v.items.length;
 			for (let row = 0; row < rowCount; row++) walkItemsOf(v.items[row], `${at}.items[${row}]`);
-		} else if ((v.type === "row" || v.type === "col" || v.type === "grid" || v.type === "card" || v.type === "page" || v.type === "field-group") && Array.isArray(v.items)) {
+		} else if ((v.type === "row" || v.type === "col" || v.type === "grid" || v.type === "card" || v.type === "page" || v.type === "field-group" || v.type === "split") && Array.isArray(v.items)) {
 			walk(v.items, `${at}.items`);
 			if (v.type === "page" && Array.isArray(v.actions)) walk(v.actions, `${at}.actions`);
-		} else if (v.type === "list-row" && Array.isArray(v.actions)) walk(v.actions, `${at}.actions`);
+		} else if ((v.type === "list-row" || v.type === "empty") && Array.isArray(v.actions)) walk(v.actions, `${at}.actions`);
 		else if (v.type === "list" && Array.isArray(v.items)) for (let row = 0; row < v.items.length; row++) walkNode(v.items[row], `${at}.items[${row}]`);
 		else if (v.type === "table" && Array.isArray(v.details)) {
 			const rowCount = tableRowsForDetails(v).length;
@@ -3782,6 +3851,23 @@ function validateNode(value, depth, at, errors, walk) {
 			else walk(v.items, depth + 1, `${at}.items`);
 			isStr("desc");
 			isStr("error");
+			break;
+		case "empty":
+			if (typeof v.title !== "string") errors.push(`${at}: type 'empty' requires title (string)`);
+			isStr("desc");
+			isStr("icon");
+			if (v.actions !== void 0 && !Array.isArray(v.actions)) errors.push(`${at}: type 'empty' requires actions (array) when present`);
+			else if (Array.isArray(v.actions)) walk(v.actions, depth + 1, `${at}.actions`);
+			break;
+		case "loading":
+			isStr("label");
+			isStr("variant");
+			isNum("lines");
+			break;
+		case "split":
+			if (!Array.isArray(v.items)) errors.push(`${at}: type 'split' requires items (array)`);
+			else walk(v.items, depth + 1, `${at}.items`);
+			isStr("ratio");
 			break;
 		case "echart":
 			if (v.option === void 0 && v.data === void 0 && v.series === void 0 && (!Array.isArray(v.links) || v.links.length === 0)) errors.push(`${at}: type 'echart' requires option, data, series, or links`);
@@ -5652,7 +5738,8 @@ const CATALOG_CATEGORIES = [
 			"spacer",
 			"hero",
 			"page",
-			"nav"
+			"nav",
+			"split"
 		]
 	},
 	{
@@ -5681,7 +5768,9 @@ const CATALOG_CATEGORIES = [
 			"icon",
 			"blocks",
 			"arrow",
-			"list-row"
+			"list-row",
+			"empty",
+			"loading"
 		]
 	},
 	{
@@ -5773,6 +5862,14 @@ const CATALOG_DOCS = {
 		quickRef: "{\"type\":\"nav\",\"items\":[{\"label\",\"active\"}]}",
 		gotcha: ["items 是 [{label,active}] 记录数组，不是字符串数组"],
 		usage: "聊天正文里的导航是示意：点击只在本地切换选中态，不承载路由。"
+	},
+	split: {
+		category: "layout",
+		summary: "双栏布局：ratio 取 1:1/2:1/1:2，窄容器自动堆叠为单列。",
+		promptInline: "（1:1/2:1/1:2 双栏，窄容器堆叠）",
+		quickRef: "{\"type\":\"split\",\"ratio\":\"1:1\",\"items\":[...]}",
+		gotcha: ["ratio 只接受 1:1 / 2:1 / 1:2；分隔线默认不画，需要时才写 divider"],
+		usage: "各栏通常各放一个 `page`；两栏并排时等高。容器窄于 600 时堆叠，间距仍是 16。"
 	},
 	badge: {
 		category: "display",
@@ -5881,6 +5978,20 @@ const CATALOG_DOCS = {
 		promptInline: "（媒体+主副文本+尾部操作）",
 		quickRef: "{\"type\":\"list-row\",\"title\",\"desc\"}",
 		usage: "media 是短标签或图标位；actions 放 button 等节点；一行只表达一个对象。"
+	},
+	empty: {
+		category: "display",
+		summary: "空态：图形位（可省）+ 标题 + 说明 + 可选操作，按真实状态呈现。",
+		quickRef: "{\"type\":\"empty\",\"title\",\"desc\"}",
+		gotcha: ["标题是 `title`，不要只写 desc；这是真实状态，不要画成虚线草稿"],
+		usage: "「没有数据」的样子，不是「还没画完」；actions 放 button/link。"
+	},
+	loading: {
+		category: "display",
+		summary: "加载态骨架：variant 取 block/row，lines 控制条数（≤3）。",
+		quickRef: "{\"type\":\"loading\",\"variant\":\"block\",\"lines\":3}",
+		gotcha: ["lines 最多 3 条，宽度自动错落，不要手写宽度字段"],
+		usage: "骨架按 100/88/72 错落收口；容器带 role=status + aria-busy。"
 	},
 	chart: {
 		category: "chart",

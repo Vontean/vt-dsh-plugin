@@ -15,6 +15,8 @@ export interface PrototypeDispatchProps {
     readonly node: GenuiNode;
     readonly path: string;
     readonly renderChildren: RenderPrototypeChildren;
+    /** Dispatch depth; 0 means a root node of the block/screen. */
+    readonly depth?: number;
 }
 /** Rendered by React (never called directly), so each component keeps its own
  *  hook scope; calling it inline would attach hooks to the dispatcher. */

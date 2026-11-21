@@ -1,6 +1,6 @@
 /**
- * Prototype-channel components (slice 1): `page`, `nav`, `list-row`,
- * `field-group`.
+ * Prototype-channel components: `page`, `nav`, `list-row`, `field-group`
+ * (slice 1) plus `empty`, `loading`, `split` (slice 3).
  *
  * They are page-structure primitives for low-fidelity, in-conversation
  * prototypes. Visual rules stay neutral on purpose (the visual pass is a
@@ -15,7 +15,11 @@
 import { useId, useState, type ReactNode } from 'react'
 import css from './Prototype.module.css'
 import { renderInline } from '../inline.ts'
-import type { GenuiFieldGroup, GenuiListRow, GenuiNav, GenuiNode, GenuiPage } from '../spec.ts'
+import { t } from '../i18n/index.ts'
+import { useScreenNavigation } from '../screen-navigation.tsx'
+import type {
+  GenuiEmpty, GenuiFieldGroup, GenuiListRow, GenuiLoading, GenuiNav, GenuiNode, GenuiPage, GenuiSplit,
+} from '../spec.ts'
 
 /** Children are rendered by the dispatcher, never imported (avoids a cycle). */
 export type RenderPrototypeChildren = (nodes: readonly GenuiNode[], basePath: string) => ReactNode
@@ -24,6 +28,8 @@ export interface PrototypeRenderProps<N> {
   readonly node: N
   readonly path: string
   readonly renderChildren: RenderPrototypeChildren
+  /** Dispatch depth; 0 means a root node of the block/screen. */
+  readonly depth?: number
 }
 
 /**
@@ -45,11 +51,12 @@ export function wrapPrototypeRoot(rendered: ReactNode, depth: number, key: numbe
 }
 
 /** `page`: optional title bar + content area; the root of a prototype screen. */
-export function PageNode({ node, path, renderChildren }: PrototypeRenderProps<GenuiPage>): ReactNode {
+export function PageNode({ node, path, renderChildren, depth = 0 }: PrototypeRenderProps<GenuiPage>): ReactNode {
   const headingId = useId()
+  const navigation = useScreenNavigation()
   const hasHeader = node.title !== undefined || node.subtitle !== undefined
     || (node.actions !== undefined && node.actions.length > 0)
-  return (
+  const section = (
     <section
       className={css.page}
       data-genui="page"
@@ -74,18 +81,37 @@ export function PageNode({ node, path, renderChildren }: PrototypeRenderProps<Ge
       </div>
     </section>
   )
+  // Screen chrome (§3.1): the corner badge says "this rectangle is a
+  // simulated screen". It lives OUTSIDE the page because the page clips its
+  // own overflow and owns no padding the badge could sit in; only the root
+  // page of a screen-based block carries one (split panes would all repeat
+  // the same label).
+  const frameLabel = depth === 0 && navigation?.screenIndex !== undefined
+    ? [t('screens.frame', { n: navigation.screenIndex + 1 }), node.title ?? navigation.screenId]
+      .filter((part): part is string => part !== undefined && part !== '')
+      .join(' · ')
+    : undefined
+  if (frameLabel === undefined) return section
+  return (
+    <div className={css.pageFrame} data-genui-page-frame>
+      <span className={css.pageLabel}>{frameLabel}</span>
+      {section}
+    </div>
+  )
 }
 
 /**
  * `nav`: a navigation *sketch*. Clicking only moves the visual selection —
- * it carries no route and never sends an action. The current item is marked
- * with `data-active` (and `aria-current` / `aria-selected` for AT).
+ * it carries no route and never sends an action.
+ *
+ * All three shapes are PAGE navigation, so the current item is
+ * `aria-current="page"`; the former `role="tab"`/`aria-selected` made screen
+ * readers announce bottom tabs as a tab widget, which they are not.
  */
 export function NavNode({ node }: PrototypeRenderProps<GenuiNav>): ReactNode {
   const variant = node.variant ?? 'top'
   const initial = node.items.findIndex(item => item.active === true)
   const [selected, setSelected] = useState(initial)
-  const isTabs = variant === 'tabs'
   const items = node.items.map((item, index) => {
     const active = index === selected
     return (
@@ -94,7 +120,7 @@ export function NavNode({ node }: PrototypeRenderProps<GenuiNav>): ReactNode {
           type="button"
           className={css.navItem}
           data-active={active ? 'true' : 'false'}
-          {...(isTabs ? { role: 'tab', 'aria-selected': active } : { 'aria-current': active ? 'page' : undefined })}
+          {...(active ? { 'aria-current': 'page' as const } : {})}
           onClick={() => setSelected(index)}
         >
           {item.icon !== undefined && <span className={css.navIcon} aria-hidden="true">{item.icon}</span>}
@@ -108,11 +134,9 @@ export function NavNode({ node }: PrototypeRenderProps<GenuiNav>): ReactNode {
       className={css.nav}
       data-genui="nav"
       data-orientation={variant}
-      aria-label={node.label ?? '导航'}
+      aria-label={node.label ?? t('prototype.nav')}
     >
-      {isTabs
-        ? <div className={css.navList} role="tablist">{items}</div>
-        : <ul className={css.navList}>{items}</ul>}
+      <ul className={css.navList}>{items}</ul>
     </nav>
   )
 }
@@ -188,6 +212,91 @@ export function FieldGroupNode({ node, path, renderChildren }: PrototypeRenderPr
       {invalid && (
         <div className={css.fieldError} id={errorId} role="alert">{renderInline(node.error ?? '')}</div>
       )}
+    </div>
+  )
+}
+
+/** Skeleton width buckets (§6.6). Adjacent bars never share a width: equal
+ *  bars close on one straight edge and stop reading as text. */
+const LOADING_BLOCK_WIDTHS: Readonly<Record<number, readonly number[]>> = {
+  1: [100],
+  2: [100, 72],
+  3: [100, 88, 72],
+}
+/** A skeleton row carries two bars; 56 would make the row look half empty. */
+const LOADING_ROW_WIDTHS: readonly number[] = [88, 72]
+
+/**
+ * `empty`: a real empty state. No dashed frame — that is the "structure not
+ * decided" signal, and using it here makes reviewers skip the state as
+ * unfinished instead of discussing it.
+ */
+export function EmptyNode({ node, path, renderChildren }: PrototypeRenderProps<GenuiEmpty>): ReactNode {
+  const headingId = useId()
+  return (
+    <div className={css.empty} data-genui="empty" role="group" aria-labelledby={headingId}>
+      {node.icon !== undefined && node.icon !== '' && (
+        <div className={css.emptyMedia} aria-hidden="true">{node.icon}</div>
+      )}
+      <h3 className={css.emptyTitle} id={headingId}>{renderInline(node.title)}</h3>
+      {node.desc !== undefined && node.desc !== '' && (
+        <p className={css.emptyDesc}>{renderInline(node.desc)}</p>
+      )}
+      {node.actions !== undefined && node.actions.length > 0 && (
+        <div className={css.emptyActions}>{renderChildren(node.actions, `${path}.actions`)}</div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * `loading`: skeleton placeholder. The width sequence is dealt here, not
+ * written by the model — a `width` field would be a second source of truth
+ * for a purely visual decision.
+ */
+export function LoadingNode({ node }: PrototypeRenderProps<GenuiLoading>): ReactNode {
+  const variant = node.variant ?? 'block'
+  const lines = Math.min(Math.max(Math.trunc(node.lines ?? 3), 1), 3)
+  const widths = variant === 'row' ? LOADING_ROW_WIDTHS : (LOADING_BLOCK_WIDTHS[lines] ?? LOADING_BLOCK_WIDTHS[3]!)
+  return (
+    <div
+      className={css.loading}
+      data-genui="loading"
+      data-orientation={variant}
+      role="status"
+      aria-busy="true"
+      aria-label={node.label ?? t('prototype.loading')}
+    >
+      <div className={css.skeleton} aria-hidden="true">
+        {variant === 'row' && <div className={css.skeletonMedia} />}
+        <div className={css.skeletonLines}>
+          {widths.map((width, index) => (
+            <div key={index} className={css.skeletonBar} data-width={String(width)} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * `split`: two panes at a fixed ratio. It paints no surface and no padding of
+ * its own — the boundary belongs to the `page` each pane carries, and the
+ * optional divider is the single exception (`divider: true`).
+ */
+export function SplitNode({ node, path, renderChildren }: PrototypeRenderProps<GenuiSplit>): ReactNode {
+  return (
+    <div
+      className={css.split}
+      data-genui="split"
+      data-ratio={node.ratio ?? '1:1'}
+      data-divider={node.divider === true ? 'true' : 'false'}
+    >
+      {node.items.map((child, index) => (
+        <div key={index} className={css.splitPane}>
+          {renderChildren([child], `${path}.items[${index}]`)}
+        </div>
+      ))}
     </div>
   )
 }

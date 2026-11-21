@@ -31,7 +31,8 @@ describe('catalog coherence', () => {
     expect(new Set(CATALOG_TYPES)).toEqual(new Set(Object.keys(CATALOG_DOCS)))
   })
 
-  test('the four prototype types are schema-backed and prompt-visible', () => {
+  test('every prototype type is schema-backed and prompt-visible', () => {
+    expect([...PROTOTYPE_TYPES]).toHaveLength(7)
     for (const type of PROTOTYPE_TYPES) {
       expect(GENUI_NATIVE_TYPES.has(type)).toBe(true)
       expect(CATALOG_TYPES).toContain(type)
