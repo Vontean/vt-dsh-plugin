@@ -46,7 +46,44 @@ export function collectInlineContentWarnings(spec: GenuiSpec): InlineContentWarn
       case 'text': check(node.content, `${path}.content`); break
       case 'card':
         check(node.title, `${path}.title`)
+        check(node.eyebrow, `${path}.eyebrow`)
         node.items.forEach((child, i) => visit(child, `${path}.items[${i}]`))
+        break
+      case 'page':
+        check(node.title, `${path}.title`)
+        check(node.subtitle, `${path}.subtitle`)
+        node.actions?.forEach((child, i) => visit(child, `${path}.actions[${i}]`))
+        node.items.forEach((child, i) => visit(child, `${path}.items[${i}]`))
+        break
+      case 'split':
+        node.items.forEach((child, i) => visit(child, `${path}.items[${i}]`))
+        break
+      case 'nav':
+        check(node.label, `${path}.label`)
+        node.items.forEach((item, i) => check(item.label, `${path}.items[${i}].label`))
+        break
+      case 'field-group':
+        check(node.label, `${path}.label`)
+        check(node.desc, `${path}.desc`)
+        check(node.error, `${path}.error`)
+        node.items.forEach((child, i) => visit(child, `${path}.items[${i}]`))
+        break
+      case 'empty':
+        check(node.title, `${path}.title`)
+        check(node.desc, `${path}.desc`)
+        node.actions?.forEach((child, i) => visit(child, `${path}.actions[${i}]`))
+        break
+      case 'list-row':
+        check(node.title, `${path}.title`)
+        check(node.desc, `${path}.desc`)
+        check(node.meta, `${path}.meta`)
+        node.actions?.forEach((child, i) => visit(child, `${path}.actions[${i}]`))
+        break
+      case 'modal':
+        check(node.title, `${path}.title`)
+        check(node.trigger, `${path}.trigger`)
+        node.items?.forEach((child, i) => visit(child, `${path}.items[${i}]`))
+        node.actions?.forEach((child, i) => visit(child, `${path}.actions[${i}]`))
         break
       case 'row':
       case 'col':
@@ -74,9 +111,29 @@ export function collectInlineContentWarnings(spec: GenuiSpec): InlineContentWarn
         check(node.explanation, `${path}.explanation`)
         break
       case 'image':
+        check(node.alt, `${path}.alt`)
+        check(node.caption, `${path}.caption`)
+        break
       case 'audio':
       case 'video':
         check(node.alt, `${path}.alt`)
+        break
+      case 'icon':
+        check(node.label, `${path}.label`)
+        break
+      case 'loading':
+        check(node.label, `${path}.label`)
+        break
+      case 'arrow':
+        check(node.label, `${path}.label`)
+        break
+      case 'divider':
+        check(node.label, `${path}.label`)
+        break
+      case 'blocks':
+        check(node.title, `${path}.title`)
+        check(node.caption, `${path}.caption`)
+        node.rows.forEach((row, i) => check(row.label, `${path}.rows[${i}].label`))
         break
       case 'hero':
         for (const field of ['label', 'value', 'delta', 'title', 'subtitle'] as const) check(node[field], `${path}.${field}`)
@@ -111,6 +168,7 @@ export function collectInlineContentWarnings(spec: GenuiSpec): InlineContentWarn
         node.details?.forEach((detail, i) => detail?.forEach((child, j) => visit(child, `${path}.details[${i}][${j}]`)))
         break
       case 'chart':
+        check(node.title, `${path}.title`)
         node.series?.forEach((series, i) => check(series.label, `${path}.series[${i}].label`))
         break
       case 'tabs':
@@ -161,10 +219,16 @@ export function collectInlineContentWarnings(spec: GenuiSpec): InlineContentWarn
         break
       case 'plot':
       case 'echart':
-      case 'diagram':
       case 'scene3d':
       case 'svg':
         check(node.title, `${path}.title`)
+        break
+      case 'diagram':
+        check(node.title, `${path}.title`)
+        node.nodes.forEach((entry, i) => {
+          check(entry.label, `${path}.nodes[${i}].label`)
+          check(entry.sub, `${path}.nodes[${i}].sub`)
+        })
         break
       case 'copy':
         check(node.label, `${path}.label`)

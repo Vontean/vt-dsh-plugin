@@ -5,15 +5,13 @@
  * 于是新增组件、或给组件加文字字段时不会报错，只会**静默少一条诊断**（H9）。
  * 本文件把这件事变成可见事实，分两组：
  *
- * 1. `covered`：现在确实会报出来的字段 —— 防回归。
- * 2. `documented gaps`：现在**不报**的字段与组件 —— 断言“仍然不报”。
- *    这不是认可现状：缺口修好时这些用例会变红，必须把它们翻到 `covered`，
- *    这样“补上诊断”与“更新测试”不会只做一半。
+ * 1. `covered`：既有会报的字段 —— 防回归。
+ * 2. `previously documented gaps`：曾记录为“不报”、现已补上的字段与子树 ——
+ *    它们从“断言不报”翻成“断言会报”，这样补上诊断与更新测试不会只做一半。
  *
- * 组件的 7 个原型子类型（page / split / nav / field-group / empty / list-row / modal）
- * 在 switch 里没有 case，因此**整棵子树都不遍历** —— 缺口清单里最先列的就是它们。
- * （switch 目前覆盖 39 个 type；catalog 共 59 个，其余 20 个的类型要么是叶子节点、
- * 要么文字字段本就不是给人看的 prose。）
+ * 补完后的覆盖范围：7 个原型容器类型（page / split / nav / field-group / empty /
+ * list-row / modal）现在都遍历子树并检查自己的文案字段；此前漏掉的 26 个可见字段
+ * （card.eyebrow、divider.label、blocks.*、diagram.nodes[]、image.caption 等）也已纳入。
  */
 import { describe, expect, test } from 'vitest'
 import { collectInlineContentWarnings } from '../inline-content-diagnostic.ts'
@@ -64,21 +62,22 @@ describe('inline content: covered fields', () => {
 })
 
 /**
- * 现在不报的字段。断言「仍然不报」——修好那天必须把它挪到 covered。
+ * 曾记录为缺口、现已覆盖的字段。断言「会报」——回归时立刻变红。
  * 分类依据：字段本身是**渲染给人看的文字**（不是 id / tone / src / code / 颜色 / 行为）。
  */
-describe('inline content: documented gaps (H9)', () => {
+describe('inline content: previously documented gaps (H9, now covered)', () => {
   const gaps: Array<{ name: string; node: unknown; path: string }> = [
-    // ---- 8 个没有 case 的类型：整棵子树不遍历 ----
+    // ---- 7 个此前没有 case 的类型：整棵子树都不遍历 ----
+    // nav 没有子节点（items 是数据记录），所以这里没有“子树”条目；
+    // 它的两处文案在下方字段清单里（nav.label / nav.items[].label）。
     { name: 'page 子树', node: { type: 'page', title: 't', items: [textChild()] }, path: 'items[0].items[0].content' },
     { name: 'split 子树', node: { type: 'split', ratio: '1:1', items: [textChild()] }, path: 'items[0].items[0].content' },
-    { name: 'nav 子树', node: { type: 'nav', items: [textChild()] }, path: 'items[0].items[0].content' },
     { name: 'field-group 子树', node: { type: 'field-group', label: 'l', items: [textChild()] }, path: 'items[0].items[0].content' },
     { name: 'empty 子树', node: { type: 'empty', title: 't', actions: [textChild()] }, path: 'items[0].actions[0].content' },
     { name: 'list-row 子树', node: { type: 'list-row', title: 't', actions: [textChild()] }, path: 'items[0].actions[0].content' },
     { name: 'modal 子树', node: { type: 'modal', title: 't', trigger: 'k', items: [textChild()] }, path: 'items[0].items[0].content' },
 
-    // ---- 有 case 但漏掉具体字段 ----
+    // ---- 既有 case 里此前漏掉的具体字段 ----
     { name: 'card.eyebrow', node: { type: 'card', eyebrow: MD_TABLE, items: [] }, path: 'items[0].eyebrow' },
     { name: 'divider.label', node: { type: 'divider', label: MD_TABLE }, path: 'items[0].label' },
     { name: 'chart.title', node: { type: 'chart', kind: 'bars', data: [{ label: 'a', value: 1 }], title: MD_TABLE }, path: 'items[0].title' },
@@ -108,8 +107,8 @@ describe('inline content: documented gaps (H9)', () => {
   ]
 
   for (const gap of gaps) {
-    test(`gap: ${gap.name} 目前不报`, () => {
-      expect(warned(gap.node)).not.toContain(gap.path)
+    test(`${gap.name} 现在会报`, () => {
+      expect(warned(gap.node)).toContain(gap.path)
     })
   }
 })
