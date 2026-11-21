@@ -164,6 +164,52 @@
           "engines": { "dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0" }
         }
       ]
+    },
+    {
+      "name": "dsh-mobile-access",
+      "title": {
+        "zh": "手机访问",
+        "en": "Mobile Access"
+      },
+      "description": {
+        "zh": "用 iPhone / iPad 自带的 Safari 打开电脑上的 DSH Web：侧栏多一个「手机访问」入口，给出短地址和 8 位配对码，扫码即可在同一会话里接着聊；附带 Return 换行、防自动放大等触摸小补丁。不改 DSH 核心、无生产依赖，局域网或自己的 Tailscale 内直连。",
+        "en": "Opens the DSH Web GUI from an iPhone or iPad Safari: a Mobile Access entry in the sidebar hands out a short address and an 8-digit pairing code so the phone joins the same session, plus small touch fixes such as Return for newline and no auto-zoom. No DSH core changes, no runtime dependencies, and pairing stays on your LAN or your own Tailscale."
+      },
+      "author": "open-dsh",
+      "homepage": "https://github.com/abbaababa/dsh-mobile-access#readme",
+      "repository": { "url": "https://github.com/abbaababa/dsh-mobile-access" },
+      "category": "tools",
+      "keywords": ["mobile", "iphone", "ipad", "lan", "pairing", "remote"],
+      "versions": [
+        {
+          "version": "1.1.10",
+          "publishTimestamp": 1793254253,
+          "source": { "type": "npm" }
+        }
+      ]
+    },
+    {
+      "name": "ds-bot",
+      "title": {
+        "zh": "Bot 团队",
+        "en": "DS Bot"
+      },
+      "description": {
+        "zh": "把 DSH 变成一支长驻 Bot 团队：每个 Bot 是独立会话，有自己的名字、角色、指令、模型、权限预设和工作文件夹；Bot 之间能互相发消息，支持群聊（管理员先答或成员依次发言、@ 并行、组内 Goal）与跨会话记忆，长对话由上下文管家折成 checkpoint 或交接继续。",
+        "en": "Turns DSH into a team of long-lived Bots: each Bot is its own session with a name, role, instructions, model, permission preset and working folder. Bots message each other, built-in group chats run admin-first or in member order with parallel @-mentions and a group Goal, memory spans conversations, and a context steward folds long chats into a checkpoint or hands off to a new part."
+      },
+      "author": "feizuu",
+      "homepage": "https://github.com/Fei2411/DS-Bot#readme",
+      "repository": { "url": "https://github.com/Fei2411/DS-Bot", "directory": "ds-bot" },
+      "category": "tools",
+      "keywords": ["bot", "team", "group-chat", "multi-agent", "memory", "session"],
+      "versions": [
+        {
+          "version": "0.3.8",
+          "publishTimestamp": 1794844046,
+          "source": { "type": "npm" }
+        }
+      ]
     }
   ]
 }
