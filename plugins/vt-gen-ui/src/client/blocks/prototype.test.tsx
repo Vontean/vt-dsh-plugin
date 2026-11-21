@@ -148,17 +148,20 @@ describe('nav', () => {
     expect(root.querySelector('nav')!.getAttribute('data-orientation')).toBe('top')
   })
 
-  test('edge-to-edge bars cancel the page inset; the side block does not', () => {
-    // §12.3: the top bar and bottom tabs run their rule across the frame, so
-    // they opt out of the page column inset. The side nav is a surface and
-    // stays inside the column — it is not an exception.
+  test('bars declare which edges they hug; the side block declares none', () => {
+    // §12.3: `data-bleed` is a direction list, not a boolean. The top bar
+    // runs edge to edge and hugs the frame top; bottom tabs hug the frame
+    // bottom; the side block is a surface inside the gutter.
     const node = { type: 'nav' as const, items: [{ label: '概览' }] }
-    const tabs = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{ ...node, variant: 'tabs' }} />)
-    expect(tabs.querySelector('nav')!.getAttribute('data-bleed')).toBe('true')
     const top = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{ ...node, variant: 'top' }} />)
-    expect(top.querySelector('nav')!.getAttribute('data-bleed')).toBe('true')
+    expect(top.querySelector('nav')!.getAttribute('data-bleed')).toBe('inline block-start')
+    const tabs = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{ ...node, variant: 'tabs' }} />)
+    expect(tabs.querySelector('nav')!.getAttribute('data-bleed')).toBe('inline block-end')
     const side = render(<NavNode path="items[0]" renderChildren={renderChildren} node={{ ...node, variant: 'side' }} />)
     expect(side.querySelector('nav')!.getAttribute('data-bleed')).toBeNull()
+    // The default variant is the top bar, so it must bleed too.
+    const fallback = render(<NavNode path="items[0]" renderChildren={renderChildren} node={node} />)
+    expect(fallback.querySelector('nav')!.getAttribute('data-bleed')).toBe('inline block-start')
   })
 })
 
@@ -193,11 +196,11 @@ describe('list-row', () => {
     expect(one.querySelector('[data-genui="list-row"]')!.getAttribute('data-lines')).toBe('1')
   })
 
-  test('rows are edge-to-edge so hover and separators span the frame', () => {
-    // §12.3: the row is one of the two allowed bleeds; it restores the inset
-    // as its own padding after cancelling the column margin.
+  test('rows bleed inline only, so hover and separators span the frame', () => {
+    // §12.3: a row cancels the inline gutter (its own padding restores the
+    // content edge) but keeps the block gutter above and below.
     const root = render(<ListRowNode path="items[0]" renderChildren={renderChildren} node={{ type: 'list-row', title: '贴边行' }} />)
-    expect(root.querySelector('[data-genui="list-row"]')!.getAttribute('data-bleed')).toBe('true')
+    expect(root.querySelector('[data-genui="list-row"]')!.getAttribute('data-bleed')).toBe('inline')
   })
 })
 
@@ -461,15 +464,45 @@ describe('style contract (no draft signals, one line width)', () => {
     expect(section('.pageFrame {', '.pageLabel {')).toContain('padding-top: 9px')
   })
 
-  test('the page column is the only source of page-level horizontal inset', () => {
-    // §12.3 rule A: components never decide their own page indent. The two
-    // edge-to-edge exceptions cancel the column margin and restore the inset
-    // as their own padding.
-    expect(section('.pageBody {', '/* ---- nav')).toContain('padding-inline: var(--proto-pad-x)')
-    expect(cssSource).toContain('margin-inline: calc(-1 * var(--proto-pad-x))')
-    // Blocks that used to carry their own page inset now sit flush.
-    expect(section('/* ---- empty', '/* ---- split')).not.toContain('var(--proto-pad-x)')
-    expect(cssSource).not.toContain('.pageBody > .fieldGroup')
+  test('the page body is the only source of page spacing, on all four sides', () => {
+    // §12.3 rule A: one gutter, four sides, and components never add a
+    // page-level padding of their own — that is how 24 + 24 happens.
+    const body = section('.pageBody {', '/* ---- nav')
+    expect(body).toContain('padding: var(--proto-gutter)')
+    expect(body).not.toContain('padding-inline')
+    // The old name described two sides; it must not come back.
+    expect(cssSource).not.toContain('--proto-pad-x')
+    // Blocks that used to carry their own page padding now sit flush.
+    expect(section('/* ---- empty', '/* ---- split')).not.toContain('padding-block: 24px')
+  })
+
+  test('bleed is a direction list with one condition per direction', () => {
+    // `inline` always applies; `block-start` / `block-end` only at the
+    // first / last child, and the top edge additionally yields to a title
+    // bar (§12.3) — miss either condition and a middle nav slides up.
+    expect(cssSource).toContain("[data-bleed~='inline']")
+    expect(cssSource).toContain("[data-bleed~='block-start']:first-child")
+    expect(cssSource).toContain("[data-bleed~='block-end']:last-child")
+    expect(cssSource).toContain('.page:has(> .pageHeader) .pageBody > [data-bleed~=\'block-start\']:first-child')
+    expect(cssSource).toContain('margin-block-start: 0')
+    // The boolean form is gone: every rule must use `~=`.
+    expect(cssSource).not.toContain("[data-bleed='true']")
+  })
+
+  test('the title bar owns its top gutter and no bottom padding', () => {
+    // §12.3: "title → first content" is G, not 16 + G.
+    expect(section('.pageHeader {', '.pageHeading')).toContain('padding: var(--proto-gutter) var(--proto-gutter) 0')
+  })
+
+  test('a divider never doubles a pane frame', () => {
+    // L1/L3: panes that are `page`s already draw a solid frame, so the
+    // divider steps aside and the gap returns.
+    const divider = section('/* Opt-in divider', '/* ---- modal trigger')
+    expect(divider).toContain(":has(> .splitPane > .page)")
+    expect(divider).toContain("[data-genui-page-frame] > .page")
+    expect(divider).toContain('gap: 16px')
+    expect(divider).toContain('border-left: 0')
+    expect(divider).toContain('padding-left: 0')
   })
 
   test('the sketch frame is solid unless the renderer marks the screen root', () => {

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · §14 几何断言</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  html, body { margin: 0; background: var(--dsw-alias-bg-base); }
+  #root { max-width: 780px; margin: 0 auto; padding: 24px 20px 40px; display: grid; gap: 24px; }
+  #verify { font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="verify"></div>
+<script>
+  // 每例一屏、独立挂载：一屏只验一条 §14 断言，互不干扰。
+  // 全部走 runtime 渲染，不是手写静态页。
+  window.__CASES__ = {
+    // G1 + G2 + G3：无标题栏；首个非贴边子元素到框内沿 = G；
+    // 内容左沿一致；list-row 盒贴边、内容回到内容列
+    g1: [{ type: 'page', items: [
+      { type: 'text', content: '首个内容元素到框顶应等于 G。' },
+      { type: 'field-group', label: '截止时间', items: [{ type: 'input', id: 'g1-input', placeholder: '选择日期' }] },
+      { type: 'list-row', title: '贴边行', desc: '行盒贴边，内容回到内容列', media: '王' },
+    ] }],
+    // G6：有标题栏；标题顶到框内沿 = G；标题栏底到首内容 = G（不是 2G）
+    g6: [{ type: 'page', title: '有标题栏', subtitle: '标题顶与首个内容各差一个 G', items: [
+      { type: 'text', content: '标题栏下边距为 0，距离由 pageBody 的 gutter 给。' },
+    ] }],
+    // G4：无标题栏、nav top 是首元素 → nav 顶贴框顶 0
+    g4: [{ type: 'page', items: [
+      { type: 'nav', variant: 'top', items: [{ label: '全部', active: true }, { label: '未读' }] },
+      { type: 'text', content: '顶栏之后的内容仍保留 G。' },
+    ] }],
+    // G4 反例：有标题栏时 nav top 不抵消顶部（≥16）
+    g4b: [{ type: 'page', title: '带标题', items: [
+      { type: 'nav', variant: 'top', items: [{ label: '全部', active: true }] },
+      { type: 'text', content: '导航贴着标题，不贴页面框。' },
+    ] }],
+    // G5：nav tabs 是末元素 → 贴框底 0
+    g5: [{ type: 'page', items: [
+      { type: 'text', content: '底部标签贴框底。' },
+      { type: 'nav', variant: 'tabs', items: [{ label: '概览', active: true }, { label: '设置' }] },
+    ] }],
+    // L3 + G8：分栏里是 page 时，divider 不生效；两栏等高
+    l3: [{ type: 'page', items: [
+      { type: 'split', divider: true, items: [
+        { type: 'page', label: '方案 A', title: '空态', items: [{ type: 'empty', title: '还没有内容' }] },
+        { type: 'page', label: '方案 B', title: '列', items: [{ type: 'list-row', title: '嵌套区域用实线' }, { type: 'list-row', title: '第二行' }] },
+      ] },
+    ] }],
+  };
+</script>
+<script src="../../lib/assets/standalone-runtime.js"></script>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+  const root = document.getElementById('root');
+  for (const [name, items] of Object.entries(window.__CASES__)) {
+    const host = document.createElement('div');
+    host.setAttribute('data-case', name);
+    root.appendChild(host);
+    window.__GenuiStandalone__.mount(host, {
+      format: 'dsh-genui',
+      version: 1,
+      spec: { items },
+      presentation: { locale: 'zh', theme },
+    });
+  }
+
+  setTimeout(() => {
+    const round = value => Math.round(value * 10) / 10;
+    const rect = el => el === null ? null : el.getBoundingClientRect();
+    // P：page 内框（去掉描边）的四条边
+    const inner = page => {
+      const r = rect(page);
+      const c = getComputedStyle(page);
+      return {
+        left: r.left + parseFloat(c.borderLeftWidth),
+        top: r.top + parseFloat(c.borderTopWidth),
+        right: r.right - parseFloat(c.borderRightWidth),
+        bottom: r.bottom - parseFloat(c.borderBottomWidth),
+      };
+    };
+    const px = value => value === null || value === undefined ? null : round(value);
+    const describe = page => {
+      const p = inner(page);
+      const header = page.querySelector(':scope > header');
+      const body = page.querySelector(':scope > [data-page-body]');
+      const children = body === null ? [] : [...body.children];
+      const first = children[0] ?? null;
+      const last = children[children.length - 1] ?? null;
+      const title = header === null ? null : header.querySelector('h2');
+      const firstContent = children.find(child => !child.hasAttribute('data-bleed')) ?? null;
+      const inlineChild = children.find(child => (child.getAttribute('data-bleed') ?? '').includes('inline')) ?? null;
+      return {
+        gutter: body === null ? null : px(parseFloat(getComputedStyle(body).paddingTop)),
+        hasHeader: header !== null,
+        titleTopMinusP: title === null ? null : px(rect(title).top - p.top),
+        headerBottomToFirstContent: header === null || firstContent === null
+          ? null : px(rect(firstContent).top - rect(header).bottom),
+        firstChildTopMinusP: first === null ? null : px(rect(first).top - p.top),
+        firstChildBleed: first === null ? null : first.getAttribute('data-bleed'),
+        lastChildBottomToP: last === null ? null : px(p.bottom - rect(last).bottom),
+        lastChildBleed: last === null ? null : last.getAttribute('data-bleed'),
+        inlineBoxLeftMinusP: inlineChild === null ? null : px(rect(inlineChild).left - p.left),
+        inlineContentLeftMinusP: inlineChild === null || inlineChild.firstElementChild === null
+          ? null : px(rect(inlineChild.firstElementChild).left - p.left),
+        notBleedingLeftMinusP: firstContent === null ? null : px(rect(firstContent).left - p.left),
+      };
+    };
+
+    const report = { theme, cases: {} };
+    for (const host of root.querySelectorAll('[data-case]')) {
+      const name = host.getAttribute('data-case');
+      const pages = [...host.querySelectorAll('[data-genui="page"]')];
+      const split = host.querySelector('[data-genui="split"]');
+      const panes = split === null ? [] : [...split.children];
+      const second = panes[1] ?? null;
+      const secondStyle = second === null ? null : getComputedStyle(second);
+      report.cases[name] = {
+        page: pages.length > 0 ? describe(pages[0]) : null,
+        // G2：同一内容列里标题/直排 text/字段标签/输入框，内容左沿应同一条线
+        contentLefts: (() => {
+          const body = host.querySelector('[data-page-body]');
+          if (body === null) return null;
+          const lefts = [];
+          const h2 = body.parentElement.querySelector(':scope > header h2');
+          if (h2) lefts.push(['title', px(rect(h2).left)]);
+          const text = [...body.children].find(child => (child.className ?? '').includes('text'));
+          if (text) lefts.push(['text', px(rect(text).left)]);
+          const label = body.querySelector('[class*="fieldLabel"]');
+          if (label) lefts.push(['fieldLabel', px(rect(label).left)]);
+          const input = body.querySelector('input');
+          if (input) lefts.push(['input', px(rect(input).left)]);
+          const row = body.querySelector('[data-genui="list-row"]');
+          if (row && row.firstElementChild) lefts.push(['rowContent', px(rect(row.firstElementChild).left)]);
+          return lefts;
+        })(),
+        split: split === null ? null : {
+          divider: split.getAttribute('data-divider'),
+          gap: getComputedStyle(split).columnGap,
+          secondBorderLeft: secondStyle === null ? null : `${secondStyle.borderLeftWidth} ${secondStyle.borderLeftStyle}`,
+          secondPaddingLeft: secondStyle === null ? null : secondStyle.paddingLeft,
+          paneTopDelta: panes.length < 2 ? null : px(Math.abs(rect(panes[0]).top - rect(panes[1]).top)),
+          paneBottomDelta: panes.length < 2 ? null : px(Math.abs(rect(panes[0]).bottom - rect(panes[1]).bottom)),
+          // L2：同屏虚线层数
+          dashedFrames: [...host.querySelectorAll('[data-genui="page"]')]
+            .filter(page => getComputedStyle(page).borderTopStyle === 'dashed').length,
+        },
+      };
+    }
+
+    const out = document.getElementById('verify');
+    out.setAttribute('data-verify', JSON.stringify(report));
+    out.textContent = JSON.stringify(report, null, 2);
+  }, 900);
+</script>
+</body>
+</html>

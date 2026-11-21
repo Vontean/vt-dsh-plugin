@@ -136,14 +136,20 @@ export function NavNode({ node }: PrototypeRenderProps<GenuiNav>): ReactNode {
       </li>
     )
   })
+  // Top bars run their rule edge to edge AND hug the frame top; bottom tabs
+  // run edge to edge and hug the frame bottom. The side block is a surface,
+  // not a bar, and stays inside the page gutter (§12.3). The direction list
+  // is what the CSS consumes — the block edges additionally require
+  // `:first-child` / `:last-child`, which the stylesheet checks.
+  const bleed = variant === 'top'
+    ? 'inline block-start'
+    : variant === 'tabs' ? 'inline block-end' : undefined
   return (
-    // Top bars and bottom tabs run their rule edge to edge; the standalone
-    // side block is a surface and stays inside the page column (§12.3).
     <nav
       className={css.nav}
       data-genui="nav"
       data-orientation={variant}
-      {...(variant === 'side' ? {} : { 'data-bleed': 'true' })}
+      {...(bleed === undefined ? {} : { 'data-bleed': bleed })}
       aria-label={node.label ?? t('prototype.nav')}
     >
       <ul className={css.navList}>{items}</ul>
@@ -168,7 +174,7 @@ export function ListRowNode({ node, path, renderChildren }: PrototypeRenderProps
       className={css.row}
       data-genui="list-row"
       role="listitem"
-      data-bleed="true"
+      data-bleed="inline"
       data-state={interactive ? 'interactive' : 'default'}
       data-lines={twoLine ? '2' : '1'}
       aria-label={name}

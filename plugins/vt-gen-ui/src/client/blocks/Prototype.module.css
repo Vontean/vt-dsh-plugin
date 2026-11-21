@@ -41,7 +41,7 @@
  * narrowed by the container query, not re-declare the default on themselves. */
 .prototypeRoot,
 .page {
-  --proto-pad-x: 24px;
+  --proto-gutter: 24px;
 }
 
 /* Outer container (§5.3): named `proto-root` so a `split` rendered at the
@@ -89,7 +89,9 @@
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  padding: 16px var(--proto-pad-x);
+  /* No bottom padding: the gutter below the title comes from `pageBody`, so
+   * "title → first content" is G, not 16 + 24 = 40 (§12.3). */
+  padding: var(--proto-gutter) var(--proto-gutter) 0;
 }
 
 .pageHeading {
@@ -125,21 +127,40 @@
   flex: 0 0 auto;
 }
 
-/* The page content column is the ONLY source of horizontal inset (§12.3).
- * Components never add page-level padding on top of it — that is how 24 + 24
- * accidents happen. */
+/* The page content block is the ONLY source of page-level spacing (§12.3):
+ * one gutter on all four sides. Components never add page-level padding on
+ * top of it — that is how 24 + 24 accidents happen. */
 .pageBody {
   display: flex;
   flex-direction: column;
   gap: 0;
   min-width: 0;
-  padding-inline: var(--proto-pad-x);
+  padding: var(--proto-gutter);
 }
 
-/* Edge-to-edge components cancel the page inset so their hover surface and
- * separators span the full frame; they carry their own inner padding. */
-.pageBody > [data-bleed='true'] {
-  margin-inline: calc(-1 * var(--proto-pad-x));
+/* Edge-to-edge components cancel the gutter on the edges they hug, so their
+ * hover surface and separators reach the frame. `data-bleed` is a space
+ * separated direction list (`inline` / `block-start` / `block-end`), not a
+ * boolean: `inline` may combine with either block edge. */
+.pageBody > [data-bleed~='inline'] {
+  margin-inline: calc(-1 * var(--proto-gutter));
+}
+
+/* A block-edge bleed only applies to the FIRST / LAST child — a bar in the
+ * middle of the content keeps the gutter above / below it (§12.3). */
+.pageBody > [data-bleed~='block-start']:first-child {
+  margin-block-start: calc(-1 * var(--proto-gutter));
+}
+
+.pageBody > [data-bleed~='block-end']:last-child {
+  margin-block-end: calc(-1 * var(--proto-gutter));
+}
+
+/* ...except when the page has a title bar: the bar already owns the top
+ * edge, so a nav under it hugs the title, not the frame. Without this the
+ * nav would slide up over the title (§12.3 condition 2). */
+.page:has(> .pageHeader) .pageBody > [data-bleed~='block-start']:first-child {
+  margin-block-start: 0;
 }
 
 /* ---- nav ---------------------------------------------------------------- */
@@ -215,7 +236,7 @@
 
 /* Top bar: 48 high, horizontally scrollable, items on one line. */
 .nav[data-orientation='top'] {
-  padding: 0 var(--proto-pad-x);
+  padding: 0 var(--proto-gutter);
   border-bottom: 1px solid var(--proto-line-rule);
   overflow-x: auto;
   overflow-y: hidden;
@@ -319,7 +340,7 @@
   align-items: center;
   gap: 12px;
   min-height: 40px;
-  padding: 8px var(--proto-pad-x);
+  padding: 8px var(--proto-gutter);
   border-radius: 0;
   background: transparent;
   min-width: 0;
@@ -527,14 +548,15 @@
 
 /* A real state, built like production: solid tile, no dashed frame. The
  * dashed frame means "the structure is not decided", which is what this is
- * deliberately not saying. Rhythm: 24 / 12 / 8 / 16 / 24. */
+ * deliberately not saying. No outer padding: the page gutter owns the
+ * spacing, so nothing is counted twice (§12.3). Rhythm: 0 / 12 / 8 / 16. */
 .empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: 8px;
-  padding: 24px 0;
+  padding: 0;
   min-width: 0;
   color: var(--dsw-alias-label-primary);
 }
@@ -580,13 +602,15 @@
 
 /* ---- loading (§6.6) ----------------------------------------------------- */
 
+/* No outer padding either: a skeleton is content, and the page gutter is the
+ * only place spacing comes from (§12.3). */
 .loading {
-  padding: 16px 0;
+  padding: 0;
   min-width: 0;
 }
 
 .loading[data-orientation='row'] {
-  padding: 8px 0;
+  padding: 0;
 }
 
 .skeleton {
@@ -666,6 +690,22 @@
 .split[data-divider='true'] > :nth-child(2) {
   border-left: 1px solid var(--proto-line-frame);
   padding-left: 16px;
+}
+
+/* When each pane is a `page`, the pane already carries its own solid frame.
+ * A divider would then draw a second line at the same x (L1) and push the
+ * right pane's border off the split — so the divider is a *fill* only for
+ * panes that have no frame of their own (§6.7, L3). The `pageFrame` form is
+ * a labelled page, which is the usual case. */
+.split[data-divider='true']:has(> .splitPane > .page),
+.split[data-divider='true']:has(> .splitPane > [data-genui-page-frame] > .page) {
+  gap: 16px;
+}
+
+.split[data-divider='true']:has(> .splitPane > .page) > :nth-child(2),
+.split[data-divider='true']:has(> .splitPane > [data-genui-page-frame] > .page) > :nth-child(2) {
+  border-left: 0;
+  padding-left: 0;
 }
 
 /* ---- modal trigger ------------------------------------------------------ */
@@ -764,7 +804,7 @@
 
 .modalPanel[data-variant='sheet'] {
   width: 100%;
-  padding: 16px var(--proto-pad-x) 24px;
+  padding: 16px var(--proto-gutter) 24px;
   border-radius: var(--proto-radius-page) var(--proto-radius-page) 0 0;
 }
 
@@ -835,13 +875,13 @@
 
 /* ---- container queries (§5.3) ------------------------------------------
  * Rules inside @container cannot style the container itself, so the page
- * narrows through its children (`--proto-pad-x` is re-declared on them and
+ * narrows through its children (`--proto-gutter` is re-declared on them and
  * inherited downward).
  * ------------------------------------------------------------------------ */
 
 @container proto-page (max-width: 600px) {
   .page > * {
-    --proto-pad-x: 16px;
+    --proto-gutter: 16px;
   }
 
   .pageHeader {
