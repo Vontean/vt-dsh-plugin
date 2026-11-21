@@ -327,6 +327,17 @@ describe('installFenceFeedback: steering', () => {
     expect(sink.steered).toHaveLength(1)
   })
 
+  test('fenceFeedback: false leaves the boundary silent even with a broken fence', () => {
+    const { emit } = harness({ enabled: false })
+    const target = session()
+    const sink = boundarySink(target)
+    emit('session/event', target, turnStart(1))
+    emit('session/event', target, assistant(BROKEN))
+    sink.emit(emit, 1)
+
+    expect(sink.steered).toHaveLength(0)
+  })
+
   test('the per-turn budget stops a third distinct failure', () => {
     const { emit } = harness()
     const target = session()
