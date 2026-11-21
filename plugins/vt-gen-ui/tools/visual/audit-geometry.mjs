@@ -294,7 +294,11 @@ function auditInPage(config) {
   }
 
   /* ---- C. 图标字段必须是 svg ---- */
-  const iconFields = [...document.querySelectorAll(sel.iconSlots.join(', '))].filter(visible)
+  const iconFields = [...document.querySelectorAll(sel.iconSlots.join(', '))].filter(el => {
+    if (!visible(el)) return false
+    // 骨架屏的占位块不是图标槽位：它按设计就是一块灰底，不该有 svg。
+    return !/skel/i.test(String(el.className ?? ''))
+  })
   for (const field of iconFields) {
     const svg = field.querySelector('svg') ?? (field.tagName.toLowerCase() === 'svg' ? field : null)
     if (svg !== null) continue
@@ -332,6 +336,11 @@ function auditInPage(config) {
       // 只有它确实是当前页面框的后代时才排除——顶层页面的外框是它的祖先，不能连内容一起排除。
       const screenChrome = el.closest(sel.screenChrome)
       if (screenChrome !== null && screenChrome !== root && root.contains(screenChrome)) continue
+      // 无障碍隐藏（sr-only）用 `margin:-1px` + 1×1 裁剪把文本移出视口，不是间距取值。
+      const visuallyHidden = /visuallyHidden|sr-only|srOnly|screenReader/i.test(
+        String(el.className ?? ''),
+      )
+      if (visuallyHidden) continue
       styled++
       const style = styleOf(el)
       for (const [prop, cssName] of SPACING_PROPS) {
@@ -520,18 +529,9 @@ for (const page of targets) {
     console.error(`找不到 fixture：${file}`)
     process.exit(2)
   }
-  if (fixture.kind === 'sketch') {
-    // 手写页只表达设计意图（§12.6）：三条断言都是“渲染产物类”，在它上面跑等于量画师的画法。
-    reports.push({
-      page,
-      kind: fixture.kind,
-      skipped: '手写探针表达设计意图，不经过渲染器；三条断言都不适用（§12.6）',
-      counts: { pages: 0, bordered: 0, iconFields: 0 },
-      notes: [],
-      violations: [],
-    })
-    continue
-  }
+  // 手写页与 runtime 页都量（§12.6）：手写页是规则文档的另一种写法，
+  // 页面四向留白、间距白名单、叠线、图标槽位这几条在它上面同样成立；
+  // 只是它的失败要读成「画法偏离规则」而不是「实现坏了」。
   const profileDir = await mkdtemp(join(tmpdir(), 'vt-geometry-'))
   const url = `file://${file}?theme=light`
   const driver = await ChromePage.open(CHROME, url, profileDir)
