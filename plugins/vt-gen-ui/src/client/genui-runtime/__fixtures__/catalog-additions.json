@@ -1,0 +1,126 @@
+{
+  "page": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "goto": "string",
+      "title": "string",
+      "subtitle": "string",
+      "label": "string",
+      "actions": "nodes",
+      "items": "nodes"
+    },
+    "since": "slice-2",
+    "note": "label 为切片 5 新增的可选字段：并排方案角标，≤12 字展示省略，数据不截断"
+  },
+  "nav": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "goto": "string",
+      "label": "string",
+      "variant": "string",
+      "items": "array"
+    },
+    "since": "slice-2"
+  },
+  "list-row": {
+    "required": [
+      "title"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "goto": "string",
+      "title": "string",
+      "desc": "string",
+      "meta": "string",
+      "media": "string",
+      "actions": "nodes"
+    },
+    "since": "slice-2"
+  },
+  "field-group": {
+    "required": [
+      "label",
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "goto": "string",
+      "label": "string",
+      "desc": "string",
+      "items": "nodes",
+      "error": "string",
+      "required": "boolean"
+    },
+    "since": "slice-2"
+  },
+  "empty": {
+    "required": [
+      "title"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "goto": "string",
+      "title": "string",
+      "desc": "string",
+      "icon": "string",
+      "actions": "nodes"
+    },
+    "since": "slice-2"
+  },
+  "loading": {
+    "required": [],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "goto": "string",
+      "label": "string",
+      "variant": "string",
+      "lines": "number"
+    },
+    "since": "slice-2"
+  },
+  "split": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "goto": "string",
+      "ratio": "string",
+      "divider": "boolean",
+      "items": "nodes"
+    },
+    "since": "slice-2"
+  },
+  "modal": {
+    "required": [
+      "title"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "goto": "string",
+      "trigger": "string",
+      "title": "string",
+      "variant": "string",
+      "open": "boolean",
+      "dismissible": "boolean",
+      "items": "nodes",
+      "actions": "nodes"
+    },
+    "since": "slice-4",
+    "note": "切片 4 落第一条（决定 B 临时例外）；既无 trigger 又非 open:true 时按 D2 丢弃"
+  }
+}

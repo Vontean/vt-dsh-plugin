@@ -24,6 +24,44 @@ const baseline = JSON.parse(readFileSync(
   'utf8',
 )) as Record<string, BaselineDefinition>
 
+/** One type added after the frozen 50-type baseline (decision D). */
+interface AdditiveDefinition extends BaselineDefinition {
+  /** Release or slice that introduced the type; entries are sorted by it. */
+  readonly since: string
+  readonly note?: string
+}
+
+/**
+ * The additive ledger: every type the catalog gained after the baseline was
+ * frozen. This file — not `git log` — is the answer to "what was added".
+ */
+const additions = JSON.parse(readFileSync(
+  resolve(here, '../../client/genui-runtime/__fixtures__/catalog-additions.json'),
+  'utf8',
+)) as Record<string, AdditiveDefinition>
+const additiveKeys = Object.keys(additions).sort()
+const additiveList = additiveKeys.join(', ')
+
+describe('additive ledger (decision D)', () => {
+  test('catalog types are exactly the frozen baseline plus the additive ledger', () => {
+    const catalogTypes = Object.keys(COMPONENT_SCHEMAS).sort()
+    const expected = [...Object.keys(baseline), ...additiveKeys].sort()
+    // The message carries the additive keys so a failure reads as
+    // "these are the added types", with no git log needed.
+    expect(catalogTypes, `additive types: ${additiveList}`).toEqual(expected)
+  })
+
+  test('every additive entry is in the catalog and matches its current schema', () => {
+    for (const type of additiveKeys) {
+      const entry = additions[type]!
+      const schema = COMPONENT_SCHEMAS[type]
+      expect(schema, `${type} is in the additive ledger but not in the catalog (additive types: ${additiveList})`).toBeDefined()
+      expect(schema!.required, `${type}.required (additive types: ${additiveList})`).toEqual(entry.required)
+      expect(schema!.fields, `${type}.fields (additive types: ${additiveList})`).toEqual(entry.fields)
+    }
+  })
+})
+
 describe('catalog coherence', () => {
   test('every schema type is in the prompt order exactly once', () => {
     expect(new Set(CATALOG_TYPES).size).toBe(CATALOG_TYPES.length)
