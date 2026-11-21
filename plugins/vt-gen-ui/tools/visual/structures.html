@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <title>dsh-vt-gen-ui · 结构规则探针</title>
+<!-- 设计意图层（§12.6）：手写 .pr-* 静态页，不经过渲染器，照着
+     docs/specs/prototype-visual-rules.md §12.3 / §12.4 画。
+     它表达「规则应该长什么样」；与 verify-structures.html（真实 spec 走 runtime、
+     表达「实现现在长什么样」）出现分歧时，按 §12.6 判定，不要为了对齐而改这里。 -->
 <link rel="stylesheet" href="./theme.css" />
 <link rel="stylesheet" href="../../src/client/GenuiBlock.module.css" />
 <link rel="stylesheet" href="./prototype.css" />
@@ -17,6 +21,10 @@
 .pr-page--nested { border-style: solid; }
 .pr-frame--nested { margin-top: 0; }
 .pr-split--demo { margin: 16px 0 24px; }
+/* 组件不自带「页面级」水平内边距：缩进由 pageBody 提供（§12.3）。
+   这里只清掉 empty/loading 的兜底值，避免与 pageBody 相加。 */
+.pr-page-body > .pr-empty,
+.pr-page-body > .pr-loading { padding-inline: 0; }
 </style>
 </head>
 <body>
@@ -50,21 +58,25 @@
         </div>
         <div class="pr-split pr-split--demo">
           <div class="pr-frame pr-frame--nested">
-            <span class="pr-frame-label">方案 A · 空态</span>
+            <span class="pr-frame-label">方案 A</span>
             <div class="pr-page pr-page--nested">
-              <div class="pr-empty" style="padding-top: 16px; padding-bottom: 16px;">
-                <div class="pr-empty__graphic"></div>
-                <div class="pr-empty__title">还没有内容</div>
+              <div class="pr-page-body">
+                <div class="pr-empty" style="padding-top: 16px; padding-bottom: 16px;">
+                  <div class="pr-empty__graphic"></div>
+                  <div class="pr-empty__title">还没有内容</div>
+                </div>
               </div>
             </div>
           </div>
           <div class="pr-frame pr-frame--nested">
-            <span class="pr-frame-label">方案 B · 列表</span>
+            <span class="pr-frame-label">方案 B</span>
             <div class="pr-page pr-page--nested">
-              <div class="pr-rows" data-bleed="true">
-                <div class="pr-row" style="min-height: 40px;">
-                  <span class="pr-row__media" style="width: 32px; height: 32px;"></span>
-                  <span class="pr-row__body"><span class="pr-row__title">嵌套区域用实线</span></span>
+              <div class="pr-page-body">
+                <div class="pr-rows" data-bleed="true">
+                  <div class="pr-row" style="min-height: 40px;">
+                    <span class="pr-row__media" style="width: 32px; height: 32px;"></span>
+                    <span class="pr-row__body"><span class="pr-row__title">嵌套区域用实线</span></span>
+                  </div>
                 </div>
               </div>
             </div>
