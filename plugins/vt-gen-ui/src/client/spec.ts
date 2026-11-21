@@ -77,6 +77,7 @@ export type GenuiNode = (
   | GenuiEmpty
   | GenuiLoading
   | GenuiSplit
+  | GenuiModal
 ) & GenuiLayoutHints
 
   | GenuiEChart
@@ -228,6 +229,32 @@ export interface GenuiSplit {
   items: GenuiNode[]
 }
 
+/**
+ * Modal: a confirmation dialog or a bottom sheet.
+ *
+ * Open/close is local state driven by node fields — no expressions. `trigger`
+ * renders the button that opens it; `open: true` shows it immediately for a
+ * static sketch and deliberately does NOT move focus, lock the page or make
+ * the background inert (it is a picture of a state, not an interaction).
+ * Action buttons close it with `close: true`, before any `action` is sent.
+ */
+export interface GenuiModal {
+  type: 'modal'
+  /** Label of the trigger button; omitted → no trigger (display-only sketch). */
+  trigger?: string
+  /** Dialog title; also the accessible name (`aria-labelledby`). */
+  title: string
+  variant?: 'dialog' | 'sheet'
+  /** Render open immediately, without interaction (presentation only). */
+  open?: boolean
+  /** Escape and scrim dismissal; `false` = only the action buttons close it. */
+  dismissible?: boolean
+  /** Panel body. */
+  items?: GenuiNode[]
+  /** Action row, right aligned; buttons may set `close: true`. */
+  actions?: GenuiNode[]
+}
+
 /* ---------------- leaf nodes ---------------- */
 
 export interface GenuiText {
@@ -255,6 +282,8 @@ export interface GenuiButton {
   action?: string
   /** Screen id to switch to (prototype state machine) instead of an action. */
   goto?: string
+  /** Modal action: close the containing modal (before any `action` is sent). */
+  close?: boolean
 }
 
 export interface GenuiInput {

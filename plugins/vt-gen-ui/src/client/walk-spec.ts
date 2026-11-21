@@ -31,6 +31,10 @@ export function walkGenuiNodes(spec: GenuiSpec, visitor: (node: GenuiNode, path:
       case 'split':
         walk(node.items, `${at}.items`, depth + 1)
         break
+      case 'modal':
+        if (node.items !== undefined) walk(node.items, `${at}.items`, depth + 1)
+        if (node.actions !== undefined) walk(node.actions, `${at}.actions`, depth + 1)
+        break
       case 'tabs':
         node.tabs.forEach((tab, tabIndex) => walk(tab.items, `${at}.tabs[${tabIndex}].items`, depth + 1))
         break

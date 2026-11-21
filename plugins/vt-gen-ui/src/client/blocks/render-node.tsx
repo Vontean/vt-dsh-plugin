@@ -13,6 +13,7 @@ import { FileLink } from '../file-link-context.tsx'
 import { t } from '../i18n/index.ts'
 import type { GenuiButton, GenuiList, GenuiNode } from '../spec.ts'
 import { useScreenNavigation } from '../screen-navigation.tsx'
+import { useModalClose } from '../modal-close.tsx'
 import type { AnswersState, GenuiBlockProps } from './state.ts'
 import { AudioNode, avatarColor, ClickFeedbackButton, VideoNode } from './basic.tsx'
 import { ChartNode, TableNode } from './charts.tsx'
@@ -186,17 +187,23 @@ function ButtonNode({ node, className, onAction }: {
   onAction: GenuiBlockProps['onAction'] | undefined
 }) {
   const navigation = useScreenNavigation()
+  const modalClose = useModalClose()
   const goto = node.goto
   const action = node.action
   const canGoto = goto !== undefined && navigation !== undefined
   const canAct = action !== undefined && onAction !== undefined
-  const interactive = canGoto || canAct
+  // A close button is enabled on its own: dismissing a dialog needs no action.
+  const canClose = node.close === true && modalClose !== undefined
+  const interactive = canGoto || canAct || canClose
   return (
     <ClickFeedbackButton
       className={className}
       disabled={!interactive}
       onClick={interactive
         ? () => {
+            // Close FIRST: the panel must already be closed when an action is
+            // sent, otherwise the message describes the state before closing.
+            if (canClose) modalClose.close()
             if (goto !== undefined && navigation !== undefined) {
               navigation.go(goto)
               return

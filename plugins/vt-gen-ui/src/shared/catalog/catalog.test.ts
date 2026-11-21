@@ -32,7 +32,7 @@ describe('catalog coherence', () => {
   })
 
   test('every prototype type is schema-backed and prompt-visible', () => {
-    expect([...PROTOTYPE_TYPES]).toHaveLength(7)
+    expect([...PROTOTYPE_TYPES]).toHaveLength(8)
     for (const type of PROTOTYPE_TYPES) {
       expect(GENUI_NATIVE_TYPES.has(type)).toBe(true)
       expect(CATALOG_TYPES).toContain(type)
@@ -67,7 +67,9 @@ describe('catalog coherence', () => {
       }
     }
     // Additive changes update this ledger deliberately, keeping them reviewable.
-    expect([...added].sort()).toEqual(['goto'])
+    // `close` (button) and `goto` (layout hint) are the deliberate additive
+    // fields; anything else is a protocol change and must be reviewed.
+    expect([...added].sort()).toEqual(['close', 'goto'])
   })
 })
 

@@ -235,6 +235,9 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
     if (out.actions !== undefined) out.actions = normalizeNodeArray(out.actions, `${path}.actions`)
   } else if (type === 'split') {
     out.items = normalizeNodeArray(out.items, `${path}.items`)
+  } else if (type === 'modal') {
+    if (out.items !== undefined) out.items = normalizeNodeArray(out.items, `${path}.items`)
+    if (out.actions !== undefined) out.actions = normalizeNodeArray(out.actions, `${path}.actions`)
   } else if (type === 'list' && Array.isArray(out.items)) {
     // List records and nested nodes share items; aliases only belong to records.
     out.items = out.items.map((child, index) => {

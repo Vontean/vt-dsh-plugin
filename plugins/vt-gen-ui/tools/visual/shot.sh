@@ -21,8 +21,9 @@ for page in "${PAGES[@]}"; do
   [ "$page" = "charts" ] && height=8200
   [ "$page" = "consistency" ] && height=4200
   [ "$page" = "mermaid" ] && height=4600
-  [ "$page" = "prototype" ] && height=3500
+  [ "$page" = "prototype" ] && height=4300
   [ "$page" = "slice3" ] && height=2600
+  [ "$page" = "slice4" ] && height=2200
   for theme in light dark; do
     "$CHROME" --headless=new --disable-gpu --hide-scrollbars --no-sandbox \
       --user-data-dir="$OUT/.chrome-profile" \

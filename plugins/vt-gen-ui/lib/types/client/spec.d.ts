@@ -7,7 +7,7 @@ export interface GenuiLayoutHints {
     /** Screen id to switch to when the node is activated (button). */
     goto?: string;
 }
-export type GenuiNode = (GenuiText | GenuiRow | GenuiCol | GenuiGrid | GenuiCard | GenuiButton | GenuiInput | GenuiSelect | GenuiCheckbox | GenuiLink | GenuiImage | GenuiAudio | GenuiVideo | GenuiBadge | GenuiStat | GenuiHero | GenuiProgress | GenuiDivider | GenuiList | GenuiTable | GenuiChart | GenuiTabs | GenuiAvatar | GenuiSpacer | GenuiPlot | GenuiCallout | GenuiSteps | GenuiKeyValue | GenuiDiff | GenuiJson | GenuiCode | GenuiRadio | GenuiSubmit | GenuiSwitch | GenuiSlider | GenuiTextarea | GenuiAccordion | GenuiCopy | GenuiMermaid | GenuiSvg | GenuiScene3D | GenuiTimeline | GenuiFileTree | GenuiBreadcrumb | GenuiQuiz | GenuiDiagram | GenuiIcon | GenuiBlocks | GenuiArrow | GenuiPage | GenuiNav | GenuiListRow | GenuiFieldGroup | GenuiEmpty | GenuiLoading | GenuiSplit) & GenuiLayoutHints | GenuiEChart;
+export type GenuiNode = (GenuiText | GenuiRow | GenuiCol | GenuiGrid | GenuiCard | GenuiButton | GenuiInput | GenuiSelect | GenuiCheckbox | GenuiLink | GenuiImage | GenuiAudio | GenuiVideo | GenuiBadge | GenuiStat | GenuiHero | GenuiProgress | GenuiDivider | GenuiList | GenuiTable | GenuiChart | GenuiTabs | GenuiAvatar | GenuiSpacer | GenuiPlot | GenuiCallout | GenuiSteps | GenuiKeyValue | GenuiDiff | GenuiJson | GenuiCode | GenuiRadio | GenuiSubmit | GenuiSwitch | GenuiSlider | GenuiTextarea | GenuiAccordion | GenuiCopy | GenuiMermaid | GenuiSvg | GenuiScene3D | GenuiTimeline | GenuiFileTree | GenuiBreadcrumb | GenuiQuiz | GenuiDiagram | GenuiIcon | GenuiBlocks | GenuiArrow | GenuiPage | GenuiNav | GenuiListRow | GenuiFieldGroup | GenuiEmpty | GenuiLoading | GenuiSplit | GenuiModal) & GenuiLayoutHints | GenuiEChart;
 export interface GenuiSpec {
     /** Short title shown as the card banner. */
     title?: string;
@@ -144,6 +144,31 @@ export interface GenuiSplit {
     divider?: boolean;
     items: GenuiNode[];
 }
+/**
+ * Modal: a confirmation dialog or a bottom sheet.
+ *
+ * Open/close is local state driven by node fields — no expressions. `trigger`
+ * renders the button that opens it; `open: true` shows it immediately for a
+ * static sketch and deliberately does NOT move focus, lock the page or make
+ * the background inert (it is a picture of a state, not an interaction).
+ * Action buttons close it with `close: true`, before any `action` is sent.
+ */
+export interface GenuiModal {
+    type: 'modal';
+    /** Label of the trigger button; omitted → no trigger (display-only sketch). */
+    trigger?: string;
+    /** Dialog title; also the accessible name (`aria-labelledby`). */
+    title: string;
+    variant?: 'dialog' | 'sheet';
+    /** Render open immediately, without interaction (presentation only). */
+    open?: boolean;
+    /** Escape and scrim dismissal; `false` = only the action buttons close it. */
+    dismissible?: boolean;
+    /** Panel body. */
+    items?: GenuiNode[];
+    /** Action row, right aligned; buttons may set `close: true`. */
+    actions?: GenuiNode[];
+}
 export interface GenuiText {
     type: 'text';
     size?: 'display' | 'h1' | 'h2' | 'h3' | 'body' | 'muted' | 'caption';
@@ -168,6 +193,8 @@ export interface GenuiButton {
     action?: string;
     /** Screen id to switch to (prototype state machine) instead of an action. */
     goto?: string;
+    /** Modal action: close the containing modal (before any `action` is sent). */
+    close?: boolean;
 }
 export interface GenuiInput {
     type: 'input';

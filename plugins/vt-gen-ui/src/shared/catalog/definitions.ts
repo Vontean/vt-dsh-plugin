@@ -66,6 +66,8 @@ export const NAV_VARIANTS = ['top', 'side', 'tabs'] as const
 export const LOADING_VARIANTS = ['block', 'row'] as const
 /** Split ratios. Only three: with no dragging, text flow must stay predictable. */
 export const SPLIT_RATIOS = ['1:1', '2:1', '1:2'] as const
+/** Modal shapes: a centred confirmation dialog or a bottom sheet. */
+export const MODAL_VARIANTS = ['dialog', 'sheet'] as const
 /** Table cell renderers (`table.types`, one entry per column). */
 export const TABLE_CELL_TYPES = ['text', 'num', 'delta', 'bar', 'badge', 'spark', 'ring', 'index', 'group'] as const
 
@@ -254,7 +256,9 @@ export const COMPONENT_SCHEMAS: Readonly<Record<string, ComponentSchema>> = {
   avatar: schema(['name'], { ...nodeFields, name: 'string', color: 'string' }),
   badge: schema(['label'], { ...nodeFields, label: 'string', tone: 'string', icon: 'string' }, { text: 'label', value: 'label' }, { enums: { tone: BADGE_TONES } }),
   breadcrumb: schema(['items'], { ...nodeFields, items: 'array' }),
-  button: schema(['label'], { ...nodeFields, label: 'string', tone: 'string', full: 'boolean', small: 'boolean', icon: 'string', action: 'string' }, {}, { enums: { tone: BUTTON_TONES } }),
+  // `close` is modal-scoped: an action button that closes its panel before
+  // sending `action` (confirmation dialogs need it; no new action payload).
+  button: schema(['label'], { ...nodeFields, label: 'string', tone: 'string', full: 'boolean', small: 'boolean', icon: 'string', action: 'string', close: 'boolean' }, {}, { enums: { tone: BUTTON_TONES } }),
   // `text`/`body`/`desc` are the model's default names for "the callout's
   // prose": a callout missing `content` is dropped by repair, which takes the
   // WHOLE fence down with it (issue: dsh-ui 围栏字段名). Adopt them as aliases.
@@ -430,6 +434,19 @@ export const COMPONENT_SCHEMAS: Readonly<Record<string, ComponentSchema>> = {
     divider: 'boolean',
     items: 'nodes',
   }, { panes: 'items', columns: 'items' }, { enums: { ratio: SPLIT_RATIOS } }),
+  // A modal is state-driven, never expression-driven: `trigger` opens it,
+  // `open` is a presentation default, and the action row closes it with
+  // `button.close`. Nesting is rejected by repair, not by the schema.
+  modal: schema(['title'], {
+    ...nodeFields,
+    trigger: 'string',
+    title: 'string',
+    variant: 'string',
+    open: 'boolean',
+    dismissible: 'boolean',
+    items: 'nodes',
+    actions: 'nodes',
+  }, { heading: 'title', label: 'title' }, { enums: { variant: MODAL_VARIANTS } }),
 } as const
 
 export const GENUI_NATIVE_TYPES: ReadonlySet<string> = new Set(Object.keys(COMPONENT_SCHEMAS))
@@ -440,6 +457,6 @@ export const GENUI_NATIVE_TYPES: ReadonlySet<string> = new Set(Object.keys(COMPO
  * Kept here (not in docs/derive) so the client bundle never pulls prompt text.
  */
 export const PROTOTYPE_TYPES = [
-  'page', 'nav', 'list-row', 'field-group', 'empty', 'loading', 'split',
+  'page', 'nav', 'list-row', 'field-group', 'empty', 'loading', 'split', 'modal',
 ] as const
 export type PrototypeType = typeof PROTOTYPE_TYPES[number]

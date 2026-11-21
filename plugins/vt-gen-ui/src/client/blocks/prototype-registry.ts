@@ -11,6 +11,7 @@ import { createElement, type ComponentType } from 'react'
 import { PROTOTYPE_TYPES, type PrototypeType } from '../../shared/catalog/definitions.ts'
 import type { GenuiNode } from '../spec.ts'
 import { EmptyNode, FieldGroupNode, ListRowNode, LoadingNode, NavNode, PageNode, SplitNode } from './prototype.tsx'
+import { ModalNode } from './modal.tsx'
 import type { PrototypeRenderProps, RenderPrototypeChildren } from './prototype.tsx'
 
 export interface PrototypeDispatchProps {
@@ -41,6 +42,7 @@ export const PROTOTYPE_RENDERERS: Readonly<Record<PrototypeType, PrototypeRender
   empty: bind(EmptyNode),
   loading: bind(LoadingNode),
   split: bind(SplitNode),
+  modal: bind(ModalNode),
 }
 
 /** True for catalog prototype types; used by tests and diagnostics. */

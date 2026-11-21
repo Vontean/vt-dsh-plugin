@@ -24,11 +24,11 @@ import {
   BADGE_TONES, BUTTON_TONES, CALLOUT_TONES, CARD_TONES, CHART_KINDS, COMPONENT_SCHEMAS, HERO_TONES,
   DIAGRAM_EDGE_KINDS, DIAGRAM_KINDS, DIAGRAM_NODE_TYPES, DIAGRAM_ROUTES, DIAGRAM_VARIANTS,
   ECHART_PRESETS, FILE_TYPES, GENUI_NATIVE_TYPES, GENUI_SPEC_SCHEMA, INPUT_TYPES,
-  ARROW_DIRS, BLOCKS_VARIANTS, BLOCK_CELL_TONES, ICON_TONES, LOADING_VARIANTS, MEDIA_ASPECT_RATIOS, MESH_SHAPES, NAV_VARIANTS, PLOT_KINDS, PROGRESS_VARIANTS, ROW_JUSTIFY, SPLIT_RATIOS, TABLE_CELL_TYPES, TEXT_ALIGNS, TEXT_SIZES, TEXT_TONES,
+  ARROW_DIRS, BLOCKS_VARIANTS, BLOCK_CELL_TONES, ICON_TONES, LOADING_VARIANTS, MEDIA_ASPECT_RATIOS, MESH_SHAPES, MODAL_VARIANTS, NAV_VARIANTS, PLOT_KINDS, PROGRESS_VARIANTS, ROW_JUSTIFY, SPLIT_RATIOS, TABLE_CELL_TYPES, TEXT_ALIGNS, TEXT_SIZES, TEXT_TONES,
 } from './genui-runtime/schema.ts'
 import type { ComponentFieldKind, ComponentRecordSchema, ComponentSchema } from './genui-runtime/schema.ts'
 import { normalizeGenuiSpec } from './genui-runtime/normalize.ts'
-import { diagnoseUnknownGenuiFields } from './genui-runtime/diagnostics.ts'
+import { diagnoseNestedModals, diagnoseUnknownGenuiFields } from './genui-runtime/diagnostics.ts'
 import type { GenuiDiagnostic } from './genui-runtime/diagnostics.ts'
 import { GENUI_LIMITS } from './genui-runtime/limits.ts'
 import { analyzeSubmissionRegistry } from './submission-registry.ts'
@@ -211,6 +211,8 @@ function validateRegistryFields(
 interface RepairCtx {
   /** Nodes left in the budget; 0 stops the walk. */
   remaining: number
+  /** How many modals we are currently inside: nested modals are dropped. */
+  modalDepth: number
 }
 
 /** Walk `list` with the shared node budget; drops invalid entries. */
@@ -436,6 +438,27 @@ function repairNodeFields(value: unknown, ctx: RepairCtx, depth: number): GenuiN
         ...opt('required', v.required === true ? true : undefined),
       }
     }
+    case 'modal': {
+      // Nesting is a structural error, not a styling choice: the inner panel
+      // would trap focus inside an already-trapped tree. Drop it whole.
+      if (ctx.modalDepth > 0) return null
+      const title = str(v.title, GENUI_LIMITS.maxString)
+      if (title === undefined) return null
+      ctx.modalDepth += 1
+      const items = Array.isArray(v.items) ? repairItems(v.items, ctx, depth + 1) : undefined
+      const actions = Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : undefined
+      ctx.modalDepth -= 1
+      return {
+        type: 'modal', title,
+        ...opt('trigger', str(v.trigger, 120)),
+        ...opt('variant', enu(v.variant, MODAL_VARIANTS)),
+        ...opt('open', v.open === true ? true : undefined),
+        // Only `false` is meaningful; absence means dismissible (default true).
+        ...opt('dismissible', v.dismissible === false ? false : undefined),
+        ...opt('items', items),
+        ...opt('actions', actions),
+      }
+    }
     case 'empty': {
       const title = str(v.title, GENUI_LIMITS.maxString)
       if (title === undefined) return null
@@ -472,6 +495,9 @@ function repairNodeFields(value: unknown, ctx: RepairCtx, depth: number): GenuiN
         ...opt('small', v.small === true ? true : undefined),
         ...opt('icon', str(v.icon, 64)),
         ...opt('action', str(v.action, 200)),
+        // `close` only means something inside a modal panel; the button keeps
+        // it so a repaired fence still closes the panel.
+        ...opt('close', v.close === true ? true : undefined),
       }
     }
     case 'input': {
@@ -1378,7 +1404,7 @@ function repairCanonicalGenuiSpec(value: unknown): GenuiSpec | null {
   const hasItems = Array.isArray(v.items)
   const rawScreens = obj(v.screens)
   if (!hasItems && rawScreens === undefined) return null
-  const ctx: RepairCtx = { remaining: GENUI_LIMITS.maxNodes }
+  const ctx: RepairCtx = { remaining: GENUI_LIMITS.maxNodes, modalDepth: 0 }
   // Screen trees share the block's node budget: repairing them sequentially
   // against the same `ctx` keeps the total at maxNodes, not maxNodes per screen.
   let screens: Record<string, GenuiNode[]> | undefined
@@ -1460,6 +1486,9 @@ export function countGenuiNodes(value: unknown, cap = Number.POSITIVE_INFINITY):
         // the tree and hid silent drops from validate_dsh_ui (issue #42).
         walk(v.items)
         if (v.type === 'page' && Array.isArray(v.actions)) walk(v.actions)
+      } else if (v.type === 'modal') {
+        if (Array.isArray(v.items)) walk(v.items)
+        if (Array.isArray(v.actions)) walk(v.actions)
       } else if ((v.type === 'list-row' || v.type === 'empty') && Array.isArray(v.actions)) {
         walk(v.actions)
       } else if (v.type === 'file-tree') {
@@ -1517,6 +1546,10 @@ function visitDeclaredGenuiNodes(
 ): number {
   const familyCaps = options.familyCaps !== false
   let count = 0
+  // Nested modals are dropped by repair, so they must not be counted as
+  // "declared but vanished" — that ledger turns an intentional drop into a
+  // fence-fatal error.
+  let modalDepth = 0
   const declared = (candidate: unknown): boolean => {
     const o = obj(candidate)
     return o !== undefined && typeof o.type === 'string' && GENUI_NODE_TYPES.has(o.type)
@@ -1532,6 +1565,7 @@ function visitDeclaredGenuiNodes(
     if (count >= cap || !declared(item)) return
     const v = obj(item)
     if (v === undefined) return
+    if (v.type === 'modal' && modalDepth > 0) return
     count += 1
     visit(v, at)
     if (v.type === 'tabs' && Array.isArray(v.tabs)) {
@@ -1548,6 +1582,14 @@ function visitDeclaredGenuiNodes(
       || v.type === 'page' || v.type === 'field-group' || v.type === 'split') && Array.isArray(v.items)) {
       walk(v.items, `${at}.items`)
       if (v.type === 'page' && Array.isArray(v.actions)) walk(v.actions, `${at}.actions`)
+    } else if (v.type === 'modal') {
+      modalDepth += 1
+      try {
+        if (Array.isArray(v.items)) walk(v.items, `${at}.items`)
+        if (Array.isArray(v.actions)) walk(v.actions, `${at}.actions`)
+      } finally {
+        modalDepth -= 1
+      }
     } else if ((v.type === 'list-row' || v.type === 'empty') && Array.isArray(v.actions)) {
       walk(v.actions, `${at}.actions`)
     } else if (v.type === 'list' && Array.isArray(v.items)) {
@@ -1763,7 +1805,11 @@ export function processGenuiSpec(value: unknown): GenuiProcessResult {
   if (declaredNativeCount > renderedNativeCount) {
     errors.push(`repair dropped ${declaredNativeCount - renderedNativeCount} declared native node(s): declared ${declaredNativeCount}, rendered ${renderedNativeCount}`)
   }
-  const warnings: GenuiDiagnostic[] = [...normalized.warnings, ...diagnoseUnknownGenuiFields(normalized.value)]
+  const warnings: GenuiDiagnostic[] = [
+    ...normalized.warnings,
+    ...diagnoseUnknownGenuiFields(normalized.value),
+    ...diagnoseNestedModals(normalized.value),
+  ]
   if (uncappedDeclaredCount > declaredNativeCount) {
     warnings.push({
       kind: 'truncated',
@@ -2288,6 +2334,20 @@ function validateNode(value: unknown, depth: number, at: string, errors: string[
       if (!Array.isArray(v.items)) errors.push(`${at}: type 'field-group' requires items (array)`)
       else walk(v.items, depth + 1, `${at}.items`)
       isStr('desc'); isStr('error')
+      break
+    case 'modal':
+      if (typeof v.title !== 'string') errors.push(`${at}: type 'modal' requires title (string)`)
+      isStr('trigger'); isStr('variant')
+      if (v.items !== undefined && !Array.isArray(v.items)) {
+        errors.push(`${at}: type 'modal' requires items (array) when present`)
+      } else if (Array.isArray(v.items)) {
+        walk(v.items, depth + 1, `${at}.items`)
+      }
+      if (v.actions !== undefined && !Array.isArray(v.actions)) {
+        errors.push(`${at}: type 'modal' requires actions (array) when present`)
+      } else if (Array.isArray(v.actions)) {
+        walk(v.actions, depth + 1, `${at}.actions`)
+      }
       break
     case 'empty':
       if (typeof v.title !== 'string') errors.push(`${at}: type 'empty' requires title (string)`)

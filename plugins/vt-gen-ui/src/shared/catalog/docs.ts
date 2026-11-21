@@ -60,7 +60,7 @@ export const CATALOG_CATEGORIES: readonly CatalogCategory[] = [
     label: '交互',
     types: [
       'button', 'input', 'textarea', 'select', 'checkbox', 'switch', 'slider', 'radio', 'submit',
-      'quiz', 'link', 'tabs', 'accordion', 'field-group',
+      'quiz', 'link', 'tabs', 'accordion', 'field-group', 'modal',
     ],
     tail: '（row.justify / col.width / card.flat 见图元）',
   },
@@ -224,6 +224,15 @@ export const CATALOG_DOCS: Readonly<Record<string, CatalogDoc>> = {
     quickRef: '{"type":"field-group","label","items":[...]}',
     gotcha: ['label 与 items 都必填'],
     usage: 'items 放控件（input/select/…）；desc 是提示，error 是错误文案，必填时加 `required:true`。',
+  },
+
+  modal: {
+    category: 'interactive',
+    summary: '确认层/底部面板：trigger 打开，标题+内容+操作区，关闭后焦点归位。',
+    promptInline: '（确认层/底部面板）',
+    quickRef: '{"type":"modal","trigger":"删除","title","items":[...],"actions":[...]}',
+    gotcha: ['弹层必填 title，关闭按钮写 close:true；弹层不能嵌套'],
+    usage: 'variant 取 dialog/sheet；open:true 只用于静态展示，不抢焦点；dismissible:false 时只能点操作区按钮关闭；触发器只负责打开。',
   },
 
   // ---- 高级 ----

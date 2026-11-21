@@ -136,6 +136,80 @@ describe('prototype states and layout (slice 3)', () => {
   })
 })
 
+describe('modal fields (slice 4)', () => {
+  test('a modal survives repair with its state fields', () => {
+    const result = processGenuiSpec({
+      items: [{
+        type: 'modal', trigger: '删除', title: '删除任务？', variant: 'sheet',
+        open: true, dismissible: false,
+        items: [{ type: 'text', content: '删除后无法恢复。' }],
+        actions: [{ type: 'button', label: '取消', close: true }],
+      }],
+    })
+    expect(result.errors).toEqual([])
+    expect(result.repaired?.items[0]).toMatchObject({
+      type: 'modal', trigger: '删除', variant: 'sheet', open: true, dismissible: false,
+    })
+    const modal = result.repaired?.items[0] as { actions: Array<{ close?: boolean }> }
+    expect(modal.actions[0]?.close).toBe(true)
+  })
+
+  test('a modal without a title is dropped', () => {
+    const result = processGenuiSpec({ items: [{ type: 'modal', trigger: '打开' }] })
+    expect(result.repaired?.items).toHaveLength(0)
+    expect(validateGenuiSpec(result.value).ok).toBe(false)
+  })
+
+  test('a nested modal is dropped whole and diagnosed, without failing the fence', () => {
+    const result = processGenuiSpec({
+      items: [{
+        type: 'modal', title: '外层',
+        items: [
+          { type: 'text', content: '外层正文' },
+          { type: 'modal', title: '内层', items: [{ type: 'text', content: '不该出现' }] },
+        ],
+      }],
+    })
+    // The intentional drop must not look like a repair failure, otherwise the
+    // whole fence degrades to a code block.
+    expect(result.errors).toEqual([])
+    const outer = result.repaired?.items[0] as { items: unknown[] }
+    expect(outer.items).toHaveLength(1)
+    expect(result.warnings.some(warning =>
+      warning.kind === 'dropped' && warning.type === 'modal' && warning.path === 'items[0].items[1]',
+    )).toBe(true)
+  })
+
+  test('a modal inside a page/row container is still one level deep', () => {
+    const result = processGenuiSpec({
+      items: [{
+        type: 'page', title: '页', items: [
+          { type: 'modal', title: '弹层', actions: [{ type: 'button', label: '取消', close: true }] },
+        ],
+      }],
+    })
+    expect(result.errors).toEqual([])
+    expect(result.warnings.some(warning => warning.kind === 'dropped')).toBe(false)
+  })
+
+  test('unknown fields inside a modal body are diagnosed', () => {
+    const result = processGenuiSpec({
+      items: [{ type: 'modal', title: '弹层', items: [{ type: 'button', label: '好', bogus: 1 }] }],
+    })
+    expect(result.warnings.some(warning => warning.kind === 'unknown-field' && warning.field === 'bogus')).toBe(true)
+  })
+
+  test('the node budget counts modal items and actions', () => {
+    expect(countGenuiNodes({
+      items: [{
+        type: 'modal', title: '弹层',
+        items: [{ type: 'text', content: '正文' }],
+        actions: [{ type: 'button', label: '取消' }],
+      }],
+    })).toBe(3)
+  })
+})
+
 describe('screen state machine fields', () => {
   test('screens-only spec validates and repairs without items', () => {
     const result = processGenuiSpec({

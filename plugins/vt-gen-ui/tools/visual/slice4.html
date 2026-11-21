@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>dsh-vt-gen-ui · 弹层（slice 4）</title>
+<link rel="stylesheet" href="./theme.css" />
+<style>
+  html, body { margin: 0; background: var(--dsw-alias-bg-base); }
+  #root { max-width: 780px; margin: 0 auto; padding: 24px 20px 40px; display: grid; gap: 24px; }
+  .fixture-label { font: 500 12px/18px system-ui, sans-serif; color: var(--dsw-alias-label-secondary); margin: 0 0 8px; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div>
+    <p class="fixture-label">触发器（关闭态）：描边按钮，只负责打开</p>
+    <div id="closed"></div>
+  </div>
+  <div>
+    <p class="fixture-label">dialog（open: true 静态展开，48% 近黑遮罩）</p>
+    <div id="dialog"></div>
+  </div>
+  <div>
+    <p class="fixture-label">sheet（贴底、12 12 0 0、操作仍右对齐）</p>
+    <div id="sheet"></div>
+  </div>
+</div>
+<script>
+  const page = (title, subtitle, items) => ({
+    items: [{ type: 'page', title, subtitle, items }]
+  });
+
+  window.__SPEC_CLOSED__ = page('任务详情', '触发器在内容流里', [
+    { type: 'list-row', title: '整理原型通道验收记录', desc: '王小鲸 · 今天 09:20', media: '王' },
+    { type: 'modal', trigger: '删除任务', title: '删除这个任务？', items: [
+      { type: 'text', content: '删除后无法恢复，关联的 3 条记录会同时移除。' }
+    ], actions: [
+      { type: 'button', label: '取消', close: true },
+      { type: 'button', label: '删除', close: true, action: 'confirm-delete', tone: 'danger' }
+    ] }
+  ]);
+
+  window.__SPEC_DIALOG__ = page('删除任务', '静态展开：不抢焦点、不锁滚动', [
+    { type: 'list-row', title: '整理原型通道验收记录', desc: '王小鲸 · 今天 09:20', media: '王' },
+    { type: 'modal', open: true, trigger: '删除任务', title: '删除这个任务？', items: [
+      { type: 'text', content: '删除后无法恢复，关联的 3 条记录会同时移除。' }
+    ], actions: [
+      { type: 'button', label: '取消', close: true },
+      { type: 'button', label: '删除', tone: 'danger' }
+    ] }
+  ]);
+
+  window.__SPEC_SHEET__ = page('任务详情', '底部面板', [
+    { type: 'list-row', title: '整理原型通道验收记录', desc: '王小鲸 · 今天 09:20', media: '王' },
+    { type: 'modal', open: true, variant: 'sheet', trigger: '指派负责人', title: '指派负责人', items: [
+      { type: 'text', content: '选择一位成员接手这个任务。' }
+    ], actions: [
+      { type: 'button', label: '取消', close: true },
+      { type: 'button', label: '指派' }
+    ] }
+  ]);
+</script>
+<script src="../../lib/assets/standalone-runtime.js"></script>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+  const mount = (id, spec) => window.__GenuiStandalone__.mount(document.getElementById(id), {
+    format: 'dsh-genui',
+    version: 1,
+    spec,
+    presentation: { locale: 'zh', theme }
+  });
+  mount('closed', window.__SPEC_CLOSED__);
+  mount('dialog', window.__SPEC_DIALOG__);
+  mount('sheet', window.__SPEC_SHEET__);
+</script>
+</body>
+</html>

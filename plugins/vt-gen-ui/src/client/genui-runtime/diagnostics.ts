@@ -5,7 +5,7 @@ import type { ComponentRecordSchema, ComponentSchema } from './schema.ts'
 import { isTableDetailReachable } from '../table-details.ts'
 
 export interface GenuiDiagnostic {
-  readonly kind: 'alias' | 'unknown-field' | 'truncated'
+  readonly kind: 'alias' | 'unknown-field' | 'truncated' | 'dropped'
   readonly path: string
   readonly message: string
   readonly type?: string
@@ -25,13 +25,20 @@ function isNode(value: unknown): value is Record<string, unknown> {
   return candidate !== undefined && typeof candidate.type === 'string'
 }
 
-function visitNativeNodes(value: unknown, path: string, visit: (node: Record<string, unknown>, path: string, schema: ComponentSchema) => void): void {
+function visitNativeNodes(
+  value: unknown,
+  path: string,
+  visit: (node: Record<string, unknown>, path: string, schema: ComponentSchema, inModal: boolean) => void,
+  inModal = false,
+): void {
   if (!isNode(value)) return
   const type = value.type as string
   const definition = COMPONENT_SCHEMAS[type]
   if (definition === undefined) return
-  visit(value, path, definition)
-  const children = (child: unknown, childPath: string): void => visitNativeNodes(child, childPath, visit)
+  visit(value, path, definition, inModal)
+  // Modal children stay "inside a modal" for the nested-modal check.
+  const children = (child: unknown, childPath: string): void =>
+    visitNativeNodes(child, childPath, visit, inModal || type === 'modal')
   if ((type === 'row' || type === 'col' || type === 'grid' || type === 'card'
     || type === 'page' || type === 'field-group' || type === 'split') && Array.isArray(value.items)) {
     value.items.forEach((child, index) => children(child, `${path}.items[${index}]`))
@@ -42,6 +49,13 @@ function visitNativeNodes(value: unknown, path: string, visit: (node: Record<str
     value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`))
   } else if (type === 'empty' && Array.isArray(value.actions)) {
     value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`))
+  } else if (type === 'modal') {
+    if (Array.isArray(value.items)) {
+      value.items.forEach((child, index) => children(child, `${path}.items[${index}]`))
+    }
+    if (Array.isArray(value.actions)) {
+      value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`))
+    }
   } else if (type === 'list' && Array.isArray(value.items)) {
     value.items.forEach((child, index) => children(child, `${path}.items[${index}]`))
   } else if (type === 'tabs' && Array.isArray(value.tabs)) {
@@ -171,6 +185,44 @@ export function diagnoseUnknownGenuiFields(value: unknown): GenuiDiagnostic[] {
   }
   // Every screen is reachable content: diagnose its nodes too, whether the
   // spec is screens-only or carries a legacy `items` tree as well.
+  const screens = record(root.screens)
+  if (screens !== undefined && !isComponentRoot(root)) {
+    for (const [screenId, nodes] of Object.entries(screens)) {
+      if (!Array.isArray(nodes)) continue
+      nodes.forEach((item, index) => visitNativeNodes(item, `screens.${screenId}[${index}]`, visit))
+    }
+  }
+  return warnings
+}
+
+/**
+ * Report modals nested inside a modal. Repair drops them (a focus trap inside
+ * a focus trap is unreachable), so without this diagnostic the model would
+ * never learn that half its panel vanished.
+ */
+export function diagnoseNestedModals(value: unknown): GenuiDiagnostic[] {
+  const warnings: GenuiDiagnostic[] = []
+  const root = record(value)
+  if (root === undefined) return warnings
+  const visit = (
+    node: Record<string, unknown>,
+    path: string,
+    _definition: ComponentSchema,
+    inModal: boolean,
+  ): void => {
+    if (node.type !== 'modal' || !inModal) return
+    warnings.push({
+      kind: 'dropped',
+      path,
+      message: `${path}: 弹层不能嵌套，内层 modal 已丢弃（只保留最外层）`,
+      type: 'modal',
+    })
+  }
+  if (Array.isArray(root.items) && !isComponentRoot(root)) {
+    root.items.forEach((item, index) => visitNativeNodes(item, `items[${index}]`, visit))
+  } else if (typeof root.type === 'string') {
+    visitNativeNodes(root, 'spec', visit)
+  }
   const screens = record(root.screens)
   if (screens !== undefined && !isComponentRoot(root)) {
     for (const [screenId, nodes] of Object.entries(screens)) {
