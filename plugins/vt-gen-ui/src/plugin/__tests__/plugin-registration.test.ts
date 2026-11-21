@@ -9,7 +9,7 @@
  */
 import { describe, expect, test } from 'vitest'
 import {
-  ASSET_ROUTE_PATH, GENUI_SECTION_TEXT, apply, bundledSkillProvider, composeGenuiSkillContent,
+  ASSET_ROUTE_PATH, apply, bundledSkillProvider, composeGenuiSkillContent, genuiSectionText,
 } from '../index.ts'
 
 interface SectionRecord {
@@ -110,7 +110,7 @@ describe('system prompt section', () => {
   test('the section text is the exported one, with the derived blocks in place', () => {
     const { sections } = recorder()
     const text = sections[0]?.text ?? ''
-    expect(text).toBe(GENUI_SECTION_TEXT)
+    expect(text).toBe(genuiSectionText(true))
     expect(text).toContain('- 布局: text · row · col · grid')
     expect(text).toContain('**字段速查**')
     expect(text).toContain('**字段名写错 = 该组件被丢弃**')

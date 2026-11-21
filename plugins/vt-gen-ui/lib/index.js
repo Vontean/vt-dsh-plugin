@@ -833,6 +833,7 @@ const COMPONENT_SCHEMAS = {
 		...nodeFields,
 		title: "string",
 		subtitle: "string",
+		label: "string",
 		actions: "nodes",
 		items: "nodes"
 	}, {
@@ -1536,6 +1537,19 @@ function normalizeGenuiSpec(value) {
 		warnings
 	};
 }
+// src/client/genui-runtime/modal-contract.ts
+/**
+* Modal contract predicates shared by repair (guard), diagnostics, and the
+* declared-vs-rendered ledger.
+*
+* One predicate, three consumers: if any of them disagreed about which modals
+* can open, an intentional drop would be counted as a repair failure and the
+* whole fence would degrade to a code block.
+*/
+/** A modal can open when it has non-empty trigger text or `open: true`. */
+function isReachableModal(value) {
+	return (typeof value.trigger === "string" ? value.trigger.trim() : "") !== "" || value.open === true;
+}
 // src/client/genui-runtime/diagnostics.ts
 /** GenUI runtime diagnostics for aliases and unknown fields. */
 function record(value) {
@@ -1665,6 +1679,22 @@ function diagnoseUnknownGenuiFields(value) {
 	}
 	return warnings;
 }
+/** Visit every declared native node, in items then screens declaration order. */
+function visitSpecNodes(value, visit) {
+	const root = record(value);
+	if (root === void 0) return;
+	if (isComponentRoot(root)) {
+		visitNativeNodes(root, "spec", visit);
+		return;
+	}
+	if (Array.isArray(root.items)) root.items.forEach((item, index) => visitNativeNodes(item, `items[${index}]`, visit));
+	const screens = record(root.screens);
+	if (screens === void 0) return;
+	for (const [screenId, nodes] of Object.entries(screens)) {
+		if (!Array.isArray(nodes)) continue;
+		nodes.forEach((item, index) => visitNativeNodes(item, `screens.${screenId}[${index}]`, visit));
+	}
+}
 /**
 * Report modals nested inside a modal. Repair drops them (a focus trap inside
 * a focus trap is unreachable), so without this diagnostic the model would
@@ -1672,24 +1702,96 @@ function diagnoseUnknownGenuiFields(value) {
 */
 function diagnoseNestedModals(value) {
 	const warnings = [];
-	const root = record(value);
-	if (root === void 0) return warnings;
-	const visit = (node, path, _definition, inModal) => {
+	visitSpecNodes(value, (node, path, _definition, inModal) => {
 		if (node.type !== "modal" || !inModal) return;
 		warnings.push({
 			kind: "dropped",
+			code: "nested-modal",
 			path,
 			message: `${path}: 弹层不能嵌套，内层 modal 已丢弃（只保留最外层）`,
 			type: "modal"
 		});
-	};
-	if (Array.isArray(root.items) && !isComponentRoot(root)) root.items.forEach((item, index) => visitNativeNodes(item, `items[${index}]`, visit));
-	else if (typeof root.type === "string") visitNativeNodes(root, "spec", visit);
+	});
+	return warnings;
+}
+/**
+* Report modals that can never open: neither a `trigger` nor `open: true`.
+* Repair drops the dead node; this makes the drop visible instead of silent.
+*/
+function diagnoseUnreachableModals(value) {
+	const warnings = [];
+	visitSpecNodes(value, (node, path, _definition, inModal) => {
+		if (node.type !== "modal" || inModal || isReachableModal(node)) return;
+		warnings.push({
+			kind: "dropped",
+			code: "modal-unreachable",
+			path,
+			message: `${path}: modal needs a non-empty 'trigger' or 'open': true`,
+			type: "modal",
+			field: "trigger"
+		});
+	});
+	return warnings;
+}
+/** Declared screens of a spec-like value: ids whose value is a node array. */
+function declaredScreens(value) {
+	const root = record(value);
+	if (root === void 0 || isComponentRoot(root)) return null;
 	const screens = record(root.screens);
-	if (screens !== void 0 && !isComponentRoot(root)) for (const [screenId, nodes] of Object.entries(screens)) {
-		if (!Array.isArray(nodes)) continue;
-		nodes.forEach((item, index) => visitNativeNodes(item, `screens.${screenId}[${index}]`, visit));
+	if (screens === void 0) return null;
+	const entries = Object.keys(screens).filter((id) => Array.isArray(screens[id]));
+	return entries.length === 0 ? null : {
+		entries,
+		nodes: screens
+	};
+}
+/**
+* Screen contract diagnostics: `goto` pointing at an undeclared screen, more
+* screens than the cap, and an `initial` naming no declared screen.
+*
+* None of these block rendering: repair deletes the dead `goto`, drops trailing
+* screens, and falls back to the first screen respectively.
+*/
+function diagnoseScreenContract(value, limits) {
+	const declared = declaredScreens(value);
+	if (declared === null) return [];
+	const warnings = [];
+	const ids = new Set(declared.entries);
+	visitSpecNodes(value, (node, path) => {
+		const target = typeof node.goto === "string" ? node.goto.trim() : "";
+		if (target === "" || ids.has(target)) return;
+		warnings.push({
+			kind: "invalid",
+			code: "unknown-goto-target",
+			path: `${path}.goto`,
+			message: `${path}.goto: unknown screen '${target}' (declared: ${declared.entries.join(", ")})`,
+			...typeof node.type === "string" ? { type: node.type } : {},
+			field: "goto",
+			canonical: target
+		});
+	});
+	if (declared.entries.length > limits.maxScreens) {
+		const kept = declared.entries.slice(0, limits.maxScreens);
+		const firstDropped = declared.entries[limits.maxScreens];
+		warnings.push({
+			kind: "truncated",
+			code: "screen-budget",
+			path: "screens",
+			message: `screens: ${declared.entries.length} declared, ${kept.length} kept ('${firstDropped}' onward not rendered)`,
+			field: "screens"
+		});
 	}
+	const root = record(value);
+	const initial = root !== void 0 && typeof root.initial === "string" ? root.initial : void 0;
+	const first = declared.entries[0] ?? "";
+	if (initial !== void 0 && !ids.has(initial)) warnings.push({
+		kind: "invalid",
+		code: "unknown-initial",
+		path: "initial",
+		message: `initial: unknown screen '${initial}', fell back to '${first}'`,
+		field: "initial",
+		canonical: first
+	});
 	return warnings;
 }
 // src/client/walk-spec.ts
@@ -1922,6 +2024,13 @@ function classifyLinkTarget(value) {
 	};
 }
 // src/client/guard.ts
+/** Classify one pipeline error. The single place that reads error text. */
+function genuiErrorCode(message) {
+	if (message.startsWith("spec exceeds ")) return "budget-nodes";
+	if (message.startsWith("repair dropped ")) return "dropped-nodes";
+	if (message.includes(": unknown type ")) return "unknown-type";
+	return "invalid-schema";
+}
 function fieldKindMatches(value, kind) {
 	switch (kind) {
 		case "string": return typeof value === "string";
@@ -2073,7 +2182,8 @@ function repairNode(value, ctx, depth) {
 	if (node === null) return null;
 	const source = obj(value);
 	const span = int(source?.span, 2, 12);
-	const goto = str(source?.goto, GENUI_LIMITS.maxScreenId);
+	const rawGoto = str(source?.goto, GENUI_LIMITS.maxScreenId);
+	const goto = rawGoto !== void 0 && ctx.screenIds !== void 0 && !ctx.screenIds.has(rawGoto) ? void 0 : rawGoto;
 	if (span === void 0 && goto === void 0) return node;
 	return {
 		...node,
@@ -2185,6 +2295,7 @@ function repairNodeFields(value, ctx, depth) {
 			items: repairItems(v.items, ctx, depth + 1),
 			...opt("title", str(v.title, GENUI_LIMITS.maxString)),
 			...opt("subtitle", str(v.subtitle, GENUI_LIMITS.maxString)),
+			...opt("label", str(v.label, 120)),
 			...opt("actions", Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : void 0)
 		};
 		case "nav": {
@@ -2236,6 +2347,8 @@ function repairNodeFields(value, ctx, depth) {
 			if (ctx.modalDepth > 0) return null;
 			const title = str(v.title, GENUI_LIMITS.maxString);
 			if (title === void 0) return null;
+			const triggerText = str(v.trigger, 120)?.trim() ?? "";
+			if (!isReachableModal(v)) return null;
 			ctx.modalDepth += 1;
 			const items = Array.isArray(v.items) ? repairItems(v.items, ctx, depth + 1) : void 0;
 			const actions = Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : void 0;
@@ -2243,7 +2356,7 @@ function repairNodeFields(value, ctx, depth) {
 			return {
 				type: "modal",
 				title,
-				...opt("trigger", str(v.trigger, 120)),
+				...triggerText === "" ? {} : { trigger: triggerText },
 				...opt("variant", enu(v.variant, MODAL_VARIANTS)),
 				...opt("open", v.open === true ? true : void 0),
 				...opt("dismissible", v.dismissible === false ? false : void 0),
@@ -3212,9 +3325,14 @@ function repairCanonicalGenuiSpec(value) {
 	const hasItems = Array.isArray(v.items);
 	const rawScreens = obj(v.screens);
 	if (!hasItems && rawScreens === void 0) return null;
+	const declaredScreenIds = rawScreens === void 0 ? void 0 : new Set(Object.entries(rawScreens).slice(0, GENUI_LIMITS.maxScreens).flatMap(([id, nodes]) => {
+		const screenId = Array.isArray(nodes) ? str(id, GENUI_LIMITS.maxScreenId) : void 0;
+		return screenId === void 0 ? [] : [screenId];
+	}));
 	const ctx = {
 		remaining: GENUI_LIMITS.maxNodes,
-		modalDepth: 0
+		modalDepth: 0,
+		...declaredScreenIds === void 0 || declaredScreenIds.size === 0 ? {} : { screenIds: declaredScreenIds }
 	};
 	let screens;
 	if (rawScreens !== void 0) {
@@ -3332,6 +3450,7 @@ function visitDeclaredGenuiNodes(value, cap, visit, options = {}) {
 		const v = obj(item);
 		if (v === void 0) return;
 		if (v.type === "modal" && modalDepth > 0) return;
+		if (v.type === "modal" && !isReachableModal(v)) return;
 		count += 1;
 		visit(v, at);
 		if (v.type === "tabs" && Array.isArray(v.tabs)) {
@@ -3371,7 +3490,7 @@ function visitDeclaredGenuiNodes(value, cap, visit, options = {}) {
 	else {
 		walk(root.items, "items");
 		const screens = obj(root.screens);
-		if (screens !== void 0) for (const [screenId, nodes] of Object.entries(screens)) walk(nodes, `screens.${screenId}`);
+		if (screens !== void 0) for (const [screenId, nodes] of Object.entries(screens).slice(0, GENUI_LIMITS.maxScreens)) walk(nodes, `screens.${screenId}`);
 	}
 	return count;
 }
@@ -3448,10 +3567,7 @@ function validateCanonicalGenuiSpec(value) {
 	if (screens !== void 0) {
 		let screenCount = 0;
 		for (const [screenId, nodes] of Object.entries(screens)) {
-			if (screenCount >= GENUI_LIMITS.maxScreens) {
-				errors.push(`spec.screens exceeds ${GENUI_LIMITS.maxScreens} screens; tail elided`);
-				break;
-			}
+			if (screenCount >= GENUI_LIMITS.maxScreens) break;
 			screenCount += 1;
 			if (!Array.isArray(nodes)) {
 				errors.push(`spec.screens.${screenId} must be an array`);
@@ -3492,8 +3608,17 @@ function processGenuiSpec(value) {
 	const warnings = [
 		...normalized.warnings,
 		...diagnoseUnknownGenuiFields(normalized.value),
-		...diagnoseNestedModals(normalized.value)
+		...diagnoseNestedModals(normalized.value),
+		...diagnoseUnreachableModals(normalized.value),
+		...diagnoseScreenContract(normalized.value, { maxScreens: GENUI_LIMITS.maxScreens })
 	];
+	if (repaired !== null && renderedNativeCount >= GENUI_LIMITS.maxNodes && declaredNativeCount > renderedNativeCount) warnings.push({
+		kind: "truncated",
+		code: "screen-budget",
+		path: "spec",
+		message: `nodes ≥ ${declaredNativeCount} declared, ${GENUI_LIMITS.maxNodes} rendered (screens share one node budget)`,
+		field: "items"
+	});
 	if (uncappedDeclaredCount > declaredNativeCount) warnings.push({
 		kind: "truncated",
 		path: "spec",
@@ -3505,6 +3630,10 @@ function processGenuiSpec(value) {
 		repaired,
 		spec: repaired,
 		errors: [...new Set(errors)],
+		errorDetails: [...new Set(errors)].map((message) => ({
+			code: genuiErrorCode(message),
+			message
+		})),
 		warnings,
 		declaredCount: declaredNativeCount,
 		renderedCount: renderedTotalCount,
@@ -3515,7 +3644,7 @@ function processGenuiSpec(value) {
 }
 /** Return whether the only process errors describe an intentional budget tail cut. */
 function isIntentionalBudgetCut(processed) {
-	return processed.errors.length > 0 && processed.errors.every((error) => error.startsWith("spec exceeds ") || error.startsWith("repair dropped ")) && processed.renderedNativeCount === GENUI_LIMITS.maxNodes && processed.declaredNativeCount === GENUI_LIMITS.maxNodes + 1;
+	return processed.errorDetails.length > 0 && processed.errorDetails.every((detail) => detail.code === "budget-nodes" || detail.code === "dropped-nodes") && processed.renderedNativeCount === GENUI_LIMITS.maxNodes;
 }
 /** Decide whether a repaired spec is safe to expose to any GenUI renderer. */
 function isRenderableProcess(processed) {
@@ -3920,6 +4049,7 @@ function validateNode(value, depth, at, errors, walk) {
 			else if (Array.isArray(v.actions)) walk(v.actions, depth + 1, `${at}.actions`);
 			isStr("title");
 			isStr("subtitle");
+			isStr("label");
 			break;
 		case "nav":
 			if (!Array.isArray(v.items)) errors.push(`${at}: type 'nav' requires items (array)`);
@@ -4623,7 +4753,44 @@ function collectInlineContentWarnings(spec) {
 				break;
 			case "card":
 				check(node.title, `${path}.title`);
+				check(node.eyebrow, `${path}.eyebrow`);
 				node.items.forEach((child, i) => visit(child, `${path}.items[${i}]`));
+				break;
+			case "page":
+				check(node.title, `${path}.title`);
+				check(node.subtitle, `${path}.subtitle`);
+				node.actions?.forEach((child, i) => visit(child, `${path}.actions[${i}]`));
+				node.items.forEach((child, i) => visit(child, `${path}.items[${i}]`));
+				break;
+			case "split":
+				node.items.forEach((child, i) => visit(child, `${path}.items[${i}]`));
+				break;
+			case "nav":
+				check(node.label, `${path}.label`);
+				node.items.forEach((item, i) => check(item.label, `${path}.items[${i}].label`));
+				break;
+			case "field-group":
+				check(node.label, `${path}.label`);
+				check(node.desc, `${path}.desc`);
+				check(node.error, `${path}.error`);
+				node.items.forEach((child, i) => visit(child, `${path}.items[${i}]`));
+				break;
+			case "empty":
+				check(node.title, `${path}.title`);
+				check(node.desc, `${path}.desc`);
+				node.actions?.forEach((child, i) => visit(child, `${path}.actions[${i}]`));
+				break;
+			case "list-row":
+				check(node.title, `${path}.title`);
+				check(node.desc, `${path}.desc`);
+				check(node.meta, `${path}.meta`);
+				node.actions?.forEach((child, i) => visit(child, `${path}.actions[${i}]`));
+				break;
+			case "modal":
+				check(node.title, `${path}.title`);
+				check(node.trigger, `${path}.trigger`);
+				node.items?.forEach((child, i) => visit(child, `${path}.items[${i}]`));
+				node.actions?.forEach((child, i) => visit(child, `${path}.actions[${i}]`));
 				break;
 			case "row":
 			case "col":
@@ -4651,9 +4818,29 @@ function collectInlineContentWarnings(spec) {
 				check(node.explanation, `${path}.explanation`);
 				break;
 			case "image":
+				check(node.alt, `${path}.alt`);
+				check(node.caption, `${path}.caption`);
+				break;
 			case "audio":
 			case "video":
 				check(node.alt, `${path}.alt`);
+				break;
+			case "icon":
+				check(node.label, `${path}.label`);
+				break;
+			case "loading":
+				check(node.label, `${path}.label`);
+				break;
+			case "arrow":
+				check(node.label, `${path}.label`);
+				break;
+			case "divider":
+				check(node.label, `${path}.label`);
+				break;
+			case "blocks":
+				check(node.title, `${path}.title`);
+				check(node.caption, `${path}.caption`);
+				node.rows.forEach((row, i) => check(row.label, `${path}.rows[${i}].label`));
 				break;
 			case "hero":
 				for (const field of [
@@ -4698,6 +4885,7 @@ function collectInlineContentWarnings(spec) {
 				node.details?.forEach((detail, i) => detail?.forEach((child, j) => visit(child, `${path}.details[${i}][${j}]`)));
 				break;
 			case "chart":
+				check(node.title, `${path}.title`);
 				node.series?.forEach((series, i) => check(series.label, `${path}.series[${i}].label`));
 				break;
 			case "tabs":
@@ -4748,10 +4936,16 @@ function collectInlineContentWarnings(spec) {
 				break;
 			case "plot":
 			case "echart":
-			case "diagram":
 			case "scene3d":
 			case "svg":
 				check(node.title, `${path}.title`);
+				break;
+			case "diagram":
+				check(node.title, `${path}.title`);
+				node.nodes.forEach((entry, i) => {
+					check(entry.label, `${path}.nodes[${i}].label`);
+					check(entry.sub, `${path}.nodes[${i}].sub`);
+				});
 				break;
 			case "copy": check(node.label, `${path}.label`);
 		}
@@ -5960,7 +6154,7 @@ const CATALOG_DOCS = {
 		summary: "页面容器：可选标题栏（标题/副标题/尾部操作）与内容区，原型的根节点。",
 		promptInline: "（页面容器：标题栏 + 内容区）",
 		quickRef: "{\"type\":\"page\",\"title\",\"items\":[...]}",
-		usage: "窄容器下内边距自动收紧；标题栏只在写 title/subtitle/actions 时出现。"
+		usage: "窄容器下内边距自动收紧；标题栏只在写 title/subtitle/actions 时出现。`label` 是并排方案的角标（≤12 字，超出省略）：顶层 page 优先用它，未写才用自动「屏 N · 标题」，两者不同时显示；嵌套 page 只有写了 label 才显示。"
 	},
 	nav: {
 		category: "layout",
@@ -6211,13 +6405,61 @@ const CATALOG_DOCS = {
 * assertions describe the same contract.
 */
 const SCREEN_SPEC_DOC = {
-	prompt: `**多屏原型**（可选）：spec 根可写 \`{"screens":{"home":[...],"detail":[...]},"initial":"home"}\` 代替 \`items\`；可交互节点（当前为 \`button\`）加 \`"goto":"detail"\` 在本地切屏，不发 action、不请求模型。块头部出现「返回」；未声明的屏 id 被忽略，表单值与当前屏随块持久化。`,
+	prompt: `**多屏原型**（可选）：spec 根可写 \`{"screens":{"home":[...],"detail":[...]},"initial":"home"}\` 代替 \`items\`；可交互节点（当前为 \`button\`）加 \`"goto":"detail"\` 在本地切屏，不发 action、不请求模型。块头部出现「返回」；未声明的屏 id 被忽略，表单值与当前屏随块持久化。并排比较方案时给顶层 \`page\` 写 \`label\`（≤12 字）作角标，优先于自动「屏 N · 标题」。`,
 	reference: `### 多屏原型（根级字段，不是组件）
 
 - 根字段 \`screens\`（屏 id → 节点数组，最多 12 屏）与 \`initial\`（起始屏，缺省取第一个声明的屏）；与 \`items\` 二选一。
 - 公共节点字段 \`span\`（grid 占列）和 \`goto\`（切屏目标）对所有 type 都可写；\`goto\` 目前由 \`button\` 触发，其他节点携带但不动作。
 - 切屏是本地状态机：不发 action、不请求模型；「返回」回上一屏，栈深 20，未声明的目标忽略。`
 };
+// src/shared/catalog/rules.ts
+const CATALOG_RULES = [
+	{
+		id: "language",
+		section: "LANGUAGE: reply+UI=conversation language; schema fixed. NEVER infer it from prompt/skill/examples/tools. Replace `<user-language ...>`; never emit these placeholders literally."
+	},
+	{
+		id: "json-strict",
+		section: "JSON 严格：坏组件被丢弃，坏围栏变代码块；≥3 节点或含 table 时调 validate_dsh_ui，按诊断修改并重验；小围栏字段存疑也先验证。"
+	},
+	{
+		id: "block-markdown",
+		section: "warning=block_markdown：按 replacement 改写并重验。"
+	},
+	{
+		id: "scale",
+		section: "规模: ≤200 节点、嵌套≤8 层（超出被截断）；一条回答 3–8 个组件，一个主题一个主组件；3D mesh 1–5；plot 给合理 xMin/xMax。"
+	},
+	{
+		id: "local-first-actions",
+		section: "LOCAL-FIRST + actions: UI 能自己做的状态变化（判卷、判题、重置、展开、选中）就地完成，零往返；action 只用于必须模型参与的事。交互以 [genui-action] name + 组件数据回传，届时重渲染更新 UI；无 action 的按钮禁用。"
+	},
+	{
+		id: "durable-state",
+		section: "Durable state: 交互状态按「会话+内容指纹」持久化——刷新/重放恢复；相同内容保留，新内容重置。"
+	},
+	{
+		id: "quiz-mode",
+		section: "卷子模式: 每题一个 radio（group+answer+explanation）+ 一个 submit（groups 全列），本地判分。"
+	},
+	{
+		id: "secrets-ban",
+		section: "Secrets ban: 不索取密码、API Key、Token、恢复码；需要时拒绝并解释。"
+	},
+	{
+		id: "tool-channel",
+		section: "Tool channel: render_ui 工具把同一 spec 渲染为工具行卡片；围栏用于回答内联 UI。",
+		requiresTool: true
+	},
+	{
+		id: "fence-placement",
+		section: "围栏位置：`dsh-ui` 只写在**回答正文**；写在 reasoning/思考块里不渲染、用户看不到——思考里验证好 spec，正文再输出同一份。"
+	},
+	{
+		id: "panel",
+		section: "Panel: \"panel\":true 只渲染进会话面板 dock 并原地更新；\"append\":true 追加合并；上限 200 节点/200 次追加，满了发 replace 重建。面板来的 [genui-action] 只回一个 panel:true 围栏 + 至多一行 10 字内确认。"
+	}
+];
 // src/shared/catalog/derive.ts
 /**
 * Catalog derivations: the model-facing prompt sections, the full component
@@ -6332,6 +6574,19 @@ function composeSkillContent(skillBody) {
 function prototypeScreensPrompt() {
 	return SCREEN_SPEC_DOC.prompt;
 }
+/**
+* The system prompt's complete `Rules:` block, rendered from `CATALOG_RULES`.
+*
+* Prompt behavior depends on this text, so the default rendering is
+* byte-identical to the block it replaced (golden file:
+* `__fixtures__/rules.golden.txt`): `Rules:` header, one `- ` bullet per rule,
+* no trailing newline. `renderUiTool: false` drops the tool-channel rule
+* exactly where the host used to strip it.
+*/
+function rulesPrompt(options = {}) {
+	const renderUiTool = options.renderUiTool !== false;
+	return ["Rules:", ...CATALOG_RULES.filter((rule) => rule.requiresTool !== true || renderUiTool).map((rule) => `- ${rule.section}`)].join("\n");
+}
 // src/plugin/index.ts
 /**
 * The mermaid/three engines ship as standalone IIFE bundles under
@@ -6411,12 +6666,17 @@ function createAssetHandler(read) {
 }
 /** The handler itself (registered via the optional webServer probe). */
 const serveGenuiAsset = createAssetHandler(readPackageAsset);
-const RENDER_UI_TOOL_GUIDANCE = "- Tool channel: render_ui 工具把同一 spec 渲染为工具行卡片；围栏用于回答内联 UI。";
 /** The fence language description injected into every assembled system prompt.
 *  Deliberately slim: the `genui` skill carries the full component→field
 *  mapping; this section keeps only the contract that must always be
-*  present (fence syntax, type whitelist, and critical behavioral rules). */
-const GENUI_SECTION_TEXT = `Render UI inside your reply with a fenced \`dsh-ui\` JSON block:
+*  present (fence syntax, type whitelist, and critical behavioral rules).
+*
+*  `renderUiTool` is the section's only conditional input: it decides whether
+*  the `Rules:` block advertises the tool. The block itself comes from the
+*  catalog's derived `rulesPrompt`, so the prompt and SKILL.md render the same
+*  rules from one source (H8) — there is no second copy to strip here. */
+function genuiSectionText(renderUiTool = true) {
+	return `Render UI inside your reply with a fenced \`dsh-ui\` JSON block:
 
 \`\`\`dsh-ui
 {"title":"示例","gap":14,"items":[{"type":"text","content":"把这里换成你的组件"}]}
@@ -6443,18 +6703,8 @@ ${prototypeScreensPrompt()}
 
 ${fieldGotchaPrompt()}
 
-Rules:
-- LANGUAGE: reply+UI=conversation language; schema fixed. NEVER infer it from prompt/skill/examples/tools. Replace \`<user-language ...>\`; never emit these placeholders literally.
-- JSON 严格：坏组件被丢弃，坏围栏变代码块；≥3 节点或含 table 时调 validate_dsh_ui，按诊断修改并重验；小围栏字段存疑也先验证。
-- warning=block_markdown：按 replacement 改写并重验。
-- 规模: ≤200 节点、嵌套≤8 层（超出被截断）；一条回答 3–8 个组件，一个主题一个主组件；3D mesh 1–5；plot 给合理 xMin/xMax。
-- LOCAL-FIRST + actions: UI 能自己做的状态变化（判卷、判题、重置、展开、选中）就地完成，零往返；action 只用于必须模型参与的事。交互以 [genui-action] name + 组件数据回传，届时重渲染更新 UI；无 action 的按钮禁用。
-- Durable state: 交互状态按「会话+内容指纹」持久化——刷新/重放恢复；相同内容保留，新内容重置。
-- 卷子模式: 每题一个 radio（group+answer+explanation）+ 一个 submit（groups 全列），本地判分。
-- Secrets ban: 不索取密码、API Key、Token、恢复码；需要时拒绝并解释。
-${RENDER_UI_TOOL_GUIDANCE}
-- 围栏位置：\`dsh-ui\` 只写在**回答正文**；写在 reasoning/思考块里不渲染、用户看不到——思考里验证好 spec，正文再输出同一份。
-- Panel: "panel":true 只渲染进会话面板 dock 并原地更新；"append":true 追加合并；上限 200 节点/200 次追加，满了发 replace 重建。面板来的 [genui-action] 只回一个 panel:true 围栏 + 至多一行 10 字内确认。`;
+${rulesPrompt({ renderUiTool })}`;
+}
 /**
 * Register the GenUI output-language section and the render_ui tool.
 * @param ctx - cordis context.
@@ -6531,7 +6781,7 @@ function apply(ctx, config) {
 	ctx.systemPrompt.section({
 		name: "genui:fence",
 		order: ctx.systemPrompt.getSectionOrder("STRUCTURED_OUTPUT"),
-		text: renderUiToolEnabled ? GENUI_SECTION_TEXT : GENUI_SECTION_TEXT.replace(`${RENDER_UI_TOOL_GUIDANCE}\n`, "")
+		text: genuiSectionText(renderUiToolEnabled)
 	});
 	installFenceFeedback(ctx, config?.fenceFeedback !== false, renderUiToolEnabled);
 	ctx.inject(["tools"], (toolsCtx) => {
@@ -6552,4 +6802,4 @@ function apply(ctx, config) {
 		}), "dsh-genui: asset route");
 	});
 }
-export { ASSET_FILE_RE, ASSET_ROUTE_PATH, GENUI_SECTION_TEXT, apply, bundledSkillProvider, composeGenuiSkillContent, createAssetHandler, inject, name, resolveAssetRequest };
+export { ASSET_FILE_RE, ASSET_ROUTE_PATH, apply, bundledSkillProvider, composeGenuiSkillContent, createAssetHandler, genuiSectionText, inject, name, resolveAssetRequest };

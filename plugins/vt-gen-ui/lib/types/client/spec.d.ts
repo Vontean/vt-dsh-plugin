@@ -1,3 +1,14 @@
+/**
+ * GenUI spec language: the declarative component tree a model emits inside a
+ * ```dsh-ui fence in its reply, which GenuiBlock renders as real interactive
+ * UI inline in the conversation. The vocabulary is a white list — the renderer
+ * maps each node to DOM directly, with no arbitrary-HTML path (same
+ * untrusted-output stance as MarkdownText).
+ *
+ * v1 interactivity is client-side only: buttons, tabs, checkboxes, and inputs
+ * are operable, but events do NOT flow back to the model.
+ */
+import { DIAGRAM_KINDS, DIAGRAM_NODE_TYPES, DIAGRAM_VARIANTS, ECHART_PRESETS, TABLE_CELL_TYPES } from './genui-runtime/schema.ts';
 /** One node in the component tree. */
 /** Layout hints accepted by every node: `span` is how many columns the node
  *  occupies as a direct child of a `grid` (bento layouts); `goto` switches to
@@ -46,6 +57,10 @@ export interface GenuiPage {
     type: 'page';
     title?: string;
     subtitle?: string;
+    /** Comparison badge for side-by-side options (≤12 chars, ellipsized when
+     *  rendered). Wins over the automatic "屏 N · 标题"; nested pages only show
+     *  a badge when it is written. */
+    label?: string;
     /** Tail actions of the title bar (buttons, badges, …). */
     actions?: GenuiNode[];
     /** Page content. */
@@ -485,7 +500,7 @@ export interface GenuiTable {
  *  - `spark`: the cell is a number list ("3,5,4,8") drawn as a mini trend
  *  - `index`: the 1-based row number (cell content is ignored)
  *  - `delta` / `num` / `badge` / `text`: text treatments. */
-export type TableCellType = 'text' | 'num' | 'delta' | 'bar' | 'badge' | 'spark' | 'ring' | 'index' | 'group';
+export type TableCellType = typeof TABLE_CELL_TYPES[number];
 export interface GenuiChartDatum {
     label: string;
     value: number;
@@ -795,13 +810,13 @@ export interface GenuiQuiz {
      * or grade it. */
     action?: string;
 }
-/** Editorial diagram kinds, ported from cathrynlavery/diagram-design (27 types). */
-export declare const DIAGRAM_KINDS: readonly ["architecture", "it-state", "flowchart", "sequence", "state", "er", "timeline", "swimlane", "quadrant", "radar", "loop", "nested", "tree", "org-chart", "layers", "venn", "pyramid", "bar", "line", "gantt", "scatter", "high-level", "process", "medallion", "data-flow", "dp-integration", "dp-security-matrix"];
+/** Editorial diagram kinds (27 types). Single source: `shared/catalog/definitions.ts`. */
+export { DIAGRAM_KINDS };
 export type GenuiDiagramKind = typeof DIAGRAM_KINDS[number];
 /** Diagram surface variant: light / dark follow the host theme; editorial is the full skin. */
-export type GenuiDiagramVariant = 'light' | 'dark' | 'editorial';
+export type GenuiDiagramVariant = typeof DIAGRAM_VARIANTS[number];
 /** Node treatment classes (map to the diagram-design semantic fills/strokes). */
-export type GenuiDiagramNodeType = 'focal' | 'backend' | 'store' | 'external' | 'input' | 'optional' | 'security';
+export type GenuiDiagramNodeType = typeof DIAGRAM_NODE_TYPES[number];
 /** One positioned node in a coordinate-mode diagram. */
 export interface GenuiDiagramNode {
     /** Stable node id referenced by edges. */
@@ -883,7 +898,7 @@ export interface GenuiDiagram {
 }
 /** Preset chart kinds the `echart` node can build from `data`/`series` without
  * a full ECharts option. Each maps to a themed option template. */
-export type EChartPreset = 'bar' | 'line' | 'area' | 'pie' | 'scatter' | 'radar' | 'gauge' | 'funnel' | 'treemap' | 'sankey' | 'graph' | 'heatmap' | 'bigline' | 'wordCloud';
+export type EChartPreset = typeof ECHART_PRESETS[number];
 /** ECharts node: renders a full ECharts chart. Two modes:
  *
  * 1. **Full option** (`option` set): the model provides a standard ECharts

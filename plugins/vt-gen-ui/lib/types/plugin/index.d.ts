@@ -58,8 +58,13 @@ export declare function createAssetHandler(read: (file: string) => Promise<Buffe
 /** The fence language description injected into every assembled system prompt.
  *  Deliberately slim: the `genui` skill carries the full component→field
  *  mapping; this section keeps only the contract that must always be
- *  present (fence syntax, type whitelist, and critical behavioral rules). */
-export declare const GENUI_SECTION_TEXT: string;
+ *  present (fence syntax, type whitelist, and critical behavioral rules).
+ *
+ *  `renderUiTool` is the section's only conditional input: it decides whether
+ *  the `Rules:` block advertises the tool. The block itself comes from the
+ *  catalog's derived `rulesPrompt`, so the prompt and SKILL.md render the same
+ *  rules from one source (H8) — there is no second copy to strip here. */
+export declare function genuiSectionText(renderUiTool?: boolean): string;
 /**
  * Register the GenUI output-language section and the render_ui tool.
  * @param ctx - cordis context.

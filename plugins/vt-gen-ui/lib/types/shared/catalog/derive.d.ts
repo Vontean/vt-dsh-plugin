@@ -44,3 +44,15 @@ export declare function catalogCategoryOf(type: PrototypeType): string;
 export declare function composeSkillContent(skillBody: string): string;
 /** The system prompt paragraph advertising the optional multi-screen machine. */
 export declare function prototypeScreensPrompt(): string;
+/**
+ * The system prompt's complete `Rules:` block, rendered from `CATALOG_RULES`.
+ *
+ * Prompt behavior depends on this text, so the default rendering is
+ * byte-identical to the block it replaced (golden file:
+ * `__fixtures__/rules.golden.txt`): `Rules:` header, one `- ` bullet per rule,
+ * no trailing newline. `renderUiTool: false` drops the tool-channel rule
+ * exactly where the host used to strip it.
+ */
+export declare function rulesPrompt(options?: {
+    renderUiTool?: boolean;
+}): string;

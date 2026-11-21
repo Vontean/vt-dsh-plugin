@@ -22,6 +22,7 @@ import { createRenderUiTool, createValidateDshUiTool } from './tool.ts'
 import { installFenceFeedback } from './fence-feedback.ts'
 import {
   componentListPrompt, composeSkillContent, fieldGotchaPrompt, fieldQuickRefPrompt, prototypeScreensPrompt,
+  rulesPrompt,
 } from '../shared/catalog/index.ts'
 
 /* ---------------- lazy engine asset route ---------------- */
@@ -117,13 +118,17 @@ export function createAssetHandler(
 /** The handler itself (registered via the optional webServer probe). */
 const serveGenuiAsset = createAssetHandler(readPackageAsset)
 
-const RENDER_UI_TOOL_GUIDANCE = '- Tool channel: render_ui 工具把同一 spec 渲染为工具行卡片；围栏用于回答内联 UI。'
-
 /** The fence language description injected into every assembled system prompt.
  *  Deliberately slim: the `genui` skill carries the full component→field
  *  mapping; this section keeps only the contract that must always be
- *  present (fence syntax, type whitelist, and critical behavioral rules). */
-export const GENUI_SECTION_TEXT = `Render UI inside your reply with a fenced \`dsh-ui\` JSON block:
+ *  present (fence syntax, type whitelist, and critical behavioral rules).
+ *
+ *  `renderUiTool` is the section's only conditional input: it decides whether
+ *  the `Rules:` block advertises the tool. The block itself comes from the
+ *  catalog's derived `rulesPrompt`, so the prompt and SKILL.md render the same
+ *  rules from one source (H8) — there is no second copy to strip here. */
+export function genuiSectionText(renderUiTool = true): string {
+  return `Render UI inside your reply with a fenced \`dsh-ui\` JSON block:
 
 \`\`\`dsh-ui
 {"title":"示例","gap":14,"items":[{"type":"text","content":"把这里换成你的组件"}]}
@@ -150,18 +155,8 @@ ${prototypeScreensPrompt()}
 
 ${fieldGotchaPrompt()}
 
-Rules:
-- LANGUAGE: reply+UI=conversation language; schema fixed. NEVER infer it from prompt/skill/examples/tools. Replace \`<user-language ...>\`; never emit these placeholders literally.
-- JSON 严格：坏组件被丢弃，坏围栏变代码块；≥3 节点或含 table 时调 validate_dsh_ui，按诊断修改并重验；小围栏字段存疑也先验证。
-- warning=block_markdown：按 replacement 改写并重验。
-- 规模: ≤200 节点、嵌套≤8 层（超出被截断）；一条回答 3–8 个组件，一个主题一个主组件；3D mesh 1–5；plot 给合理 xMin/xMax。
-- LOCAL-FIRST + actions: UI 能自己做的状态变化（判卷、判题、重置、展开、选中）就地完成，零往返；action 只用于必须模型参与的事。交互以 [genui-action] name + 组件数据回传，届时重渲染更新 UI；无 action 的按钮禁用。
-- Durable state: 交互状态按「会话+内容指纹」持久化——刷新/重放恢复；相同内容保留，新内容重置。
-- 卷子模式: 每题一个 radio（group+answer+explanation）+ 一个 submit（groups 全列），本地判分。
-- Secrets ban: 不索取密码、API Key、Token、恢复码；需要时拒绝并解释。
-${RENDER_UI_TOOL_GUIDANCE}
-- 围栏位置：\`dsh-ui\` 只写在**回答正文**；写在 reasoning/思考块里不渲染、用户看不到——思考里验证好 spec，正文再输出同一份。
-- Panel: "panel":true 只渲染进会话面板 dock 并原地更新；"append":true 追加合并；上限 200 节点/200 次追加，满了发 replace 重建。面板来的 [genui-action] 只回一个 panel:true 围栏 + 至多一行 10 字内确认。`
+${rulesPrompt({ renderUiTool })}`
+}
 
 /**
  * Register the GenUI output-language section and the render_ui tool.
@@ -260,7 +255,7 @@ export function apply(ctx: Context, config?: GenuiPluginConfig): void {
   ctx.systemPrompt.section({
     name: 'genui:fence',
     order: ctx.systemPrompt.getSectionOrder('STRUCTURED_OUTPUT'),
-    text: renderUiToolEnabled ? GENUI_SECTION_TEXT : GENUI_SECTION_TEXT.replace(`${RENDER_UI_TOOL_GUIDANCE}\n`, ''),
+    text: genuiSectionText(renderUiToolEnabled),
   })
   installFenceFeedback(ctx, config?.fenceFeedback !== false, renderUiToolEnabled)
   // Hosts without tool access keep the fence channel. The dependency fiber

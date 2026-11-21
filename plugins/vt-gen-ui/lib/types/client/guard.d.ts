@@ -20,6 +20,24 @@
  */
 import type { GenuiSpec } from './spec.ts';
 import type { GenuiDiagnostic } from './genui-runtime/diagnostics.ts';
+/**
+ * Stable code for one pipeline error. Errors keep their human-readable text,
+ * but the tier judgement (`isIntentionalBudgetCut`) reads this code instead of
+ * matching message prefixes, so wording can change without changing behavior.
+ */
+export type GenuiErrorCode = 
+/** Spec exceeds a resource limit; the tail is elided by design. */
+'budget-nodes'
+/** Repair dropped declared nodes (the declared-vs-rendered ledger). */
+ | 'dropped-nodes'
+/** A node names a type outside the white list (custom nodes stay opaque). */
+ | 'unknown-type'
+/** Structural or field-level validation failure. */
+ | 'invalid-schema';
+export interface GenuiErrorDetail {
+    readonly code: GenuiErrorCode;
+    readonly message: string;
+}
 /** Result of `validateGenuiSpec`. */
 export interface GenuiValidation {
     ok: boolean;
@@ -103,6 +121,8 @@ export interface GenuiProcessResult {
     spec: GenuiSpec | null;
     /** Structural and semantic validation errors. */
     errors: string[];
+    /** `errors` with stable codes; renderers/tests judge on `code`, not text. */
+    errorDetails: readonly GenuiErrorDetail[];
     /** Alias and native unknown-field warnings. */
     warnings: GenuiDiagnostic[];
     /** Native nodes declared in the canonical input, before repair drops. */
