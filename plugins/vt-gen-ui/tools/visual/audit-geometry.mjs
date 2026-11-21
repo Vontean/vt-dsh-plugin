@@ -5,18 +5,26 @@
  * 为什么必须在 Chrome 里跑：vitest 跑 jsdom，jsdom 没有排版引擎，
  * `getBoundingClientRect()` 恒为 0，几何断言在单测里永远“通过”。
  *
- * 审计对象按 §12.6 分层：**只默认跑 runtime 页**。手写探针（`structures.html`、
+ * 版本说明：本文件的首个提交（`a2f339c`）**含口径上调，不止分层** ——
+ * 除了把审计对象从手写页换到 runtime 页，还加了 `padding-not-G`（四向 padding
+ * 严格 = G）与 `spacing-not-whitelist`（§14 G9）两条新判定。提交描述只写了分层，
+ * 这里补记，便于回溯那次是什么变了。历史不改写。
+ *
+ * 审计对象按 §12.6 分层：手写探针（`structures.html`、
  * `prototype.html`）表达的是设计意图，不经过渲染器，量它等于量画师的简化画法，
  * 抓不到组件的真实输出（图标字段有没有 svg、页面框有没有真的贴住内容）。
- * 手写页只在“结构不变量”类断言落地后才有用武之地，当前三条断言都不适用。
+ * 手写页只在“结构不变量”类断言落地后才有用武之地；当前四条都是渲染产物类，
+ * 因此对手写页直接跳过并说明原因，不拿画法当实现结论。
  *
  * 四条断言：
  *   A. padding-not-G（§12.3 / §14 G1–G6）：
  *      `pageBody` 的 computed padding 四向必须**严格等于** G（宽容器 24，页面框宽 ≤600 时 16）。
  *      不是「> 0」：只抓贴边抓不到「写了 20 / 32」这种错值。G 由页面框宽度算出，
  *      不读 `--proto-gutter`，否则等于拿变量校验自己。
- *      距离仍然量并记录（`gaps`），作为 G1/G2/G4/G5 的观测形态与「量过」的证据；
- *      定向贴边（`data-bleed` / G3–G5）的 0 距离只记豁免，不判违规。
+ *      距离同时逐面量并记录（`gaps`），作为 G1/G2/G4/G5 的观测形态与「量过」的证据。
+ *      距离 ≤ 0 时，该元素必须显式声明对应的 `data-bleed` 方向
+ *      （top→block-start、bottom→block-end、左右→inline），否则判 content-touches-frame。
+ *      豁免因此有据可查，而不是审计替实现解释「它碰巧是首元素」。
  *   D. spacing-not-whitelist（§14 G9）：页面框子树内 margin / padding 计算值
  *      必须 ∈ {0,4,8,12,16,24}；负值只允许贴边抵消用的 -16 / -24（§12.3）。
  *   B. double-line（§14 L1）：任意两个元素的边框落在同一坐标（±1px）且线段重叠
@@ -34,7 +42,7 @@
  */
 import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -54,7 +62,7 @@ const FIXTURES = {
   structures: { kind: 'sketch' },
   prototype: { kind: 'sketch' },
 }
-const DEFAULT_PAGES = ['verify-structures', 'verify5', 'verify-geometry']
+const DEFAULT_PAGES = ['verify-structures', 'verify5', 'verify-geometry', 'structures', 'prototype']
 
 /** 三类检查共用的选择器；按 `kind` 切换，不在断言逻辑里写死类名。 */
 const SELECTORS = {
@@ -63,12 +71,9 @@ const SELECTORS = {
     body: ':scope > [data-page-body]',
     children: ':scope > [data-page-body] > *',
     screenChrome: '[data-genui-page-frame]', // §12.4 的屏幕外框与角标
-    iconSlots: [
-      '[data-genui="list-row"] > [class*="rowMedia"]', // list-row.media
-      '[class*="navIcon"]', // nav item.icon
-      '[class*="emptyMedia"]', // empty.icon
-      '[class*="iconNode"]', // icon 节点（未知图标名会退化成圆点）
-    ],
+    // 三个图标字段（media / nav-icon / empty-icon）都带语义标记，
+    // `data-genui-icon-name` 记着被判定的原始值，判定因此不需要字段白名单。
+    iconSlots: ['[data-genui-icon-field]'],
   },
   sketch: {
     page: '.pr-page',
@@ -78,6 +83,19 @@ const SELECTORS = {
     iconSlots: ['[class*="__media"]', '[class*="__icon"]'],
   },
 }
+
+/**
+ * 图标目录：从**已构建的资产**里取名字，审计不自带一份名单（否则等于拿自己校验自己）。
+ * 目录外的值（头像首字「王」、emoji）按设计允许保持文字。
+ */
+const ICON_ASSET = join(ROOT, 'lib/assets/icons.js')
+const ICON_CATALOGUE = (() => {
+  if (!existsSync(ICON_ASSET)) return null
+  const source = readFileSync(ICON_ASSET, 'utf8')
+  const names = new Set()
+  for (const match of source.matchAll(/[,{]([A-Za-z][A-Za-z0-9_]*):\{viewBox:/g)) names.add(match[1])
+  return [...names]
+})()
 
 const args = process.argv.slice(2)
 const asJson = args.includes('--json')
@@ -89,7 +107,7 @@ const targets = pages.length > 0 ? pages : DEFAULT_PAGES
 /* ------------------------------------------------------------------ */
 
 /**
- * 三条断言的全部逻辑。故意写成自包含函数（被序列化进页面执行），
+ * 四条断言的页面侧逻辑。故意写成自包含函数（被序列化进页面执行），
  * 除入参外不引用任何外部状态。
  * @param {{ kind: 'runtime' | 'sketch', selectors: object }} config
  */
@@ -120,15 +138,6 @@ function auditInPage(config) {
     return type === '' ? name : `${name}[${type}]`
   }
   const round = value => Math.round(value * 10) / 10
-  // `data-bleed` 是定向的方向串：inline 贴左右沿，block 贴上下沿，true 表示都贴。
-  const bleedAxis = el => {
-    const value = el.getAttribute('data-bleed')
-    if (value === null || value === 'false') return { inline: false, block: false }
-    return {
-      inline: value === 'true' || value.includes('inline'),
-      block: value === 'true' || value.includes('block'),
-    }
-  }
   // `data-bleed` 是**方向声明**（空格分隔的 token 列表），不是布尔。
   // 每个 0 都必须有一个针对该边的声明支撑：top 认 block-start、bottom 认 block-end、
   // 左右认 inline（也接受 inline-start / inline-end）。没有声明却贴在框上 → 违规。
@@ -208,34 +217,34 @@ function auditInPage(config) {
     )
     if (children.length === 0) continue
 
-    const first = children[0]
-    const last = children[children.length - 1]
-    const horizontal = children.filter(child => !bleedAxis(child).inline)
-    const verticalStart = bleedAxis(first).block ? null : first
-    const verticalEnd = bleedAxis(last).block ? null : last
-
-    const sides = []
-    if (verticalStart !== null) {
-      sides.push({ side: 'top', gap: rectOf(verticalStart).top - inner.top, who: verticalStart })
-    } else {
-      notes.push(`A 豁免 ${label(page)} top：首个子元素 ${label(first)} 是定向贴边（G4）`)
-    }
-    if (verticalEnd !== null) {
-      sides.push({ side: 'bottom', gap: inner.bottom - rectOf(verticalEnd).bottom, who: verticalEnd })
-    } else {
-      notes.push(`A 豁免 ${label(page)} bottom：末个子元素 ${label(last)} 是定向贴边（G5）`)
-    }
-    if (horizontal.length === 0) {
-      notes.push(`A 豁免 ${label(page)} left/right：全部子元素都是 inline 贴边（G3）`)
-    } else {
-      const leftMost = horizontal.reduce((a, b) => (rectOf(a).left <= rectOf(b).left ? a : b))
-      const rightMost = horizontal.reduce((a, b) => (rectOf(a).right >= rectOf(b).right ? a : b))
-      sides.push({ side: 'left', gap: rectOf(leftMost).left - inner.left, who: leftMost })
-      sides.push({ side: 'right', gap: inner.right - rectOf(rightMost).right, who: rightMost })
-    }
+    // 四边都量，不因为“它是首/末元素”就跳过：跳过等于替实现找理由。
+    // 距离 ≤ 0 时再看该元素有没有声明对应的贴边方向；有声明才算设计如此（G3–G5），
+    // 没有声明就贴在框上 → 违规，不管它碰巧是不是首/末元素。
+    const lastChild = children[children.length - 1]
+    const leftMost = children.reduce((a, b) => (rectOf(a).left <= rectOf(b).left ? a : b))
+    const rightMost = children.reduce((a, b) => (rectOf(a).right >= rectOf(b).right ? a : b))
+    const sides = [
+      { side: 'top', gap: rectOf(children[0]).top - inner.top, who: children[0] },
+      { side: 'bottom', gap: inner.bottom - rectOf(lastChild).bottom, who: lastChild },
+      { side: 'left', gap: rectOf(leftMost).left - inner.left, who: leftMost },
+      { side: 'right', gap: inner.right - rectOf(rightMost).right, who: rightMost },
+    ]
 
     for (const { side, gap, who } of sides) {
       gaps.push({ page: label(page), side, gap: round(gap), who: label(who) })
+      if (gap > 0) continue
+      if (declares(who, side)) {
+        notes.push(
+          `A 允许 ${side}=${round(gap)}px：${label(who)} 声明 data-bleed 含 ${SIDE_DECLARATION[side][0]}`,
+        )
+        continue
+      }
+      violations.push({
+        rule: 'content-touches-frame',
+        target: label(page),
+        detail: `${side} 边：最近内容 ${label(who)} 距框内沿 ${round(gap)}px，且未声明对应 data-bleed`,
+        geometry: { side, gap: round(gap), inner, content: rectOf(who) },
+      })
     }
   }
 
@@ -293,16 +302,39 @@ function auditInPage(config) {
     }
   }
 
-  /* ---- C. 图标字段必须是 svg ---- */
+  /* ---- C. 图标字段：目录内必须是 svg，目录外允许文字 ---- */
+  const knownIcons = new Set(config.iconCatalogue ?? [])
   const iconFields = [...document.querySelectorAll(sel.iconSlots.join(', '))].filter(el => {
     if (!visible(el)) return false
     // 骨架屏的占位块不是图标槽位：它按设计就是一块灰底，不该有 svg。
     return !/skel/i.test(String(el.className ?? ''))
   })
+  let iconKnown = 0
+  let iconKnownSvg = 0
+  let iconUnknown = 0
   for (const field of iconFields) {
     const svg = field.querySelector('svg') ?? (field.tagName.toLowerCase() === 'svg' ? field : null)
-    if (svg !== null) continue
     const text = (field.textContent ?? '').trim()
+    const name = field.getAttribute('data-genui-icon-name')
+    if (name === null || !knownIcons.has(name)) iconUnknown++
+    else {
+      iconKnown++
+      if (svg !== null) iconKnownSvg++
+    }
+    if (svg !== null) continue
+    if (name !== null) {
+      // 语义判定：目录里的名字必须画成字形；头像首字、emoji 这类目录外的值
+      // 允许保持文字，不需要为它们写字例。
+      if (!knownIcons.has(name)) continue
+      violations.push({
+        rule: 'icon-not-svg',
+        target: label(field),
+        detail: `name「${name}」是目录图标，却渲染成${text === '' ? '空元素' : `文字「${text.slice(0, 24)}」`}`,
+        geometry: { rect: (({ left, top, width, height }) => ({ left, top, width, height }))(rectOf(field)) },
+      })
+      continue
+    }
+    // 没有语义标记的旧槽位（手写页）：空占位或文字都算没画图标。
     violations.push({
       rule: 'icon-not-svg',
       target: label(field),
@@ -310,6 +342,11 @@ function auditInPage(config) {
       geometry: { rect: (({ left, top, width, height }) => ({ left, top, width, height }))(rectOf(field)) },
     })
   }
+
+  // 图标断言的自证：目录内的名字有几个真的画出了 svg，目录外有几个按设计保留文字。
+  notes.push(
+    `C 图标槽 ${iconFields.length}：目录内 ${iconKnown}（有 svg ${iconKnownSvg}）、目录外 ${iconUnknown}（允许文字）`,
+  )
 
   /* ---- D. 间距白名单（§14 G9） ---- */
   const SPACING = new Set([0, 4, 8, 12, 16, 24])
@@ -526,22 +563,43 @@ for (const page of targets) {
   }
   const file = join(ROOT, 'tools/visual', `${page}.html`)
   if (!existsSync(file)) {
-    console.error(`找不到 fixture：${file}`)
-    process.exit(2)
+    // 别人 checkout 时可能没有某个探针：跳过并说明原因，不让整次审计崩掉（否则进不了 CI）。
+    reports.push({
+      page,
+      kind: fixture.kind,
+      skipped: `fixture 不存在：${file}`,
+      counts: { pages: 0, bodies: 0, skipped: 0, bordered: 0, iconFields: 0, styled: 0 },
+      gaps: [],
+      notes: [],
+      violations: [],
+    })
+    continue
   }
-  // 手写页与 runtime 页都量（§12.6）：手写页是规则文档的另一种写法，
-  // 页面四向留白、间距白名单、叠线、图标槽位这几条在它上面同样成立；
-  // 只是它的失败要读成「画法偏离规则」而不是「实现坏了」。
   const profileDir = await mkdtemp(join(tmpdir(), 'vt-geometry-'))
   const url = `file://${file}?theme=light`
   const driver = await ChromePage.open(CHROME, url, profileDir)
   try {
     await driver.waitForLayout()
     const report = await driver.evaluate(
-      `(${auditInPage.toString()})(${JSON.stringify({ kind: fixture.kind, selectors: SELECTORS[fixture.kind] })})`,
+      `(${auditInPage.toString()})(${JSON.stringify({
+        kind: fixture.kind,
+        selectors: SELECTORS[fixture.kind],
+        iconCatalogue: ICON_CATALOGUE,
+      })})`,
     )
+    if (fixture.kind === 'runtime') {
+      // runtime 页没有 pageBody 是实现的缺陷（页面必须有自己的内容区），不是探针问题。
+      for (const skip of report.skips ?? []) {
+        report.violations.push({
+          rule: 'no-page-body',
+          target: skip.page,
+          detail: `页面没有内容区（${skip.reason}）`,
+        })
+      }
+    }
     reports.push({ page, kind: fixture.kind, ...report })
-    if (report.violations.length > 0) failed = true
+    // 退出码只由「实现违规」决定：手写页的发现是 fixture 缺口，不能把默认跑变成噪声。
+    if (fixture.kind === 'runtime' && report.violations.length > 0) failed = true
   } finally {
     driver.close()
     await rm(profileDir, { recursive: true, force: true })
@@ -551,17 +609,17 @@ for (const page of targets) {
 if (asJson) {
   console.log(JSON.stringify(reports, null, 2))
 } else {
-  for (const report of reports) {
+  const render = report => {
     const { page, counts, violations, notes, skipped } = report
     if (skipped !== undefined) {
       console.log(`· ${page}：跳过 —— ${skipped}`)
-      continue
+      return
     }
     console.log(
       `· ${page}：pages=${counts.pages} bodies=${counts.bodies} skipped=${counts.skipped} bordered=${counts.bordered} iconFields=${counts.iconFields} styled=${counts.styled}`,
     )
     for (const skip of report.skips ?? []) {
-      console.log(`  - 跳过 ${skip.page}：${skip.reason}`)
+      console.log(`  - 缺口 ${skip.page}：${skip.reason}`)
     }
     // 量过的面数与最小间距一起打出来：零违规要能区分“真的合格”与“没量到”。
     const measured = report.gaps ?? []
@@ -572,13 +630,35 @@ if (asJson) {
     for (const note of notes) console.log(`  · ${note}`)
     if (violations.length === 0) {
       console.log('  无违规')
-      continue
+      return
     }
     for (const violation of violations) {
       console.log(`  ✗ [${violation.rule}] ${violation.target} — ${violation.detail}`)
     }
   }
-  console.log(failed ? '\n审计失败：存在违规' : '\n审计通过')
+
+  const runtimeReports = reports.filter(report => report.kind === 'runtime')
+  const sketchReports = reports.filter(report => report.kind === 'sketch')
+  const runtimeHits = runtimeReports.reduce((total, report) => total + report.violations.length, 0)
+  // 手写页「没有 pageBody」「漏画图标」都是探针自身的缺口，一并计入这一栏。
+  const fixtureHits = sketchReports.reduce(
+    (total, report) => total + report.violations.length + (report.skips?.length ?? 0),
+    0,
+  )
+
+  // 两栏必须分开：手写页漏画图标、探针缺 pageBody 属于 fixture 自身的缺口，
+  // 和「实现坏了」挤在一张表里，红就会退化成噪声。
+  console.log(`
+== 实现违规（runtime，决定退出码）：${runtimeHits} 条 ==`)
+  for (const report of runtimeReports) render(report)
+  if (runtimeHits === 0) console.log('· 无')
+
+  console.log(`
+== fixture 缺口（手写探针，不改退出码）：${fixtureHits} 条 ==`)
+  for (const report of sketchReports) render(report)
+  if (fixtureHits === 0) console.log('· 无')
+
+  console.log(failed ? '\n审计失败：存在实现违规' : '\n审计通过：实现无违规（fixture 缺口单列）')
 }
 
 process.exit(failed ? 1 : 0)
