@@ -165,9 +165,9 @@ raw fence body
 
 ---
 
-## 3. 完整组件目录（以 `render-node.tsx` 的 switch 为准：**50 个 type**）
+## 3. 完整组件目录（50 个原生 type + 4 个原型通道 type）
 
-派发入口 `renderNode`（`src/client/blocks/render-node.tsx:174-527`），`default: return null`（`:525`）——**白名单外的 type 不渲染任何东西**。下表「渲染实现」列若写 `render-node.tsx:NN` 表示就地渲染，否则为独立组件文件。
+派发入口 `renderNode`（`src/client/blocks/render-node.tsx`）：50 个原生 type 走 switch；`default` 再查 catalog 派生的原型注册表（`src/client/blocks/prototype-registry.ts`），都没有才 `return null`——**白名单外的 type 不渲染任何东西**。组件定义（字段/必填/别名）自 2026-11-21 起只有一份来源：`src/shared/catalog/definitions.ts`，本目录 §3 的字段表由它校验（`catalog.test.ts` 有基线快照）。下表「渲染实现」列若写 `render-node.tsx:NN` 表示就地渲染，否则为独立组件文件。
 
 列含义：**必填**＝schema 的 `required`；**默认值**＝代码里的实际兜底；**action**＝是否消费 `action` 字段；**本地状态/answers**＝组件内部状态或是否参与聚合/持久化。
 
@@ -250,6 +250,18 @@ raw fence body
 | `timeline` | `items` | `items[].title/desc/time` | `advanced.tsx:471-492` | ✗ | 无 |
 | `file-tree` | `items` | `items[].name/type/children`；有 children 无 type 时自动补 `dir` | `advanced.tsx:515-566` | ✗ | 本地折叠，默认全展开 |
 | `breadcrumb` | `items` | `items[]: string` | `advanced.tsx:648-660` | ✗ | 无 |
+
+### 3.7 原型通道（slice 1，4 个 type）
+
+页面级低保真原型。纯加法：不改上面 50 个 type 的名字/必填字段/action 形状，围栏标签仍是 `dsh-ui`。
+字段定义见 `src/shared/catalog/definitions.ts`；渲染实现在 `src/client/blocks/prototype.tsx`，由 `prototype-registry.ts` 注册。状态统一进 `data-*`（`data-orientation` / `data-active` / `data-invalid` / `data-state`），样式层用属性选择器消费。
+
+| type | 必填 | 可选字段（含默认） | 语义 / 状态 |
+| --- | --- | --- | --- |
+| `page` | `items` | `title`、`subtitle`、`actions`(nodes) | `<section>`；有标题时 `aria-labelledby` 指向标题；`data-orientation="vertical"`；窄容器（≤420px）收紧内边距 |
+| `nav` | `items` | `label`、`variant`: top(默认)/side/tabs | `<nav>` + `aria-label`；当前项 `data-active="true"`，tabs 用 `role="tablist"`/`tab`+`aria-selected`，其余用 `aria-current="page"`；点击只做视觉选中 |
+| `list-row` | `title` | `desc`、`meta`、`media`、`actions`(nodes) | `role="listitem"`；`aria-label` 合并 title/desc/meta；有 actions 时 `data-state="interactive"` |
+| `field-group` | `label`、`items` | `desc`、`error`、`required` | `role="group"` + `aria-labelledby`；`desc`/`error` 进 `aria-describedby`；错误态 `data-invalid="true"`/`data-state="invalid"`，错误文案 `role="alert"` |
 
 ---
 

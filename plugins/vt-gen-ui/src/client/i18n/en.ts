@@ -298,6 +298,7 @@ export const EN = {
   'block.total': 'Total',
   'block.filteredRows': '{visible} / {total} rows after filtering',
   'block.filterMatch': '{shown} / {total} matched',
+  'screens.back': '← Back',
   'block.triggered': '✓ Sent',
   'block.triggeredPlain': 'Sent',
   'block.audio': 'Audio',

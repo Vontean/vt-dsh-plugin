@@ -24,7 +24,7 @@ import {
   BADGE_TONES, BUTTON_TONES, CALLOUT_TONES, CARD_TONES, CHART_KINDS, COMPONENT_SCHEMAS, HERO_TONES,
   DIAGRAM_EDGE_KINDS, DIAGRAM_KINDS, DIAGRAM_NODE_TYPES, DIAGRAM_ROUTES, DIAGRAM_VARIANTS,
   ECHART_PRESETS, FILE_TYPES, GENUI_NATIVE_TYPES, GENUI_SPEC_SCHEMA, INPUT_TYPES,
-  ARROW_DIRS, BLOCKS_VARIANTS, BLOCK_CELL_TONES, ICON_TONES, MEDIA_ASPECT_RATIOS, MESH_SHAPES, PLOT_KINDS, PROGRESS_VARIANTS, ROW_JUSTIFY, TABLE_CELL_TYPES, TEXT_ALIGNS, TEXT_SIZES, TEXT_TONES,
+  ARROW_DIRS, BLOCKS_VARIANTS, BLOCK_CELL_TONES, ICON_TONES, MEDIA_ASPECT_RATIOS, MESH_SHAPES, NAV_VARIANTS, PLOT_KINDS, PROGRESS_VARIANTS, ROW_JUSTIFY, TABLE_CELL_TYPES, TEXT_ALIGNS, TEXT_SIZES, TEXT_TONES,
 } from './genui-runtime/schema.ts'
 import type { ComponentFieldKind, ComponentRecordSchema, ComponentSchema } from './genui-runtime/schema.ts'
 import { normalizeGenuiSpec } from './genui-runtime/normalize.ts'
@@ -256,8 +256,18 @@ function sparkValues(v: unknown): number[] | undefined {
 function repairNode(value: unknown, ctx: RepairCtx, depth: number): GenuiNode | null {
   const node = repairNodeFields(value, ctx, depth)
   if (node === null) return null
-  const span = int(obj(value)?.span, 2, 12)
-  return span === undefined ? node : ({ ...node, span } as GenuiNode)
+  const source = obj(value)
+  const span = int(source?.span, 2, 12)
+  // `goto` is a cross-cutting layout hint, not a per-type field: preserve it
+  // here so every repaired node keeps its screen target without a hand-written
+  // copy in 50 repair cases.
+  const goto = str(source?.goto, GENUI_LIMITS.maxScreenId)
+  if (span === undefined && goto === undefined) return node
+  return {
+    ...node,
+    ...(span === undefined ? {} : { span }),
+    ...(goto === undefined ? {} : { goto }),
+  } as GenuiNode
 }
 
 function repairNodeFields(value: unknown, ctx: RepairCtx, depth: number): GenuiNode | null {
@@ -371,6 +381,59 @@ function repairNodeFields(value: unknown, ctx: RepairCtx, depth: number): GenuiN
         ...opt('tone', enu(v.tone, CARD_TONES)),
         ...opt('accent', color(v.accent)),
         ...opt('flat', v.flat === true ? true : undefined),
+      }
+    }
+    case 'page': {
+      return {
+        type: 'page',
+        items: repairItems(v.items, ctx, depth + 1),
+        ...opt('title', str(v.title, GENUI_LIMITS.maxString)),
+        ...opt('subtitle', str(v.subtitle, GENUI_LIMITS.maxString)),
+        ...opt('actions', Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : undefined),
+      }
+    }
+    case 'nav': {
+      if (!Array.isArray(v.items)) return null
+      // Nav entries are records, not nodes: sanitize them here instead of
+      // letting them reach the renderer unfiltered.
+      const items = v.items.slice(0, 12).flatMap((entry) => {
+        const it = obj(entry)
+        if (it === undefined) return []
+        const label = str(it.label, 120)
+        if (label === undefined) return []
+        return [{
+          label,
+          ...opt('icon', str(it.icon, 64)),
+          ...opt('active', it.active === true ? true : undefined),
+        }]
+      })
+      if (items.length === 0) return null
+      return {
+        type: 'nav', items,
+        ...opt('label', str(v.label, 120)),
+        ...opt('variant', enu(v.variant, NAV_VARIANTS)),
+      }
+    }
+    case 'list-row': {
+      const title = str(v.title, GENUI_LIMITS.maxString)
+      if (title === undefined) return null
+      return {
+        type: 'list-row', title,
+        ...opt('desc', str(v.desc, GENUI_LIMITS.maxString)),
+        ...opt('meta', str(v.meta, 200)),
+        ...opt('media', str(v.media, 64)),
+        ...opt('actions', Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : undefined),
+      }
+    }
+    case 'field-group': {
+      const label = str(v.label, 200)
+      if (label === undefined || !Array.isArray(v.items)) return null
+      return {
+        type: 'field-group', label,
+        items: repairItems(v.items, ctx, depth + 1),
+        ...opt('desc', str(v.desc, GENUI_LIMITS.maxString)),
+        ...opt('error', str(v.error, GENUI_LIMITS.maxString)),
+        ...opt('required', v.required === true ? true : undefined),
       }
     }
     case 'button': {
@@ -1286,14 +1349,36 @@ function repairCanonicalGenuiSpec(value: unknown): GenuiSpec | null {
     if (wrapped === null) return null
     return repairCanonicalGenuiSpec(wrapped)
   }
-  if (!Array.isArray(v.items)) return null
+  const hasItems = Array.isArray(v.items)
+  const rawScreens = obj(v.screens)
+  if (!hasItems && rawScreens === undefined) return null
   const ctx: RepairCtx = { remaining: GENUI_LIMITS.maxNodes }
+  // Screen trees share the block's node budget: repairing them sequentially
+  // against the same `ctx` keeps the total at maxNodes, not maxNodes per screen.
+  let screens: Record<string, GenuiNode[]> | undefined
+  if (rawScreens !== undefined) {
+    const entries = Object.entries(rawScreens).slice(0, GENUI_LIMITS.maxScreens)
+    const repaired: Record<string, GenuiNode[]> = {}
+    for (const [id, nodes] of entries) {
+      const screenId = str(id, GENUI_LIMITS.maxScreenId)
+      if (screenId === undefined || !Array.isArray(nodes)) continue
+      repaired[screenId] = repairItems(nodes, ctx, 0)
+    }
+    if (Object.keys(repaired).length === 0) return null
+    screens = repaired
+  }
+  const items = hasItems ? repairItems(v.items, ctx, 0) : []
+  const initial = screens === undefined ? undefined : str(v.initial, GENUI_LIMITS.maxScreenId)
   return {
     ...opt('title', str(v.title, GENUI_LIMITS.maxString)),
     ...opt('gap', num(v.gap, 0, 96)),
     ...opt('panel', v.panel === true ? true : undefined),
     ...opt('append', v.append === true ? true : undefined),
-    items: repairItems(v.items, ctx, 0),
+    ...(screens === undefined ? {} : { screens }),
+    // Keep `initial` only when it names a repaired screen; otherwise the
+    // renderer falls back to the first screen deterministically.
+    ...(initial !== undefined && screens !== undefined && Object.hasOwn(screens, initial) ? { initial } : {}),
+    items,
   }
 }
 
@@ -1343,10 +1428,14 @@ export function countGenuiNodes(value: unknown, cap = Number.POSITIVE_INFINITY):
           const io = obj(it)
           if (io !== undefined) walk(io.items)
         }
-      } else if ((v.type === 'row' || v.type === 'col' || v.type === 'grid' || v.type === 'card') && Array.isArray(v.items)) {
+      } else if ((v.type === 'row' || v.type === 'col' || v.type === 'grid' || v.type === 'card'
+        || v.type === 'page' || v.type === 'field-group') && Array.isArray(v.items)) {
         // Layout containers hold real children; skipping them undercounted
         // the tree and hid silent drops from validate_dsh_ui (issue #42).
         walk(v.items)
+        if (v.type === 'page' && Array.isArray(v.actions)) walk(v.actions)
+      } else if (v.type === 'list-row' && Array.isArray(v.actions)) {
+        walk(v.actions)
       } else if (v.type === 'file-tree') {
         // file-tree.items are data records, not GenUI children.
       } else if (v.type === 'list' && Array.isArray(v.items)) {
@@ -1368,7 +1457,13 @@ export function countGenuiNodes(value: unknown, cap = Number.POSITIVE_INFINITY):
     }
   }
   const root = obj(value)
-  walk(root === undefined ? [] : root.items)
+  if (root === undefined) return count
+  walk(root.items)
+  // Screen trees share the same block budget; the cap stops the walk.
+  const screens = obj(root.screens)
+  if (screens !== undefined) {
+    for (const nodes of Object.values(screens)) walk(nodes)
+  }
   return count
 }
 
@@ -1423,8 +1518,12 @@ function visitDeclaredGenuiNodes(
       for (let row = 0; row < rowCount; row++) {
         walkItemsOf(v.items[row], `${at}.items[${row}]`)
       }
-    } else if ((v.type === 'row' || v.type === 'col' || v.type === 'grid' || v.type === 'card') && Array.isArray(v.items)) {
+    } else if ((v.type === 'row' || v.type === 'col' || v.type === 'grid' || v.type === 'card'
+      || v.type === 'page' || v.type === 'field-group') && Array.isArray(v.items)) {
       walk(v.items, `${at}.items`)
+      if (v.type === 'page' && Array.isArray(v.actions)) walk(v.actions, `${at}.actions`)
+    } else if (v.type === 'list-row' && Array.isArray(v.actions)) {
+      walk(v.actions, `${at}.actions`)
     } else if (v.type === 'list' && Array.isArray(v.items)) {
       for (let row = 0; row < v.items.length; row++) {
         walkNode(v.items[row], `${at}.items[${row}]`)
@@ -1448,7 +1547,13 @@ function visitDeclaredGenuiNodes(
   // Component root: the root itself is the declared node, whether or not it
   // carries an `items` data array (issue #172).
   if (isComponentRoot(root) && declared(value)) walkNode(value, 'spec')
-  else walk(root.items, 'items')
+  else {
+    walk(root.items, 'items')
+    const screens = obj(root.screens)
+    if (screens !== undefined) {
+      for (const [screenId, nodes] of Object.entries(screens)) walk(nodes, `screens.${screenId}`)
+    }
+  }
   return count
 }
 
@@ -1503,7 +1608,17 @@ export function validateCanonicalGenuiSpec(value: unknown): GenuiValidation {
     if (wrapped !== null) return validateCanonicalGenuiSpec(wrapped)
     return { ok: false, errors: ['spec.items must be an array'] }
   }
-  if (!Array.isArray(v.items)) return { ok: false, errors: ['spec.items must be an array'] }
+  const hasItems = Array.isArray(v.items)
+  const screens = obj(v.screens)
+  if (!hasItems && screens === undefined) {
+    return { ok: false, errors: ['spec.items or spec.screens must be present'] }
+  }
+  if (v.screens !== undefined && screens === undefined) {
+    errors.push('spec.screens must be an object of screen id → node array')
+  }
+  if (v.initial !== undefined && typeof v.initial !== 'string') {
+    errors.push('spec.initial must be a string')
+  }
   validateSchemaFieldKinds(v, 'spec', GENUI_SPEC_SCHEMA, errors, ['items'])
   let count = 0
   let capped = false
@@ -1526,7 +1641,22 @@ export function validateCanonicalGenuiSpec(value: unknown): GenuiValidation {
       validateNode(list[i], depth, at, errors, walk)
     }
   }
-  walk(v.items, 0, 'items')
+  if (hasItems) walk(v.items, 0, 'items')
+  if (screens !== undefined) {
+    let screenCount = 0
+    for (const [screenId, nodes] of Object.entries(screens)) {
+      if (screenCount >= GENUI_LIMITS.maxScreens) {
+        errors.push(`spec.screens exceeds ${GENUI_LIMITS.maxScreens} screens; tail elided`)
+        break
+      }
+      screenCount += 1
+      if (!Array.isArray(nodes)) {
+        errors.push(`spec.screens.${screenId} must be an array`)
+        continue
+      }
+      walk(nodes, 0, `screens.${screenId}`)
+    }
+  }
   if (errors.length === 0) errors.push(...analyzeSubmissionRegistry(v as unknown as GenuiSpec).diagnostics)
   const uniqueErrors = [...new Set(errors)]
   return { ok: uniqueErrors.length === 0, errors: uniqueErrors }
@@ -2096,6 +2226,43 @@ function validateNode(value: unknown, depth: number, at: string, errors: string[
       if (v.edges !== undefined && !Array.isArray(v.edges)) errors.push(`${at}: type 'diagram' requires edges (array) when present`)
       break
 
+    case 'page':
+      if (!Array.isArray(v.items)) errors.push(`${at}: type 'page' requires items (array)`)
+      else walk(v.items, depth + 1, `${at}.items`)
+      if (v.actions !== undefined && !Array.isArray(v.actions)) {
+        errors.push(`${at}: type 'page' requires actions (array) when present`)
+      } else if (Array.isArray(v.actions)) {
+        walk(v.actions, depth + 1, `${at}.actions`)
+      }
+      isStr('title'); isStr('subtitle')
+      break
+    case 'nav':
+      if (!Array.isArray(v.items)) errors.push(`${at}: type 'nav' requires items (array)`)
+      else {
+        v.items.forEach((entry, index) => {
+          const it = obj(entry)
+          if (it === undefined || typeof it.label !== 'string') {
+            errors.push(`${at}.items[${index}]: nav item requires label (string)`)
+          }
+        })
+      }
+      isStr('label'); isStr('variant')
+      break
+    case 'list-row':
+      if (typeof v.title !== 'string') errors.push(`${at}: type 'list-row' requires title (string)`)
+      isStr('desc'); isStr('meta'); isStr('media')
+      if (v.actions !== undefined && !Array.isArray(v.actions)) {
+        errors.push(`${at}: type 'list-row' requires actions (array) when present`)
+      } else if (Array.isArray(v.actions)) {
+        walk(v.actions, depth + 1, `${at}.actions`)
+      }
+      break
+    case 'field-group':
+      if (typeof v.label !== 'string') errors.push(`${at}: type 'field-group' requires label (string)`)
+      if (!Array.isArray(v.items)) errors.push(`${at}: type 'field-group' requires items (array)`)
+      else walk(v.items, depth + 1, `${at}.items`)
+      isStr('desc'); isStr('error')
+      break
     case 'echart':
       // `links` alone is a valid payload: the sankey/graph presets are driven
       // by edges only. Missing it here rejected the whole fence as

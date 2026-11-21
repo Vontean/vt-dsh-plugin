@@ -224,6 +224,13 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
 
   if (type === 'row' || type === 'col' || type === 'grid' || type === 'card' || type === 'file-tree' || type === 'timeline' || type === 'breadcrumb') {
     if (type !== 'file-tree' && type !== 'timeline' && type !== 'breadcrumb') out.items = normalizeNodeArray(out.items, `${path}.items`)
+  } else if (type === 'page') {
+    out.items = normalizeNodeArray(out.items, `${path}.items`)
+    if (out.actions !== undefined) out.actions = normalizeNodeArray(out.actions, `${path}.actions`)
+  } else if (type === 'field-group') {
+    out.items = normalizeNodeArray(out.items, `${path}.items`)
+  } else if (type === 'list-row') {
+    if (out.actions !== undefined) out.actions = normalizeNodeArray(out.actions, `${path}.actions`)
   } else if (type === 'list' && Array.isArray(out.items)) {
     // List records and nested nodes share items; aliases only belong to records.
     out.items = out.items.map((child, index) => {
@@ -360,6 +367,16 @@ export function normalizeGenuiSpec(value: unknown): { value: unknown; warnings: 
   }
   if (Array.isArray(out.items)) {
     out.items = out.items.map((item, index) => normalizeNode(item, `items[${index}]`, warnings))
+  }
+  const screens = record(out.screens)
+  if (screens !== undefined) {
+    const normalized: Record<string, unknown> = {}
+    for (const [screenId, nodes] of Object.entries(screens)) {
+      normalized[screenId] = Array.isArray(nodes)
+        ? nodes.map((child, index) => normalizeNode(child, `screens.${screenId}[${index}]`, warnings))
+        : nodes
+    }
+    out.screens = normalized
   }
   return { value: out, warnings }
 }

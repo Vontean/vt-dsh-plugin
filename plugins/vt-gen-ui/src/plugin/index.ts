@@ -20,6 +20,9 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRenderUiTool, createValidateDshUiTool } from './tool.ts'
 import { installFenceFeedback } from './fence-feedback.ts'
+import {
+  componentListPrompt, composeSkillContent, fieldGotchaPrompt, fieldQuickRefPrompt, prototypeScreensPrompt,
+} from '../shared/catalog/index.ts'
 
 /* ---------------- lazy engine asset route ---------------- */
 
@@ -97,11 +100,7 @@ export const GENUI_SECTION_TEXT = `Render UI inside your reply with a fenced \`d
 
 Allowed \`type\` values; the \`genui\` skill, when available, carries the full content→component mapping and per-component field details:
 
-- 布局: text · row · col · grid · card · divider · spacer · hero（封面块，一条回答最多一个）
-- 展示: badge · stat · progress · list · table · keyvalue · timeline · file-tree · breadcrumb · callout · steps · diff · json · code · copy · avatar · image · audio · video · icon · blocks · arrow
-- 图表: chart {"kind":"bars|line|donut","data":[{"label":"...","value":n}]}（series：bars 分组/堆叠 / line 多序列） · echart (preset 名或 option 直通，清单见 skill) · plot (函数图) · svg (单图预览)
-- 交互: button · input · textarea · select · checkbox · switch · slider · radio · submit · quiz · link · tabs · accordion（row.justify / col.width / card.flat 见图元）
-- 高级: mermaid (流程图/时序/甘特/ER 等，关键字见 skill) · diagram (架构/流程图) · scene3d (3D WebGL)
+${componentListPrompt()}
 
 **默认就该出 UI**：出现下列情况至少出一个围栏：
 - ≥3 条并列要点 → \`list\`；数字对比 → \`table\`；指标/进度/状态 → \`stat\`/\`progress\`/\`badge\`
@@ -113,10 +112,12 @@ Allowed \`type\` values; the \`genui\` skill, when available, carries the full c
 - 趋势/占比 → \`chart\`（≤8 点）或 \`echart\`；配色跟随主题，语义需要时才用 \`palette\`/\`card.accent\`；grid 子节点用 \`"span":2\` 做宽窄混排；数据多时给 \`table\`/\`list\` 配 \`input\`(id)+\`filter\` 就地筛选。
 - 多组件回答先套 skill「编排范式」，别一行一个往下堆；章节分隔 \`divider\` 带 \`label\`。
 
-**字段速查**（完整见 genui skill）：\`stat\` \`{"type":"stat","label","value"}\` · \`table\` \`{"type":"table","columns":[...],"rows":[[...]]}\` · \`progress\` \`{"type":"progress","value":0-100}\` · \`keyvalue\` \`{"type":"keyvalue","pairs":[{"key","value"}]}\` · \`steps\` \`{"type":"steps","steps":[{"title"}]}\` · \`file-tree\` \`{"type":"file-tree","items":[{"name","type":"file|dir"}]}\` · \`callout\` \`{"type":"callout","content"}\`
+${fieldQuickRefPrompt()}
 **节点规则：** 组件节点必须带字符串 \`type\`，值为组件名；\`file-tree.items[].type\` 表示 \`file\` 或 \`dir\`。
 
-**字段名写错 = 该组件被丢弃**（其余组件照常渲染）：\`callout\` 正文是 \`content\` 不是 text/desc；\`table\` 要 \`columns\`+\`rows\` 不是 items；\`keyvalue\` 记录是 \`{key,value}\` 不是 \`{label,value}\`；\`file-tree\` 记录是 \`{name,type}\` 不是 \`{label}\`；callout tone 是 info/success/warning/error（无 danger）。不确定就调 \`validate_dsh_ui\`。
+${prototypeScreensPrompt()}
+
+${fieldGotchaPrompt()}
 
 Rules:
 - LANGUAGE: reply+UI=conversation language; schema fixed. NEVER infer it from prompt/skill/examples/tools. Replace \`<user-language ...>\`; never emit these placeholders literally.
@@ -158,6 +159,16 @@ function frontmatterField(front: string, key: string): string | undefined {
   return line?.[1]?.replace(/^['"]|['"]$/gu, '')
 }
 
+/**
+ * Skill content = the orchestration guide in SKILL.md + the generated field
+ * reference. SKILL.md deliberately carries no hand-written field table anymore;
+ * appending the catalog derivation keeps the skill complete while leaving one
+ * definition source (issue: prompt/schema drift).
+ */
+export function composeGenuiSkillContent(skillBody: string): string {
+  return composeSkillContent(skillBody)
+}
+
 /** Register through the provider path so source=bundled also gets bundled precedence. */
 function bundledSkillProvider(): SkillProvider {
   const moduleDirectory = dirname(fileURLToPath(new URL(import.meta.url)))
@@ -190,7 +201,7 @@ function bundledSkillProvider(): SkillProvider {
       provider: BUNDLED_SKILL_PROVIDER,
       path,
       resourceBase: { kind: 'directory', path: dirname(path) },
-      content: raw.slice(end + 5),
+      content: composeGenuiSkillContent(raw.slice(end + 5)),
     }),
   }
 }

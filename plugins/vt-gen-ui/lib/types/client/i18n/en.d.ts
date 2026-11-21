@@ -272,6 +272,7 @@ export declare const EN: {
     readonly 'block.total': "Total";
     readonly 'block.filteredRows': "{visible} / {total} rows after filtering";
     readonly 'block.filterMatch': "{shown} / {total} matched";
+    readonly 'screens.back': "← Back";
     readonly 'block.triggered': "✓ Sent";
     readonly 'block.triggeredPlain': "Sent";
     readonly 'block.audio': "Audio";

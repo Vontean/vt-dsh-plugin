@@ -34,6 +34,12 @@ export interface GenuiBlockProps {
   onStateChange?: ((state: BlockInteractionState) => void) | undefined
   /** Observe the current secret-free durable state without changing persistence ownership. */
   onStateSnapshot?: ((state: BlockInteractionState) => void) | undefined
+  /**
+   * Prototype screen state machine. Defaults to on; `false` degrades to
+   * rendering only the initial screen (the fallback for older renderers).
+   * No effect on specs without `screens`.
+   */
+  screenMachine?: boolean | undefined
 }
 
 /** Block-wide aggregation state. Grouped radios store one selected label in

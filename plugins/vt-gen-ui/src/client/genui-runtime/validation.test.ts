@@ -1,0 +1,129 @@
+/**
+ * Failure tiers: repairable aliases are rescued, missing required fields drop
+ * the component, unknown fields keep it and warn. These are the three real
+ * field-writing failures the guard is expected to distinguish.
+ */
+import { describe, expect, test } from 'vitest'
+import { countGenuiNodes, processGenuiSpec, validateGenuiSpec } from '../guard.ts'
+
+describe('rescue (alias)', () => {
+  test('callout text is adopted as content', () => {
+    const result = processGenuiSpec({ items: [{ type: 'callout', text: '注意' }] })
+    expect(result.errors).toEqual([])
+    expect(result.warnings.some(warning => warning.kind === 'alias')).toBe(true)
+    expect(result.repaired?.items).toHaveLength(1)
+  })
+
+  test('keyvalue label is adopted as key', () => {
+    const result = processGenuiSpec({ items: [{ type: 'keyvalue', pairs: [{ label: '版本', value: '1.0' }] }] })
+    expect(validateGenuiSpec(result.value).ok).toBe(true)
+    expect(result.warnings.some(warning => warning.kind === 'alias')).toBe(true)
+    expect(result.repaired?.items[0]).toMatchObject({ pairs: [{ key: '版本', value: '1.0' }] })
+  })
+
+  test('list-row name is adopted as title', () => {
+    const result = processGenuiSpec({ items: [{ type: 'list-row', name: '未命名' }] })
+    expect(result.errors).toEqual([])
+    expect(result.repaired?.items[0]).toMatchObject({ type: 'list-row', title: '未命名' })
+  })
+})
+
+describe('drop (missing required)', () => {
+  test('stat without value is dropped, siblings survive', () => {
+    const result = processGenuiSpec({
+      items: [{ type: 'stat', label: '仅标签' }, { type: 'badge', label: '保留' }],
+    })
+    expect(validateGenuiSpec(result.value).ok).toBe(false)
+    expect(result.errors.join('\n')).toContain("requires value")
+    expect(result.repaired?.items).toEqual([{ type: 'badge', label: '保留' }])
+  })
+
+  test('page without items is invalid, like other containers', () => {
+    const result = processGenuiSpec({ items: [{ type: 'page', title: '空页' }] })
+    expect(validateGenuiSpec(result.value).ok).toBe(false)
+    // Repair keeps the container shell (same policy as row/col/card) but the
+    // content area is empty; validate_dsh_ui is what reports the defect.
+    expect(result.repaired?.items[0]).toMatchObject({ type: 'page', items: [] })
+  })
+
+  test('nav with string items is dropped', () => {
+    const result = processGenuiSpec({ items: [{ type: 'nav', items: ['首页', '设置'] }] })
+    expect(result.repaired?.items).toHaveLength(0)
+  })
+})
+
+describe('degrade (wrong field name)', () => {
+  test('unknown field warns but keeps the component', () => {
+    const result = processGenuiSpec({
+      items: [{ type: 'list-row', title: '行标题', tile: '不该有' }],
+    })
+    expect(validateGenuiSpec(result.value).ok).toBe(true)
+    expect(result.warnings.some(warning => warning.kind === 'unknown-field' && warning.field === 'tile')).toBe(true)
+    expect(result.repaired?.items).toHaveLength(1)
+  })
+
+  test('unknown type is reported and never counted as a native node', () => {
+    const result = processGenuiSpec({ items: [{ type: 'mystery', label: 'x' }] })
+    // processGenuiSpec filters the custom-renderer error for the render gate;
+    // the validator keeps it, which is what diagnostics and the tool report.
+    expect(validateGenuiSpec(result.value).errors.join('\n')).toContain('unknown type')
+    expect(result.renderedNativeCount).toBe(0)
+  })
+
+  test('unknown fields inside a page are still diagnosed', () => {
+    const result = processGenuiSpec({
+      items: [{ type: 'page', items: [{ type: 'text', content: '正文', bodyy: 'x' }] }],
+    })
+    expect(result.warnings.some(warning => warning.kind === 'unknown-field' && warning.field === 'bodyy')).toBe(true)
+  })
+})
+
+describe('screen state machine fields', () => {
+  test('screens-only spec validates and repairs without items', () => {
+    const result = processGenuiSpec({
+      screens: {
+        list: [{ type: 'text', content: '列表' }, { type: 'button', label: '详情', goto: 'detail' }],
+        detail: [{ type: 'text', content: '详情' }],
+      },
+      initial: 'list',
+    })
+    expect(result.errors).toEqual([])
+    expect(result.repaired?.initial).toBe('list')
+    expect(result.repaired?.screens?.list).toHaveLength(2)
+    expect(result.repaired?.items).toEqual([])
+  })
+
+  test('goto survives repair and is not an unknown field', () => {
+    const result = processGenuiSpec({
+      items: [{ type: 'button', label: '下一步', goto: 'detail' }],
+      screens: { detail: [{ type: 'text', content: '详情' }] },
+    })
+    expect(result.warnings.some(warning => warning.kind === 'unknown-field' && warning.field === 'goto')).toBe(false)
+    expect(result.repaired?.items[0]).toMatchObject({ type: 'button', goto: 'detail' })
+  })
+
+  test('unknown-field diagnostics still run inside screens', () => {
+    const result = processGenuiSpec({
+      screens: { list: [{ type: 'text', content: '正文', bodyy: 'x' }] },
+    })
+    expect(result.warnings.some(warning => warning.kind === 'unknown-field' && warning.field === 'bodyy')).toBe(true)
+  })
+
+  test('an invalid initial screen is dropped rather than rendered blank', () => {
+    const result = processGenuiSpec({
+      screens: { list: [{ type: 'text', content: '列表' }] },
+      initial: 'missing',
+    })
+    expect(result.errors).toEqual([])
+    expect(result.repaired?.initial).toBeUndefined()
+  })
+
+  test('the node budget counts every screen', () => {
+    expect(countGenuiNodes({
+      screens: {
+        a: [{ type: 'text', content: '1' }, { type: 'text', content: '2' }],
+        b: [{ type: 'text', content: '3' }],
+      },
+    })).toBe(3)
+  })
+})

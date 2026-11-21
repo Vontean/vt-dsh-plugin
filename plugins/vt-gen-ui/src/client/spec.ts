@@ -12,9 +12,12 @@ import { COMPONENT_SCHEMAS, GENUI_NATIVE_TYPES } from './genui-runtime/schema.ts
 
 /** One node in the component tree. */
 /** Layout hints accepted by every node: `span` is how many columns the node
- *  occupies as a direct child of a `grid` (bento layouts). */
+ *  occupies as a direct child of a `grid` (bento layouts); `goto` switches to
+ *  another screen in the prototype state machine (interactive nodes only). */
 export interface GenuiLayoutHints {
   span?: number
+  /** Screen id to switch to when the node is activated (button). */
+  goto?: string
 }
 
 export type GenuiNode = (
@@ -67,6 +70,10 @@ export type GenuiNode = (
   | GenuiIcon
   | GenuiBlocks
   | GenuiArrow
+  | GenuiPage
+  | GenuiNav
+  | GenuiListRow
+  | GenuiFieldGroup
 ) & GenuiLayoutHints
 
   | GenuiEChart
@@ -88,7 +95,89 @@ export interface GenuiSpec {
    * Applies only when the fence body is fully complete, so a streaming
    * partial parse never double-merges. */
   append?: boolean
-  /** Root component list. */
+  /** Root component list. Empty when the spec is screen-based. */
+  items: GenuiNode[]
+  /**
+   * Screen id → component tree. When present, the block renders one screen at
+   * a time and a node's `goto` switches screens locally (no model round trip).
+   * Specs without `screens` render `items` exactly as before.
+   */
+  screens?: Record<string, GenuiNode[]>
+  /** Initial screen id; defaults to the first declared screen. */
+  initial?: string
+}
+
+/* ---------------- prototype channel (slice 1) ---------------- */
+
+/**
+ * Page container: the root of one low-fidelity prototype screen.
+ * `items` is the content area; the title bar appears only when one of
+ * `title` / `subtitle` / `actions` is present. Narrow containers tighten the
+ * padding (container query), so the same spec works at phone width.
+ */
+export interface GenuiPage {
+  type: 'page'
+  title?: string
+  subtitle?: string
+  /** Tail actions of the title bar (buttons, badges, …). */
+  actions?: GenuiNode[]
+  /** Page content. */
+  items: GenuiNode[]
+}
+
+/** One nav entry. Data record, not a node: label is the only required field. */
+export interface GenuiNavItem {
+  label: string
+  /** Short glyph/emoji shown before the label. */
+  icon?: string
+  /** Initially selected entry. */
+  active?: boolean
+}
+
+/**
+ * Navigation sketch: top bar, side rail, or bottom tabs. Clicking only moves
+ * the visual selection; it is not a route and sends no action.
+ */
+export interface GenuiNav {
+  type: 'nav'
+  /** Accessible name of the navigation landmark (defaults to 导航). */
+  label?: string
+  variant?: 'top' | 'side' | 'tabs'
+  items: GenuiNavItem[]
+}
+
+/**
+ * Compact list row: media slot + title + description + meta + tail actions.
+ * Part split follows shadcn/ui Item. The whole row exposes one accessible
+ * name composed from title/description/meta.
+ */
+export interface GenuiListRow {
+  type: 'list-row'
+  title: string
+  desc?: string
+  /** Tail text such as a time or status. */
+  meta?: string
+  /** Media slot: a short label, emoji, or icon glyph. */
+  media?: string
+  /** Tail actions (buttons, badges, …). */
+  actions?: GenuiNode[]
+}
+
+/**
+ * Field group: label + control + description + error. Part split follows
+ * shadcn/ui Field. `error` makes the group invalid and renders a
+ * `role="alert"` message wired through `aria-describedby`.
+ */
+export interface GenuiFieldGroup {
+  type: 'field-group'
+  label: string
+  /** Hint shown below the control. */
+  desc?: string
+  /** Error message; presence flips data-invalid/data-state. */
+  error?: string
+  /** Marks the label with a required indicator. */
+  required?: boolean
+  /** The control(s), e.g. input / select / radio. */
   items: GenuiNode[]
 }
 
@@ -117,6 +206,8 @@ export interface GenuiButton {
   icon?: string
   /** v2: when set, clicking sends this action back to the model. */
   action?: string
+  /** Screen id to switch to (prototype state machine) instead of an action. */
+  goto?: string
 }
 
 export interface GenuiInput {
@@ -935,7 +1026,9 @@ export function parseGenuiSpec(raw: string): GenuiSpec | null {
   } catch {
     return null
   }
-  if (isGenuiSpec(value)) return value
+  // Screen-based specs may omit `items`; every consumer keeps the required
+  // field, so normalize the shape once at the parse boundary.
+  if (isGenuiSpec(value)) return Array.isArray(value.items) ? value : { ...value, items: [] }
   // Single-component roots are part of the documented fence vocabulary
   // (e.g. {"type":"callout","tone":"info","title":"…","content":"…"} as the
   // whole body) — wrap them into a one-item spec so the items-gated pipeline
@@ -1008,8 +1101,13 @@ export function wrapSingleComponentRoot(value: unknown): GenuiSpec | null {
 export function isGenuiSpec(value: unknown): value is GenuiSpec {
   if (typeof value !== 'object' || value === null) return false
   if (isComponentRoot(value)) return false
-  const v = value as { items?: unknown; title?: unknown; gap?: unknown }
-  if (!Array.isArray(v.items)) return false
+  const v = value as { items?: unknown; screens?: unknown; initial?: unknown; title?: unknown; gap?: unknown }
+  // A screen-based spec may omit `items`; `parseGenuiSpec` normalizes it to an
+  // empty list so every consumer keeps the required `items` field.
+  const hasItems = Array.isArray(v.items)
+  const hasScreens = typeof v.screens === 'object' && v.screens !== null && !Array.isArray(v.screens)
+  if (!hasItems && !hasScreens) return false
+  if (v.initial !== undefined && typeof v.initial !== 'string') return false
   if (v.title !== undefined && typeof v.title !== 'string') return false
   if (v.gap !== undefined && typeof v.gap !== 'number') return false
   return true

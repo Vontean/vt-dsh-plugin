@@ -32,8 +32,14 @@ function visitNativeNodes(value: unknown, path: string, visit: (node: Record<str
   if (definition === undefined) return
   visit(value, path, definition)
   const children = (child: unknown, childPath: string): void => visitNativeNodes(child, childPath, visit)
-  if ((type === 'row' || type === 'col' || type === 'grid' || type === 'card') && Array.isArray(value.items)) {
+  if ((type === 'row' || type === 'col' || type === 'grid' || type === 'card'
+    || type === 'page' || type === 'field-group') && Array.isArray(value.items)) {
     value.items.forEach((child, index) => children(child, `${path}.items[${index}]`))
+    if (type === 'page' && Array.isArray(value.actions)) {
+      value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`))
+    }
+  } else if (type === 'list-row' && Array.isArray(value.actions)) {
+    value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`))
   } else if (type === 'list' && Array.isArray(value.items)) {
     value.items.forEach((child, index) => children(child, `${path}.items[${index}]`))
   } else if (type === 'tabs' && Array.isArray(value.tabs)) {
@@ -159,6 +165,15 @@ export function diagnoseUnknownGenuiFields(value: unknown): GenuiDiagnostic[] {
     for (const field of Object.keys(root)) {
       if (field in GENUI_SPEC_SCHEMA.fields) continue
       pushUnknownField(warnings, 'spec', field, 'spec')
+    }
+  }
+  // Every screen is reachable content: diagnose its nodes too, whether the
+  // spec is screens-only or carries a legacy `items` tree as well.
+  const screens = record(root.screens)
+  if (screens !== undefined && !isComponentRoot(root)) {
+    for (const [screenId, nodes] of Object.entries(screens)) {
+      if (!Array.isArray(nodes)) continue
+      nodes.forEach((item, index) => visitNativeNodes(item, `screens.${screenId}[${index}]`, visit))
     }
   }
   return warnings

@@ -213,6 +213,40 @@ body[data-ds-dark-theme] .panel {
   border-bottom: 1px solid var(--dsl-g-border);
 }
 
+/* Screen back bar (prototype state machine). Only appears when a screen-based
+   spec has somewhere to go back to; colours stay on host tokens. */
+.screenBar {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--dsl-g-gap-md);
+}
+
+.screenBack {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--dsl-g-border);
+  border-radius: var(--dsl-g-radius-control);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: var(--dsl-g-font-meta);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.screenBack:hover {
+  background: var(--dsl-g-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screenBack {
+    transition: none;
+  }
+}
+
 /* ---------- layout primitives ---------- */
 
 .col { display: flex; flex-direction: column; gap: var(--dsl-g-gap-md); min-width: 0; }

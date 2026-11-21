@@ -1,0 +1,503 @@
+/*
+ * Prototype-channel components — "简洁线面" visual rules (slice 1).
+ *
+ * Source of truth: docs/specs/prototype-visual-rules.md
+ * - colours come from host tokens only (`--dsw-alias-*` / `--dsl-g-*`), never hex;
+ * - state is consumed through `data-*` attributes, never class-name joins;
+ * - 1px is the only line width; dashed borders mark "not a real screen" only;
+ * - type sizes / line heights / spacing are fixed values from the spec table.
+ */
+
+/* ---- local aliases (§5.1) ------------------------------------------------
+ * Every prototype root defines them, so a component rendered without a page
+ * or root ancestor still resolves. They are aliases only — no new colours.
+ * ------------------------------------------------------------------------ */
+
+.prototypeRoot,
+.page,
+.nav,
+.row,
+.fieldGroup {
+  --proto-line-rule: var(--dsl-g-border);
+  --proto-line-frame: var(--dsl-g-border-strong);
+  --proto-surface-card: var(--dsw-alias-bg-layer-2, var(--dsl-g-surface));
+  --proto-surface-inset: var(--dsw-alias-markdown-code-block, var(--dsl-g-surface));
+  --proto-fill-placeholder: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);
+  --proto-radius-page: var(--dsl-g-radius-surface);
+  --proto-radius-control: var(--dsl-g-radius-control);
+  --proto-radius-sm: var(--dsl-g-radius-sm);
+}
+
+/* Page inset lives on the root/page only: components must inherit the value
+ * narrowed by the container query, not re-declare the default on themselves. */
+.prototypeRoot,
+.page {
+  --proto-pad-x: 24px;
+}
+
+/* Outer container (§5.3): named `proto-root` so a `split` rendered at the
+ * prototype root (outside any `page`) can still query its width. */
+.prototypeRoot {
+  container: proto-root / inline-size;
+  min-width: 0;
+}
+
+/* ---- page --------------------------------------------------------------- */
+
+/* No padding: the title bar, rows and nav own it, so the side rail's inset
+ * surface can reach the frame edge. The dashed frame is the one whole-block
+ * signal meaning "this rectangle is a simulated screen". */
+.page {
+  container: proto-page / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  background: var(--proto-surface-card);
+  border: 1px dashed var(--proto-line-frame);
+  border-radius: var(--proto-radius-page);
+  overflow: clip;
+  color: var(--dsw-alias-label-primary);
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px var(--proto-pad-x);
+}
+
+.pageHeading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.pageSubtitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  letter-spacing: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.pageActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.pageBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+/* A bare field group sits directly in the content flow, so the page content
+ * area supplies its horizontal inset (there is no `section` type in slice 1).
+ * Rows and nav opt out by carrying their own padding. */
+.pageBody > .fieldGroup {
+  padding-inline: var(--proto-pad-x);
+}
+
+/* ---- nav ---------------------------------------------------------------- */
+
+.nav {
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.navList {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.navItemCell {
+  display: flex;
+  min-width: 0;
+}
+
+/* Nav item, all three shapes (§6.2): height 32, inset 8, radius 8. */
+.navItem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--proto-radius-control);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--dsl-g-dur-fast) var(--dsl-g-ease-out),
+    color var(--dsl-g-dur-fast) var(--dsl-g-ease-out);
+}
+
+.navItem:hover {
+  background: var(--dsl-g-hover);
+}
+
+/* Current item: surface + weight carry "selected"; accent is not used on text. */
+.navItem[data-active='true'] {
+  background: var(--dsl-g-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.navItem:focus-visible {
+  outline: 2px solid var(--dsl-g-accent);
+  outline-offset: 2px;
+}
+
+.navIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+  line-height: 16px;
+}
+
+/* Top bar: 48 high, horizontally scrollable, items on one line. */
+.nav[data-orientation='top'] {
+  padding: 0 var(--proto-pad-x);
+  border-bottom: 1px solid var(--proto-line-rule);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.nav[data-orientation='top']::-webkit-scrollbar {
+  display: none;
+}
+
+.nav[data-orientation='top'] .navList {
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Side rail: 200 wide, inset surface, hairline on the right. */
+.nav[data-orientation='side'] {
+  width: 200px;
+  flex: 0 0 200px;
+  padding: 8px;
+  background: var(--proto-surface-inset);
+  border-right: 1px solid var(--proto-line-rule);
+}
+
+.nav[data-orientation='side'] .navList {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav[data-orientation='side'] .navItem {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+/* On the inset surface the current item rises one level instead of using a
+ * leading bar: a 2px inset shadow reads as "selected / warning" on white. */
+.nav[data-orientation='side'] .navItem[data-active='true'] {
+  background: var(--proto-surface-card);
+}
+
+/* Bottom tabs: equal segments above the page, 52 high, radius 0. */
+.nav[data-orientation='tabs'] {
+  border-top: 1px solid var(--proto-line-rule);
+}
+
+.nav[data-orientation='tabs'] .navList {
+  gap: 0;
+  align-items: stretch;
+}
+
+.nav[data-orientation='tabs'] .navItemCell {
+  flex: 1 1 0;
+}
+
+.nav[data-orientation='tabs'] .navItem {
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  height: 52px;
+  padding: 0 4px;
+  border-radius: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.nav[data-orientation='tabs'] .navIcon {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+  line-height: 20px;
+}
+
+.nav[data-orientation='tabs'] .navItem[data-active='true'] {
+  background: transparent;
+}
+
+/* Colour lives on the icon only: accent is 4.23:1 in light, enough for a
+ * graphic but not for 12px text. */
+.nav[data-orientation='tabs'] .navItem[data-active='true'] .navIcon {
+  color: var(--dsl-g-accent);
+}
+
+/* ---- list-row ----------------------------------------------------------- */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 8px var(--proto-pad-x);
+  border-radius: 0;
+  background: transparent;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  transition: background-color var(--dsl-g-dur-fast) var(--dsl-g-ease-out);
+}
+
+/* Two-line rhythm is fixed so mixed single/double rows keep the same beat. */
+.row[data-lines='2'] {
+  min-height: 56px;
+}
+
+/* Separator on the top edge of every row but the first. */
+.row + .row {
+  border-top: 1px solid var(--proto-line-rule);
+}
+
+.row[data-state='interactive']:hover {
+  background: var(--dsl-g-hover);
+}
+
+.rowMedia {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--proto-radius-control);
+  background: var(--proto-fill-placeholder);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  overflow: hidden;
+}
+
+.rowContent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rowTitle {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowDesc {
+  font-size: 13px;
+  line-height: 18px;
+  letter-spacing: 0;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta {
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ---- field-group -------------------------------------------------------- */
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fieldGroup + .fieldGroup {
+  margin-top: 16px;
+}
+
+.fieldLabel {
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.fieldRequired {
+  margin-left: 2px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.fieldControl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Control outline is a structural line (border-l2): l1 is ~4% in light and
+ * makes the input read as plain text with no edge. */
+.fieldControl :is(input:not([type='checkbox']):not([type='radio']), select) {
+  height: 32px;
+  padding: 0 8px;
+  border-color: var(--proto-line-frame);
+  border-radius: var(--proto-radius-control);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.fieldDesc {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.fieldError {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Invalid is redundant by design: red outline + red text + role="alert".
+ * The label keeps its normal colour so the field name never carries the error. */
+.fieldGroup[data-invalid='true'] .fieldControl :is(input:not([type='checkbox']):not([type='radio']), select) {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+/* ---- container queries (§5.3) ------------------------------------------
+ * Rules inside @container cannot style the container itself, so the page
+ * narrows through its children (`--proto-pad-x` is re-declared on them and
+ * inherited downward).
+ * ------------------------------------------------------------------------ */
+
+@container proto-page (max-width: 600px) {
+  .page > * {
+    --proto-pad-x: 16px;
+  }
+
+  .pageHeader {
+    gap: 12px;
+  }
+}
+
+/* A nav rendered at the prototype root has no `page` ancestor, so its own
+ * narrow rule queries `proto-root`. */
+@container proto-root (max-width: 560px) {
+  .nav[data-orientation='side'] {
+    width: auto;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--proto-line-rule);
+  }
+
+  .nav[data-orientation='side'] .navList {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .nav[data-orientation='tabs'] .navItem {
+    height: 48px;
+  }
+}
+
+@container proto-page (max-width: 560px) {
+  .nav[data-orientation='side'] {
+    width: auto;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--proto-line-rule);
+  }
+
+  .nav[data-orientation='side'] .navList {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .nav[data-orientation='tabs'] .navItem {
+    height: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navItem,
+  .row {
+    transition: none;
+  }
+}

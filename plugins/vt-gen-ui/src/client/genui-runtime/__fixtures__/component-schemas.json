@@ -1,0 +1,2014 @@
+{
+  "arrow": {
+    "required": [],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "dir": "string",
+      "length": "number",
+      "label": "string"
+    },
+    "optional": {
+      "span": "number",
+      "dir": "string",
+      "length": "number",
+      "label": "string"
+    },
+    "aliases": {
+      "direction": "dir"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "dir": [
+        "down",
+        "right"
+      ]
+    },
+    "nested": {}
+  },
+  "accordion": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "items": "array"
+    },
+    "optional": {
+      "span": "number"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {
+      "items": {
+        "required": [
+          "title",
+          "items"
+        ],
+        "fields": {
+          "title": "string",
+          "items": "nodes"
+        },
+        "enums": {},
+        "nested": {},
+        "aliases": {}
+      }
+    }
+  },
+  "audio": {
+    "required": [
+      "src"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "src": "string",
+      "alt": "string",
+      "loop": "boolean"
+    },
+    "optional": {
+      "span": "number",
+      "alt": "string",
+      "loop": "boolean"
+    },
+    "aliases": {
+      "url": "src",
+      "link": "src"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "avatar": {
+    "required": [
+      "name"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "name": "string",
+      "color": "string"
+    },
+    "optional": {
+      "span": "number",
+      "color": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "badge": {
+    "required": [
+      "label"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "tone": "string",
+      "icon": "string"
+    },
+    "optional": {
+      "span": "number",
+      "tone": "string",
+      "icon": "string"
+    },
+    "aliases": {
+      "text": "label",
+      "value": "label"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "tone": [
+        "success",
+        "warn",
+        "danger",
+        "accent"
+      ]
+    },
+    "nested": {}
+  },
+  "breadcrumb": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "items": "array"
+    },
+    "optional": {
+      "span": "number"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "button": {
+    "required": [
+      "label"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "tone": "string",
+      "full": "boolean",
+      "small": "boolean",
+      "icon": "string",
+      "action": "string"
+    },
+    "optional": {
+      "span": "number",
+      "tone": "string",
+      "full": "boolean",
+      "small": "boolean",
+      "icon": "string",
+      "action": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "tone": [
+        "primary",
+        "danger",
+        "success",
+        "ghost"
+      ]
+    },
+    "nested": {}
+  },
+  "callout": {
+    "required": [
+      "content"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "title": "string",
+      "content": "string",
+      "tone": "string"
+    },
+    "optional": {
+      "span": "number",
+      "title": "string",
+      "tone": "string"
+    },
+    "aliases": {
+      "kind": "tone",
+      "text": "content",
+      "body": "content",
+      "desc": "content"
+    },
+    "valueAliases": {
+      "tone": {
+        "danger": "error",
+        "warn": "warning"
+      }
+    },
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "tone": [
+        "info",
+        "success",
+        "warning",
+        "error"
+      ]
+    },
+    "nested": {}
+  },
+  "card": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "title": "string",
+      "eyebrow": "string",
+      "items": "nodes",
+      "tone": "string",
+      "accent": "string",
+      "flat": "boolean"
+    },
+    "optional": {
+      "span": "number",
+      "title": "string",
+      "eyebrow": "string",
+      "tone": "string",
+      "accent": "string",
+      "flat": "boolean"
+    },
+    "aliases": {
+      "label": "title",
+      "content": "items"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "tone": [
+        "info",
+        "success",
+        "warning",
+        "danger"
+      ]
+    },
+    "nested": {}
+  },
+  "chart": {
+    "required": [],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "title": "string",
+      "kind": "string",
+      "data": "array",
+      "series": "array",
+      "horizontal": "boolean",
+      "stacked": "boolean",
+      "filter": "string",
+      "palette": "array"
+    },
+    "optional": {
+      "span": "number",
+      "title": "string",
+      "kind": "string",
+      "data": "array",
+      "series": "array",
+      "horizontal": "boolean",
+      "stacked": "boolean",
+      "filter": "string",
+      "palette": "array"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [
+      [
+        "data",
+        "series"
+      ]
+    ],
+    "conditionalRequired": [
+      {
+        "kind": "required-if",
+        "when": {
+          "field": "kind",
+          "equals": "donut"
+        },
+        "required": [
+          "data"
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "kind": "one-of-required",
+        "fields": [
+          "data",
+          "series"
+        ]
+      },
+      {
+        "kind": "required-if",
+        "when": {
+          "field": "kind",
+          "equals": "donut"
+        },
+        "required": [
+          "data"
+        ]
+      }
+    ],
+    "enums": {
+      "kind": [
+        "bars",
+        "line",
+        "donut"
+      ]
+    },
+    "nested": {
+      "data": {
+        "required": [
+          "label",
+          "value"
+        ],
+        "fields": {
+          "label": "string",
+          "value": "number",
+          "color": "string"
+        },
+        "enums": {},
+        "nested": {},
+        "aliases": {}
+      },
+      "series": {
+        "required": [
+          "label",
+          "data"
+        ],
+        "fields": {
+          "label": "string",
+          "color": "string",
+          "data": "array"
+        },
+        "enums": {},
+        "nested": {
+          "data": {
+            "required": [
+              "label",
+              "value"
+            ],
+            "fields": {
+              "label": "string",
+              "value": "number",
+              "color": "string"
+            },
+            "enums": {},
+            "nested": {},
+            "aliases": {}
+          }
+        },
+        "aliases": {}
+      }
+    },
+    "validator": {
+      "name": "chart-renderability"
+    }
+  },
+  "checkbox": {
+    "required": [
+      "label"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "checked": "boolean",
+      "action": "string",
+      "group": "string"
+    },
+    "optional": {
+      "span": "number",
+      "checked": "boolean",
+      "action": "string",
+      "group": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "code": {
+    "required": [
+      "code"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "lang": "string",
+      "code": "string"
+    },
+    "optional": {
+      "span": "number",
+      "lang": "string"
+    },
+    "aliases": {
+      "content": "code",
+      "text": "code"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "col": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "items": "nodes",
+      "gap": "number",
+      "width": "number"
+    },
+    "optional": {
+      "span": "number",
+      "gap": "number",
+      "width": "number"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "copy": {
+    "required": [
+      "text"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "text": "string",
+      "expandable": "boolean",
+      "previewLines": "number"
+    },
+    "optional": {
+      "span": "number",
+      "label": "string",
+      "expandable": "boolean",
+      "previewLines": "number"
+    },
+    "aliases": {
+      "content": "text",
+      "code": "text",
+      "value": "text"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "diagram": {
+    "required": [
+      "kind",
+      "nodes"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "kind": "string",
+      "variant": "string",
+      "title": "string",
+      "nodes": "array",
+      "edges": "array",
+      "zones": "array",
+      "theme": "object"
+    },
+    "optional": {
+      "span": "number",
+      "variant": "string",
+      "title": "string",
+      "edges": "array",
+      "zones": "array",
+      "theme": "object"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "kind": [
+        "architecture",
+        "it-state",
+        "flowchart",
+        "sequence",
+        "state",
+        "er",
+        "timeline",
+        "swimlane",
+        "quadrant",
+        "radar",
+        "loop",
+        "nested",
+        "tree",
+        "org-chart",
+        "layers",
+        "venn",
+        "pyramid",
+        "bar",
+        "line",
+        "gantt",
+        "scatter",
+        "high-level",
+        "process",
+        "medallion",
+        "data-flow",
+        "dp-integration",
+        "dp-security-matrix"
+      ],
+      "variant": [
+        "light",
+        "dark",
+        "editorial"
+      ]
+    },
+    "nested": {
+      "nodes": {
+        "required": [
+          "id",
+          "label"
+        ],
+        "fields": {
+          "id": "string",
+          "label": "string",
+          "sub": "string",
+          "type": "string",
+          "x": "number",
+          "y": "number",
+          "w": "number",
+          "h": "number",
+          "tag": "string"
+        },
+        "enums": {
+          "type": [
+            "focal",
+            "backend",
+            "store",
+            "external",
+            "input",
+            "optional",
+            "security"
+          ]
+        },
+        "nested": {},
+        "aliases": {}
+      },
+      "edges": {
+        "required": [
+          "from",
+          "to"
+        ],
+        "fields": {
+          "from": "string",
+          "to": "string",
+          "label": "string",
+          "kind": "string",
+          "route": "string"
+        },
+        "enums": {
+          "kind": [
+            "solid",
+            "dashed",
+            "accent",
+            "link"
+          ],
+          "route": [
+            "auto",
+            "orthogonal",
+            "straight"
+          ]
+        },
+        "nested": {},
+        "aliases": {}
+      },
+      "zones": {
+        "required": [
+          "label"
+        ],
+        "fields": {
+          "label": "string",
+          "x": "number",
+          "y": "number",
+          "w": "number",
+          "h": "number"
+        },
+        "enums": {},
+        "nested": {},
+        "aliases": {}
+      },
+      "theme": {
+        "required": [],
+        "fields": {
+          "paper": "string",
+          "paper-2": "string",
+          "ink": "string",
+          "muted": "string",
+          "soft": "string",
+          "rule": "string",
+          "accent": "string",
+          "accent-tint": "string",
+          "link": "string"
+        },
+        "enums": {},
+        "nested": {},
+        "aliases": {}
+      }
+    }
+  },
+  "diff": {
+    "required": [
+      "diffs"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "diffs": "array"
+    },
+    "optional": {
+      "span": "number"
+    },
+    "aliases": {
+      "items": "diffs",
+      "files": "diffs"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {
+      "diffs": {
+        "required": [
+          "path",
+          "newText"
+        ],
+        "fields": {
+          "path": "string",
+          "oldText": "string-or-null",
+          "newText": "string"
+        },
+        "enums": {},
+        "nested": {},
+        "aliases": {}
+      }
+    }
+  },
+  "divider": {
+    "required": [],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string"
+    },
+    "optional": {
+      "span": "number",
+      "label": "string"
+    },
+    "aliases": {
+      "title": "label",
+      "text": "label"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "echart": {
+    "required": [],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "title": "string",
+      "height": "number",
+      "preset": "string",
+      "data": "array",
+      "series": "array",
+      "links": "array",
+      "palette": "array",
+      "option": "object"
+    },
+    "optional": {
+      "span": "number",
+      "title": "string",
+      "height": "number",
+      "preset": "string",
+      "data": "array",
+      "series": "array",
+      "links": "array",
+      "palette": "array",
+      "option": "object"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [
+      [
+        "option",
+        "data",
+        "series",
+        "links"
+      ]
+    ],
+    "conditionalRequired": [],
+    "rules": [
+      {
+        "kind": "one-of-required",
+        "fields": [
+          "option",
+          "data",
+          "series",
+          "links"
+        ]
+      }
+    ],
+    "enums": {
+      "preset": [
+        "bar",
+        "line",
+        "area",
+        "pie",
+        "scatter",
+        "radar",
+        "gauge",
+        "funnel",
+        "treemap",
+        "sankey",
+        "graph",
+        "heatmap",
+        "bigline",
+        "wordCloud"
+      ]
+    },
+    "nested": {}
+  },
+  "file-tree": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "items": "array"
+    },
+    "optional": {
+      "span": "number"
+    },
+    "aliases": {
+      "nodes": "items"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {
+      "items": {
+        "required": [
+          "name"
+        ],
+        "fields": {
+          "name": "string",
+          "type": "string",
+          "children": "array"
+        },
+        "enums": {
+          "type": [
+            "file",
+            "dir"
+          ]
+        },
+        "nested": {
+          "children": {
+            "required": [
+              "name"
+            ],
+            "fields": {
+              "name": "string",
+              "type": "string",
+              "children": "array"
+            },
+            "enums": {
+              "type": [
+                "file",
+                "dir"
+              ]
+            },
+            "nested": {
+              "children": {
+                "required": [
+                  "name"
+                ],
+                "fields": {
+                  "name": "string",
+                  "type": "string",
+                  "children": "array"
+                },
+                "enums": {
+                  "type": [
+                    "file",
+                    "dir"
+                  ]
+                },
+                "nested": {
+                  "children": {
+                    "required": [
+                      "name"
+                    ],
+                    "fields": {
+                      "name": "string",
+                      "type": "string",
+                      "children": "array"
+                    },
+                    "enums": {
+                      "type": [
+                        "file",
+                        "dir"
+                      ]
+                    },
+                    "nested": {
+                      "children": {
+                        "required": [
+                          "name"
+                        ],
+                        "fields": {
+                          "name": "string",
+                          "type": "string",
+                          "children": "array"
+                        },
+                        "enums": {
+                          "type": [
+                            "file",
+                            "dir"
+                          ]
+                        },
+                        "nested": {
+                          "children": {
+                            "required": [
+                              "name"
+                            ],
+                            "fields": {
+                              "name": "string",
+                              "type": "string",
+                              "children": "array"
+                            },
+                            "enums": {
+                              "type": [
+                                "file",
+                                "dir"
+                              ]
+                            },
+                            "nested": {
+                              "children": {
+                                "required": [
+                                  "name"
+                                ],
+                                "fields": {
+                                  "name": "string",
+                                  "type": "string",
+                                  "children": "array"
+                                },
+                                "enums": {
+                                  "type": [
+                                    "file",
+                                    "dir"
+                                  ]
+                                },
+                                "nested": {},
+                                "aliases": {
+                                  "label": "name"
+                                }
+                              }
+                            },
+                            "aliases": {
+                              "label": "name"
+                            }
+                          }
+                        },
+                        "aliases": {
+                          "label": "name"
+                        }
+                      }
+                    },
+                    "aliases": {
+                      "label": "name"
+                    }
+                  }
+                },
+                "aliases": {
+                  "label": "name"
+                }
+              }
+            },
+            "aliases": {
+              "label": "name"
+            }
+          }
+        },
+        "aliases": {
+          "label": "name"
+        }
+      }
+    }
+  },
+  "grid": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "cols": "number",
+      "items": "nodes"
+    },
+    "optional": {
+      "span": "number",
+      "cols": "number"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "blocks": {
+    "required": [
+      "rows"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "rows": "array",
+      "columns": "number",
+      "caption": "string",
+      "title": "string"
+    },
+    "optional": {
+      "span": "number",
+      "columns": "number",
+      "caption": "string",
+      "title": "string"
+    },
+    "aliases": {
+      "items": "rows",
+      "data": "rows"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {
+      "rows": {
+        "required": [
+          "cells"
+        ],
+        "fields": {
+          "label": "string",
+          "cells": "array",
+          "color": "string",
+          "variant": "string"
+        },
+        "enums": {
+          "variant": [
+            "fill",
+            "outline",
+            "plain"
+          ]
+        },
+        "nested": {},
+        "aliases": {
+          "title": "label"
+        }
+      }
+    }
+  },
+  "icon": {
+    "required": [
+      "name"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "name": "string",
+      "label": "string",
+      "tone": "string",
+      "size": "number",
+      "tile": "boolean"
+    },
+    "optional": {
+      "span": "number",
+      "label": "string",
+      "tone": "string",
+      "size": "number",
+      "tile": "boolean"
+    },
+    "aliases": {
+      "icon": "name"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "tone": [
+        "default",
+        "muted",
+        "info",
+        "success",
+        "warning",
+        "danger"
+      ]
+    },
+    "nested": {}
+  },
+  "image": {
+    "required": [
+      "src"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "src": "string",
+      "alt": "string",
+      "caption": "string"
+    },
+    "optional": {
+      "span": "number",
+      "alt": "string",
+      "caption": "string"
+    },
+    "aliases": {
+      "url": "src",
+      "link": "src"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "input": {
+    "required": [],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "placeholder": "string",
+      "value": "string",
+      "inputType": "string",
+      "action": "string",
+      "id": "string"
+    },
+    "optional": {
+      "span": "number",
+      "label": "string",
+      "placeholder": "string",
+      "value": "string",
+      "inputType": "string",
+      "action": "string",
+      "id": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "inputType": [
+        "text",
+        "email",
+        "password",
+        "color"
+      ]
+    },
+    "nested": {}
+  },
+  "json": {
+    "required": [
+      "value"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "value": "unknown"
+    },
+    "optional": {
+      "span": "number"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "keyvalue": {
+    "required": [
+      "pairs"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "pairs": "array"
+    },
+    "optional": {
+      "span": "number"
+    },
+    "aliases": {
+      "items": "pairs",
+      "rows": "pairs",
+      "entries": "pairs"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {
+      "pairs": {
+        "required": [
+          "key",
+          "value"
+        ],
+        "fields": {
+          "key": "string",
+          "value": "string"
+        },
+        "enums": {},
+        "nested": {},
+        "aliases": {
+          "label": "key"
+        }
+      }
+    }
+  },
+  "link": {
+    "required": [
+      "label"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "href": "string"
+    },
+    "optional": {
+      "span": "number",
+      "href": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "list": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "items": "array",
+      "filter": "string"
+    },
+    "optional": {
+      "span": "number",
+      "filter": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "mermaid": {
+    "required": [
+      "code"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "code": "string"
+    },
+    "optional": {
+      "span": "number"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "svg": {
+    "required": [
+      "code"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "code": "string",
+      "title": "string",
+      "height": "number"
+    },
+    "optional": {
+      "span": "number",
+      "title": "string",
+      "height": "number"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "plot": {
+    "required": [
+      "series"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "series": "array",
+      "xMin": "number",
+      "xMax": "number",
+      "yMin": "number",
+      "yMax": "number",
+      "title": "string"
+    },
+    "optional": {
+      "span": "number",
+      "xMin": "number",
+      "xMax": "number",
+      "yMin": "number",
+      "yMax": "number",
+      "title": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {
+      "series": {
+        "required": [
+          "expr"
+        ],
+        "fields": {
+          "expr": "string",
+          "label": "string",
+          "color": "string",
+          "kind": "string",
+          "params": "array"
+        },
+        "enums": {
+          "kind": [
+            "line",
+            "area",
+            "scatter"
+          ]
+        },
+        "nested": {
+          "params": {
+            "required": [
+              "name",
+              "value"
+            ],
+            "fields": {
+              "name": "string",
+              "value": "number",
+              "min": "number",
+              "max": "number",
+              "step": "number",
+              "animateTo": "number",
+              "durationMs": "number",
+              "loop": "boolean"
+            },
+            "enums": {},
+            "nested": {},
+            "aliases": {}
+          }
+        },
+        "aliases": {}
+      }
+    }
+  },
+  "progress": {
+    "required": [
+      "value"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "value": "number",
+      "label": "string",
+      "valueLabel": "string",
+      "variant": "string",
+      "target": "number"
+    },
+    "optional": {
+      "span": "number",
+      "label": "string",
+      "valueLabel": "string",
+      "variant": "string",
+      "target": "number"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "variant": [
+        "bar",
+        "ring"
+      ]
+    },
+    "nested": {}
+  },
+  "quiz": {
+    "required": [
+      "question",
+      "options"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "question": "string",
+      "options": "array",
+      "explanation": "string",
+      "id": "string",
+      "action": "string"
+    },
+    "optional": {
+      "span": "number",
+      "explanation": "string",
+      "id": "string",
+      "action": "string"
+    },
+    "aliases": {
+      "title": "question",
+      "text": "question",
+      "choices": "options",
+      "items": "options"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "radio": {
+    "required": [
+      "options"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "options": "array",
+      "selected": "number",
+      "action": "string",
+      "group": "string",
+      "answer": "unknown",
+      "explanation": "string"
+    },
+    "optional": {
+      "span": "number",
+      "label": "string",
+      "selected": "number",
+      "action": "string",
+      "group": "string",
+      "answer": "unknown",
+      "explanation": "string"
+    },
+    "aliases": {
+      "items": "options"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "row": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "items": "nodes",
+      "wrap": "boolean",
+      "spacer": "boolean",
+      "justify": "string"
+    },
+    "optional": {
+      "span": "number",
+      "wrap": "boolean",
+      "spacer": "boolean",
+      "justify": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "justify": [
+        "start",
+        "center",
+        "end",
+        "between"
+      ]
+    },
+    "nested": {}
+  },
+  "scene3d": {
+    "required": [
+      "meshes"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "title": "string",
+      "meshes": "array",
+      "ambient": "number",
+      "background": "string"
+    },
+    "optional": {
+      "span": "number",
+      "title": "string",
+      "ambient": "number",
+      "background": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {
+      "meshes": {
+        "required": [
+          "shape"
+        ],
+        "fields": {
+          "shape": "string",
+          "color": "string",
+          "position": "array",
+          "rotation": "array",
+          "scale": "unknown",
+          "size": "unknown"
+        },
+        "enums": {
+          "shape": [
+            "box",
+            "sphere",
+            "cone",
+            "cylinder",
+            "torus"
+          ]
+        },
+        "nested": {},
+        "aliases": {}
+      }
+    }
+  },
+  "select": {
+    "required": [
+      "options"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "options": "array",
+      "action": "string",
+      "selected": "number",
+      "id": "string"
+    },
+    "optional": {
+      "span": "number",
+      "label": "string",
+      "action": "string",
+      "selected": "number",
+      "id": "string"
+    },
+    "aliases": {
+      "items": "options"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "slider": {
+    "required": [],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "min": "number",
+      "max": "number",
+      "step": "number",
+      "value": "number",
+      "action": "string",
+      "id": "string"
+    },
+    "optional": {
+      "span": "number",
+      "label": "string",
+      "min": "number",
+      "max": "number",
+      "step": "number",
+      "value": "number",
+      "action": "string",
+      "id": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "spacer": {
+    "required": [],
+    "fields": {
+      "type": "string",
+      "span": "number"
+    },
+    "optional": {
+      "span": "number"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "hero": {
+    "required": [
+      "title"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "title": "string",
+      "subtitle": "string",
+      "value": "string",
+      "label": "string",
+      "delta": "string",
+      "spark": "array",
+      "tone": "string"
+    },
+    "optional": {
+      "span": "number",
+      "subtitle": "string",
+      "value": "string",
+      "label": "string",
+      "delta": "string",
+      "spark": "array",
+      "tone": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "tone": [
+        "accent",
+        "success",
+        "warning",
+        "danger"
+      ]
+    },
+    "nested": {}
+  },
+  "stat": {
+    "required": [
+      "label",
+      "value"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "value": "string",
+      "delta": "string",
+      "spark": "array",
+      "size": "string"
+    },
+    "optional": {
+      "span": "number",
+      "delta": "string",
+      "spark": "array",
+      "size": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "size": [
+        "hero"
+      ]
+    },
+    "nested": {}
+  },
+  "steps": {
+    "required": [
+      "steps"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "steps": "array",
+      "current": "number"
+    },
+    "optional": {
+      "span": "number",
+      "current": "number"
+    },
+    "aliases": {
+      "items": "steps"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {
+      "steps": {
+        "required": [
+          "title"
+        ],
+        "fields": {
+          "title": "string",
+          "desc": "string"
+        },
+        "enums": {},
+        "nested": {},
+        "aliases": {}
+      }
+    }
+  },
+  "submit": {
+    "required": [
+      "label"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "action": "string",
+      "resetAction": "string",
+      "groups": "array"
+    },
+    "optional": {
+      "span": "number",
+      "action": "string",
+      "resetAction": "string",
+      "groups": "array"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "switch": {
+    "required": [
+      "label"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "checked": "boolean",
+      "action": "string"
+    },
+    "optional": {
+      "span": "number",
+      "checked": "boolean",
+      "action": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "table": {
+    "required": [
+      "columns",
+      "rows"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "columns": "array",
+      "rows": "array",
+      "types": "array",
+      "total": "boolean",
+      "details": "array",
+      "filter": "string",
+      "filterColumn": "number",
+      "sortField": "string",
+      "export": "boolean"
+    },
+    "optional": {
+      "span": "number",
+      "types": "array",
+      "total": "boolean",
+      "details": "array",
+      "filter": "string",
+      "filterColumn": "number",
+      "sortField": "string",
+      "export": "boolean"
+    },
+    "aliases": {
+      "headers": "columns",
+      "data": "rows",
+      "items": "rows"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "tabs": {
+    "required": [
+      "tabs"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "tabs": "array"
+    },
+    "optional": {
+      "span": "number"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {
+      "tabs": {
+        "required": [
+          "label",
+          "items"
+        ],
+        "fields": {
+          "label": "string",
+          "items": "nodes",
+          "content": "nodes"
+        },
+        "enums": {},
+        "nested": {},
+        "aliases": {}
+      }
+    }
+  },
+  "text": {
+    "required": [
+      "content"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "content": "string",
+      "size": "string",
+      "center": "boolean",
+      "align": "string",
+      "tone": "string",
+      "mono": "boolean"
+    },
+    "optional": {
+      "span": "number",
+      "size": "string",
+      "center": "boolean",
+      "align": "string",
+      "tone": "string",
+      "mono": "boolean"
+    },
+    "aliases": {
+      "text": "content"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "size": [
+        "display",
+        "h1",
+        "h2",
+        "h3",
+        "body",
+        "muted",
+        "caption"
+      ],
+      "align": [
+        "left",
+        "center",
+        "right"
+      ],
+      "tone": [
+        "danger",
+        "success",
+        "warning",
+        "info",
+        "muted"
+      ]
+    },
+    "nested": {}
+  },
+  "textarea": {
+    "required": [],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "label": "string",
+      "placeholder": "string",
+      "rows": "number",
+      "value": "string",
+      "action": "string",
+      "id": "string"
+    },
+    "optional": {
+      "span": "number",
+      "label": "string",
+      "placeholder": "string",
+      "rows": "number",
+      "value": "string",
+      "action": "string",
+      "id": "string"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {}
+  },
+  "timeline": {
+    "required": [
+      "items"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "items": "array"
+    },
+    "optional": {
+      "span": "number"
+    },
+    "aliases": {},
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {},
+    "nested": {
+      "items": {
+        "required": [
+          "title"
+        ],
+        "fields": {
+          "title": "string",
+          "desc": "string",
+          "time": "string"
+        },
+        "enums": {},
+        "nested": {},
+        "aliases": {}
+      }
+    }
+  },
+  "video": {
+    "required": [
+      "src"
+    ],
+    "fields": {
+      "type": "string",
+      "span": "number",
+      "src": "string",
+      "alt": "string",
+      "poster": "string",
+      "loop": "boolean",
+      "muted": "boolean",
+      "aspectRatio": "string"
+    },
+    "optional": {
+      "span": "number",
+      "alt": "string",
+      "poster": "string",
+      "loop": "boolean",
+      "muted": "boolean",
+      "aspectRatio": "string"
+    },
+    "aliases": {
+      "url": "src",
+      "link": "src"
+    },
+    "valueAliases": {},
+    "oneOfRequired": [],
+    "conditionalRequired": [],
+    "rules": [],
+    "enums": {
+      "aspectRatio": [
+        "16:9",
+        "4:3",
+        "1:1",
+        "9:16"
+      ]
+    },
+    "nested": {}
+  }
+}

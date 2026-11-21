@@ -130,7 +130,7 @@ function trySpec(candidate: string, allowSingleComponentRoot: boolean): GenuiSpe
         return null
       }
     }
-    if (isGenuiSpec(value)) return value
+    if (isGenuiSpec(value)) return Array.isArray(value.items) ? value : { ...value, items: [] }
     // A root-level component list is the envelope minus its braces (issue
     // #186): adopt it as `items` instead of rejecting the body.
     if (Array.isArray(value) && value.length > 0) return { items: value }

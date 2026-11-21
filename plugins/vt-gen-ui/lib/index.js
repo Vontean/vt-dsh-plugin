@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
-// src/client/genui-runtime/schema.ts
+// src/shared/catalog/definitions.ts
 /** Canonical enum domains shared by schema validation and repair. */
 const TEXT_SIZES = [
 	"display",
@@ -195,6 +195,12 @@ const HERO_TONES = [
 	"warning",
 	"danger"
 ];
+/** Prototype navigation shapes: a top bar, a side rail, or bottom tabs. */
+const NAV_VARIANTS = [
+	"top",
+	"side",
+	"tabs"
+];
 /** Table cell renderers (`table.types`, one entry per column). */
 const TABLE_CELL_TYPES = [
 	"text",
@@ -238,7 +244,8 @@ const recordSchema = (required, fields, nested = {}, enums = {}, aliases = {}) =
 });
 const nodeFields = {
 	type: "string",
-	span: "number"
+	span: "number",
+	goto: "string"
 };
 const chartDatumSchema = recordSchema(["label", "value"], {
 	label: "string",
@@ -253,6 +260,11 @@ const chartSeriesSchema = recordSchema(["label", "data"], {
 const stepsRecordSchema = recordSchema(["title"], {
 	title: "string",
 	desc: "string"
+});
+const navItemSchema = recordSchema(["label"], {
+	label: "string",
+	icon: "string",
+	active: "boolean"
 });
 const keyValueRecordSchema = recordSchema(["key", "value"], {
 	key: "string",
@@ -355,13 +367,17 @@ const diagramThemeSchema = recordSchema([], {
 	link: "string"
 });
 /** Root GenUI specification metadata used by diagnostics. */
-const GENUI_SPEC_SCHEMA = schema(["items"], {
+const GENUI_SPEC_SCHEMA = schema([], {
 	title: "string",
 	gap: "number",
 	panel: "boolean",
 	append: "boolean",
-	items: "nodes"
-});
+	items: "nodes",
+	/** Screen id → component tree (prototype state machine). */
+	screens: "object",
+	/** Initial screen id; defaults to the first declared screen. */
+	initial: "string"
+}, {}, { oneOfRequired: [["items", "screens"]] });
 /**
 * Native component field metadata.
 *
@@ -801,7 +817,54 @@ const COMPONENT_SCHEMAS = {
 	}, {
 		url: "src",
 		link: "src"
-	}, { enums: { aspectRatio: MEDIA_ASPECT_RATIOS } })
+	}, { enums: { aspectRatio: MEDIA_ASPECT_RATIOS } }),
+	page: schema(["items"], {
+		...nodeFields,
+		title: "string",
+		subtitle: "string",
+		actions: "nodes",
+		items: "nodes"
+	}, {
+		heading: "title",
+		content: "items"
+	}),
+	nav: schema(["items"], {
+		...nodeFields,
+		label: "string",
+		variant: "string",
+		items: "array"
+	}, { title: "label" }, {
+		enums: { variant: NAV_VARIANTS },
+		nested: { items: navItemSchema }
+	}),
+	"list-row": schema(["title"], {
+		...nodeFields,
+		title: "string",
+		desc: "string",
+		meta: "string",
+		media: "string",
+		actions: "nodes"
+	}, {
+		name: "title",
+		label: "title",
+		description: "desc",
+		subtitle: "desc",
+		content: "desc",
+		body: "desc"
+	}),
+	"field-group": schema(["label", "items"], {
+		...nodeFields,
+		label: "string",
+		desc: "string",
+		items: "nodes",
+		error: "string",
+		required: "boolean"
+	}, {
+		description: "desc",
+		hint: "desc",
+		help: "desc",
+		message: "error"
+	})
 };
 const GENUI_NATIVE_TYPES = new Set(Object.keys(COMPONENT_SCHEMAS));
 // src/client/spec.ts
@@ -874,7 +937,10 @@ function isGenuiSpec(value) {
 	if (typeof value !== "object" || value === null) return false;
 	if (isComponentRoot(value)) return false;
 	const v = value;
-	if (!Array.isArray(v.items)) return false;
+	const hasItems = Array.isArray(v.items);
+	const hasScreens = typeof v.screens === "object" && v.screens !== null && !Array.isArray(v.screens);
+	if (!hasItems && !hasScreens) return false;
+	if (v.initial !== void 0 && typeof v.initial !== "string") return false;
 	if (v.title !== void 0 && typeof v.title !== "string") return false;
 	if (v.gap !== void 0 && typeof v.gap !== "number") return false;
 	return true;
@@ -884,6 +950,10 @@ function isGenuiSpec(value) {
 const GENUI_LIMITS = {
 	/** Maximum nesting depth of the component tree. */
 	maxDepth: 8,
+	/** Maximum screens in one prototype state machine. */
+	maxScreens: 12,
+	/** Maximum length of a screen id (and of a node's `goto`). */
+	maxScreenId: 96,
 	/** Maximum total nodes across the whole spec. */
 	maxNodes: 200,
 	/** Maximum length of any plain string field. */
@@ -1262,6 +1332,12 @@ function normalizeNode(value, path, warnings) {
 	}
 	if (type === "row" || type === "col" || type === "grid" || type === "card" || type === "file-tree" || type === "timeline" || type === "breadcrumb") {
 		if (type !== "file-tree" && type !== "timeline" && type !== "breadcrumb") out.items = normalizeNodeArray(out.items, `${path}.items`);
+	} else if (type === "page") {
+		out.items = normalizeNodeArray(out.items, `${path}.items`);
+		if (out.actions !== void 0) out.actions = normalizeNodeArray(out.actions, `${path}.actions`);
+	} else if (type === "field-group") out.items = normalizeNodeArray(out.items, `${path}.items`);
+	else if (type === "list-row") {
+		if (out.actions !== void 0) out.actions = normalizeNodeArray(out.actions, `${path}.actions`);
 	} else if (type === "list" && Array.isArray(out.items)) out.items = out.items.map((child, index) => {
 		if (isNode$1(child)) return normalizeNodeValue(child, `${path}.items[${index}]`);
 		if (Array.isArray(child) && child.length === 1 && typeof child[0] === "string") return child[0];
@@ -1389,6 +1465,12 @@ function normalizeGenuiSpec(value) {
 		warnings
 	};
 	if (Array.isArray(out.items)) out.items = out.items.map((item, index) => normalizeNode(item, `items[${index}]`, warnings));
+	const screens = record$1(out.screens);
+	if (screens !== void 0) {
+		const normalized = {};
+		for (const [screenId, nodes] of Object.entries(screens)) normalized[screenId] = Array.isArray(nodes) ? nodes.map((child, index) => normalizeNode(child, `screens.${screenId}[${index}]`, warnings)) : nodes;
+		out.screens = normalized;
+	}
 	return {
 		value: out,
 		warnings
@@ -1410,7 +1492,10 @@ function visitNativeNodes(value, path, visit) {
 	if (definition === void 0) return;
 	visit(value, path, definition);
 	const children = (child, childPath) => visitNativeNodes(child, childPath, visit);
-	if ((type === "row" || type === "col" || type === "grid" || type === "card") && Array.isArray(value.items)) value.items.forEach((child, index) => children(child, `${path}.items[${index}]`));
+	if ((type === "row" || type === "col" || type === "grid" || type === "card" || type === "page" || type === "field-group") && Array.isArray(value.items)) {
+		value.items.forEach((child, index) => children(child, `${path}.items[${index}]`));
+		if (type === "page" && Array.isArray(value.actions)) value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`));
+	} else if (type === "list-row" && Array.isArray(value.actions)) value.actions.forEach((child, index) => children(child, `${path}.actions[${index}]`));
 	else if (type === "list" && Array.isArray(value.items)) value.items.forEach((child, index) => children(child, `${path}.items[${index}]`));
 	else if (type === "tabs" && Array.isArray(value.tabs)) value.tabs.forEach((tab, index) => {
 		const holder = record(tab);
@@ -1509,6 +1594,11 @@ function diagnoseUnknownGenuiFields(value) {
 		if (field in GENUI_SPEC_SCHEMA.fields) continue;
 		pushUnknownField(warnings, "spec", field, "spec");
 	}
+	const screens = record(root.screens);
+	if (screens !== void 0 && !isComponentRoot(root)) for (const [screenId, nodes] of Object.entries(screens)) {
+		if (!Array.isArray(nodes)) continue;
+		nodes.forEach((item, index) => visitNativeNodes(item, `screens.${screenId}[${index}]`, visit));
+	}
 	return warnings;
 }
 // src/client/walk-spec.ts
@@ -1527,7 +1617,15 @@ function walkGenuiNodes(spec, visitor) {
 			case "col":
 			case "grid":
 			case "card":
+			case "field-group":
 				walk(node.items, `${at}.items`, depth + 1);
+				break;
+			case "page":
+				walk(node.items, `${at}.items`, depth + 1);
+				if (node.actions !== void 0) walk(node.actions, `${at}.actions`, depth + 1);
+				break;
+			case "list-row":
+				if (node.actions !== void 0) walk(node.actions, `${at}.actions`, depth + 1);
 				break;
 			case "tabs":
 				node.tabs.forEach((tab, tabIndex) => walk(tab.items, `${at}.tabs[${tabIndex}].items`, depth + 1));
@@ -1545,7 +1643,10 @@ function walkGenuiNodes(spec, visitor) {
 			});
 		}
 	};
-	walk(spec.items, "items", 0);
+	if (Array.isArray(spec.items)) walk(spec.items, "items", 0);
+	if (spec.screens !== void 0) {
+		for (const [screenId, nodes] of Object.entries(spec.screens)) if (Array.isArray(nodes)) walk(nodes, `screens.${screenId}`, 0);
+	}
 }
 // src/client/submission-registry.ts
 /** 从 spec 建立成员表，并诊断 submission key 和 submit.groups。 */
@@ -1871,10 +1972,14 @@ function sparkValues(v) {
 function repairNode(value, ctx, depth) {
 	const node = repairNodeFields(value, ctx, depth);
 	if (node === null) return null;
-	const span = int(obj(value)?.span, 2, 12);
-	return span === void 0 ? node : {
+	const source = obj(value);
+	const span = int(source?.span, 2, 12);
+	const goto = str(source?.goto, GENUI_LIMITS.maxScreenId);
+	if (span === void 0 && goto === void 0) return node;
+	return {
 		...node,
-		span
+		...span === void 0 ? {} : { span },
+		...goto === void 0 ? {} : { goto }
 	};
 }
 function repairNodeFields(value, ctx, depth) {
@@ -1976,6 +2081,58 @@ function repairNodeFields(value, ctx, depth) {
 			...opt("accent", color(v.accent)),
 			...opt("flat", v.flat === true ? true : void 0)
 		};
+		case "page": return {
+			type: "page",
+			items: repairItems(v.items, ctx, depth + 1),
+			...opt("title", str(v.title, GENUI_LIMITS.maxString)),
+			...opt("subtitle", str(v.subtitle, GENUI_LIMITS.maxString)),
+			...opt("actions", Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : void 0)
+		};
+		case "nav": {
+			if (!Array.isArray(v.items)) return null;
+			const items = v.items.slice(0, 12).flatMap((entry) => {
+				const it = obj(entry);
+				if (it === void 0) return [];
+				const label = str(it.label, 120);
+				if (label === void 0) return [];
+				return [{
+					label,
+					...opt("icon", str(it.icon, 64)),
+					...opt("active", it.active === true ? true : void 0)
+				}];
+			});
+			if (items.length === 0) return null;
+			return {
+				type: "nav",
+				items,
+				...opt("label", str(v.label, 120)),
+				...opt("variant", enu(v.variant, NAV_VARIANTS))
+			};
+		}
+		case "list-row": {
+			const title = str(v.title, GENUI_LIMITS.maxString);
+			if (title === void 0) return null;
+			return {
+				type: "list-row",
+				title,
+				...opt("desc", str(v.desc, GENUI_LIMITS.maxString)),
+				...opt("meta", str(v.meta, 200)),
+				...opt("media", str(v.media, 64)),
+				...opt("actions", Array.isArray(v.actions) ? repairItems(v.actions, ctx, depth + 1) : void 0)
+			};
+		}
+		case "field-group": {
+			const label = str(v.label, 200);
+			if (label === void 0 || !Array.isArray(v.items)) return null;
+			return {
+				type: "field-group",
+				label,
+				items: repairItems(v.items, ctx, depth + 1),
+				...opt("desc", str(v.desc, GENUI_LIMITS.maxString)),
+				...opt("error", str(v.error, GENUI_LIMITS.maxString)),
+				...opt("required", v.required === true ? true : void 0)
+			};
+		}
 		case "button": {
 			const label = str(v.label, GENUI_LIMITS.maxString);
 			if (label === void 0) return null;
@@ -2910,14 +3067,32 @@ function repairCanonicalGenuiSpec(value) {
 		if (wrapped === null) return null;
 		return repairCanonicalGenuiSpec(wrapped);
 	}
-	if (!Array.isArray(v.items)) return null;
+	const hasItems = Array.isArray(v.items);
+	const rawScreens = obj(v.screens);
+	if (!hasItems && rawScreens === void 0) return null;
 	const ctx = { remaining: GENUI_LIMITS.maxNodes };
+	let screens;
+	if (rawScreens !== void 0) {
+		const entries = Object.entries(rawScreens).slice(0, GENUI_LIMITS.maxScreens);
+		const repaired = {};
+		for (const [id, nodes] of entries) {
+			const screenId = str(id, GENUI_LIMITS.maxScreenId);
+			if (screenId === void 0 || !Array.isArray(nodes)) continue;
+			repaired[screenId] = repairItems(nodes, ctx, 0);
+		}
+		if (Object.keys(repaired).length === 0) return null;
+		screens = repaired;
+	}
+	const items = hasItems ? repairItems(v.items, ctx, 0) : [];
+	const initial = screens === void 0 ? void 0 : str(v.initial, GENUI_LIMITS.maxScreenId);
 	return {
 		...opt("title", str(v.title, GENUI_LIMITS.maxString)),
 		...opt("gap", num(v.gap, 0, 96)),
 		...opt("panel", v.panel === true ? true : void 0),
 		...opt("append", v.append === true ? true : void 0),
-		items: repairItems(v.items, ctx, 0)
+		...screens === void 0 ? {} : { screens },
+		...initial !== void 0 && screens !== void 0 && Object.hasOwn(screens, initial) ? { initial } : {},
+		items
 	};
 }
 /**
@@ -2948,7 +3123,10 @@ function countGenuiNodes(value, cap = Number.POSITIVE_INFINITY) {
 				const io = obj(it);
 				if (io !== void 0) walk(io.items);
 			}
-			else if ((v.type === "row" || v.type === "col" || v.type === "grid" || v.type === "card") && Array.isArray(v.items)) walk(v.items);
+			else if ((v.type === "row" || v.type === "col" || v.type === "grid" || v.type === "card" || v.type === "page" || v.type === "field-group") && Array.isArray(v.items)) {
+				walk(v.items);
+				if (v.type === "page" && Array.isArray(v.actions)) walk(v.actions);
+			} else if (v.type === "list-row" && Array.isArray(v.actions)) walk(v.actions);
 			else if (v.type === "file-tree") {} else if (v.type === "list" && Array.isArray(v.items)) for (const li of v.items) {
 				if (count >= cap) return;
 				const lo = obj(li);
@@ -2965,7 +3143,10 @@ function countGenuiNodes(value, cap = Number.POSITIVE_INFINITY) {
 		}
 	};
 	const root = obj(value);
-	walk(root === void 0 ? [] : root.items);
+	if (root === void 0) return count;
+	walk(root.items);
+	const screens = obj(root.screens);
+	if (screens !== void 0) for (const nodes of Object.values(screens)) walk(nodes);
 	return count;
 }
 /** Every white-listed node `type`. Keep in sync with the repairNode switch —
@@ -3009,7 +3190,10 @@ function visitDeclaredGenuiNodes(value, cap, visit, options = {}) {
 		} else if (v.type === "accordion" && Array.isArray(v.items)) {
 			const rowCount = familyCaps ? Math.min(v.items.length, GENUI_LIMITS.maxAccordionItems) : v.items.length;
 			for (let row = 0; row < rowCount; row++) walkItemsOf(v.items[row], `${at}.items[${row}]`);
-		} else if ((v.type === "row" || v.type === "col" || v.type === "grid" || v.type === "card") && Array.isArray(v.items)) walk(v.items, `${at}.items`);
+		} else if ((v.type === "row" || v.type === "col" || v.type === "grid" || v.type === "card" || v.type === "page" || v.type === "field-group") && Array.isArray(v.items)) {
+			walk(v.items, `${at}.items`);
+			if (v.type === "page" && Array.isArray(v.actions)) walk(v.actions, `${at}.actions`);
+		} else if (v.type === "list-row" && Array.isArray(v.actions)) walk(v.actions, `${at}.actions`);
 		else if (v.type === "list" && Array.isArray(v.items)) for (let row = 0; row < v.items.length; row++) walkNode(v.items[row], `${at}.items[${row}]`);
 		else if (v.type === "table" && Array.isArray(v.details)) {
 			const rowCount = tableRowsForDetails(v).length;
@@ -3026,7 +3210,11 @@ function visitDeclaredGenuiNodes(value, cap, visit, options = {}) {
 	const root = obj(value);
 	if (root === void 0) return count;
 	if (isComponentRoot(root) && declared(value)) walkNode(value, "spec");
-	else walk(root.items, "items");
+	else {
+		walk(root.items, "items");
+		const screens = obj(root.screens);
+		if (screens !== void 0) for (const [screenId, nodes] of Object.entries(screens)) walk(nodes, `screens.${screenId}`);
+	}
 	return count;
 }
 /**
@@ -3068,10 +3256,14 @@ function validateCanonicalGenuiSpec(value) {
 			errors: ["spec.items must be an array"]
 		};
 	}
-	if (!Array.isArray(v.items)) return {
+	const hasItems = Array.isArray(v.items);
+	const screens = obj(v.screens);
+	if (!hasItems && screens === void 0) return {
 		ok: false,
-		errors: ["spec.items must be an array"]
+		errors: ["spec.items or spec.screens must be present"]
 	};
+	if (v.screens !== void 0 && screens === void 0) errors.push("spec.screens must be an object of screen id → node array");
+	if (v.initial !== void 0 && typeof v.initial !== "string") errors.push("spec.initial must be a string");
 	validateSchemaFieldKinds(v, "spec", GENUI_SPEC_SCHEMA, errors, ["items"]);
 	let count = 0;
 	let capped = false;
@@ -3094,7 +3286,22 @@ function validateCanonicalGenuiSpec(value) {
 			validateNode(list[i], depth, at, errors, walk);
 		}
 	};
-	walk(v.items, 0, "items");
+	if (hasItems) walk(v.items, 0, "items");
+	if (screens !== void 0) {
+		let screenCount = 0;
+		for (const [screenId, nodes] of Object.entries(screens)) {
+			if (screenCount >= GENUI_LIMITS.maxScreens) {
+				errors.push(`spec.screens exceeds ${GENUI_LIMITS.maxScreens} screens; tail elided`);
+				break;
+			}
+			screenCount += 1;
+			if (!Array.isArray(nodes)) {
+				errors.push(`spec.screens.${screenId} must be an array`);
+				continue;
+			}
+			walk(nodes, 0, `screens.${screenId}`);
+		}
+	}
 	if (errors.length === 0) errors.push(...analyzeSubmissionRegistry(v).diagnostics);
 	const uniqueErrors = [...new Set(errors)];
 	return {
@@ -3543,6 +3750,38 @@ function validateNode(value, depth, at, errors, walk) {
 			if (typeof v.kind !== "string") errors.push(`${at}: type 'diagram' requires kind (string)`);
 			if (!Array.isArray(v.nodes)) errors.push(`${at}: type 'diagram' requires nodes (array)`);
 			if (v.edges !== void 0 && !Array.isArray(v.edges)) errors.push(`${at}: type 'diagram' requires edges (array) when present`);
+			break;
+		case "page":
+			if (!Array.isArray(v.items)) errors.push(`${at}: type 'page' requires items (array)`);
+			else walk(v.items, depth + 1, `${at}.items`);
+			if (v.actions !== void 0 && !Array.isArray(v.actions)) errors.push(`${at}: type 'page' requires actions (array) when present`);
+			else if (Array.isArray(v.actions)) walk(v.actions, depth + 1, `${at}.actions`);
+			isStr("title");
+			isStr("subtitle");
+			break;
+		case "nav":
+			if (!Array.isArray(v.items)) errors.push(`${at}: type 'nav' requires items (array)`);
+			else v.items.forEach((entry, index) => {
+				const it = obj(entry);
+				if (it === void 0 || typeof it.label !== "string") errors.push(`${at}.items[${index}]: nav item requires label (string)`);
+			});
+			isStr("label");
+			isStr("variant");
+			break;
+		case "list-row":
+			if (typeof v.title !== "string") errors.push(`${at}: type 'list-row' requires title (string)`);
+			isStr("desc");
+			isStr("meta");
+			isStr("media");
+			if (v.actions !== void 0 && !Array.isArray(v.actions)) errors.push(`${at}: type 'list-row' requires actions (array) when present`);
+			else if (Array.isArray(v.actions)) walk(v.actions, depth + 1, `${at}.actions`);
+			break;
+		case "field-group":
+			if (typeof v.label !== "string") errors.push(`${at}: type 'field-group' requires label (string)`);
+			if (!Array.isArray(v.items)) errors.push(`${at}: type 'field-group' requires items (array)`);
+			else walk(v.items, depth + 1, `${at}.items`);
+			isStr("desc");
+			isStr("error");
 			break;
 		case "echart":
 			if (v.option === void 0 && v.data === void 0 && v.series === void 0 && (!Array.isArray(v.links) || v.links.length === 0)) errors.push(`${at}: type 'echart' requires option, data, series, or links`);
@@ -4811,7 +5050,10 @@ function trySpec(candidate, allowSingleComponentRoot) {
 		} catch {
 			return null;
 		}
-		if (isGenuiSpec(value)) return value;
+		if (isGenuiSpec(value)) return Array.isArray(value.items) ? value : {
+			...value,
+			items: []
+		};
 		if (Array.isArray(value) && value.length > 0) return { items: value };
 		return allowSingleComponentRoot ? wrapSingleComponentRoot(value) : null;
 	} catch {
@@ -5394,6 +5636,476 @@ function installFenceFeedback(ctx, enabled, renderUiToolEnabled = true) {
 		}
 	});
 }
+// src/shared/catalog/docs.ts
+/** Prompt grouping. Order is the order the model reads; keep it stable. */
+const CATALOG_CATEGORIES = [
+	{
+		key: "layout",
+		label: "布局",
+		types: [
+			"text",
+			"row",
+			"col",
+			"grid",
+			"card",
+			"divider",
+			"spacer",
+			"hero",
+			"page",
+			"nav"
+		]
+	},
+	{
+		key: "display",
+		label: "展示",
+		types: [
+			"badge",
+			"stat",
+			"progress",
+			"list",
+			"table",
+			"keyvalue",
+			"timeline",
+			"file-tree",
+			"breadcrumb",
+			"callout",
+			"steps",
+			"diff",
+			"json",
+			"code",
+			"copy",
+			"avatar",
+			"image",
+			"audio",
+			"video",
+			"icon",
+			"blocks",
+			"arrow",
+			"list-row"
+		]
+	},
+	{
+		key: "chart",
+		label: "图表",
+		types: [
+			"chart",
+			"echart",
+			"plot",
+			"svg"
+		]
+	},
+	{
+		key: "interactive",
+		label: "交互",
+		types: [
+			"button",
+			"input",
+			"textarea",
+			"select",
+			"checkbox",
+			"switch",
+			"slider",
+			"radio",
+			"submit",
+			"quiz",
+			"link",
+			"tabs",
+			"accordion",
+			"field-group"
+		],
+		tail: "（row.justify / col.width / card.flat 见图元）"
+	},
+	{
+		key: "advanced",
+		label: "高级",
+		types: [
+			"mermaid",
+			"diagram",
+			"scene3d"
+		]
+	}
+];
+const CATALOG_DOCS = {
+	text: {
+		category: "layout",
+		summary: "段落/标题文字，支持大小、对齐、语义色与等宽。"
+	},
+	row: {
+		category: "layout",
+		summary: "横向排列一组成员。"
+	},
+	col: {
+		category: "layout",
+		summary: "纵向排列一组成员，可占行宽百分比。"
+	},
+	grid: {
+		category: "layout",
+		summary: "网格布局；子节点 span 控制占几列。"
+	},
+	card: {
+		category: "layout",
+		summary: "带标题的分组表面；tone 给语义底色，flat 去阴影。"
+	},
+	divider: {
+		category: "layout",
+		summary: "分隔线；带 label 时渲染成章节分隔。"
+	},
+	spacer: {
+		category: "layout",
+		summary: "纯间距占位。"
+	},
+	hero: {
+		category: "layout",
+		summary: "封面块：大数字 + 标题 + 副标题，一条回答最多一个。",
+		promptInline: "（封面块，一条回答最多一个）"
+	},
+	page: {
+		category: "layout",
+		summary: "页面容器：可选标题栏（标题/副标题/尾部操作）与内容区，原型的根节点。",
+		promptInline: "（页面容器：标题栏 + 内容区）",
+		quickRef: "{\"type\":\"page\",\"title\",\"items\":[...]}",
+		usage: "窄容器下内边距自动收紧；标题栏只在写 title/subtitle/actions 时出现。"
+	},
+	nav: {
+		category: "layout",
+		summary: "导航示意：variant 取 top/side/tabs，当前项用 active 标记；点击只做视觉选中。",
+		promptInline: "（顶栏/侧栏/底部标签）",
+		quickRef: "{\"type\":\"nav\",\"items\":[{\"label\",\"active\"}]}",
+		gotcha: ["items 是 [{label,active}] 记录数组，不是字符串数组"],
+		usage: "聊天正文里的导航是示意：点击只在本地切换选中态，不承载路由。"
+	},
+	badge: {
+		category: "display",
+		summary: "短状态标签。"
+	},
+	stat: {
+		category: "display",
+		summary: "单个指标：标签 + 数值，可带涨跌与微趋势线。",
+		quickRef: "{\"type\":\"stat\",\"label\",\"value\"}"
+	},
+	progress: {
+		category: "display",
+		summary: "进度条或环形进度。",
+		quickRef: "{\"type\":\"progress\",\"value\":0-100}"
+	},
+	list: {
+		category: "display",
+		summary: "要点列表；条目可嵌节点，可用 filter 就地筛选。"
+	},
+	table: {
+		category: "display",
+		summary: "数据表格：排序、合计、导出、行明细、就地筛选。",
+		quickRef: "{\"type\":\"table\",\"columns\":[...],\"rows\":[[...]]}",
+		gotcha: ["要 columns+rows 不是 items"],
+		usage: "`types` 可按列指定 bar/ring/spark/badge/delta/num/index/group；`total:true` 追加合计行；`export:true` 出现复制 Markdown/CSV；`filter` 绑定输入框 id 就地过滤。"
+	},
+	keyvalue: {
+		category: "display",
+		summary: "键值对列表。",
+		quickRef: "{\"type\":\"keyvalue\",\"pairs\":[{\"key\",\"value\"}]}",
+		gotcha: ["记录是 {key,value} 不是 {label,value}"]
+	},
+	timeline: {
+		category: "display",
+		summary: "时间线：条目含标题、说明、时间。"
+	},
+	"file-tree": {
+		category: "display",
+		summary: "目录树，本地折叠展开。",
+		quickRef: "{\"type\":\"file-tree\",\"items\":[{\"name\",\"type\":\"file|dir\"}]}",
+		gotcha: ["记录是 {name,type} 不是 {label}"]
+	},
+	breadcrumb: {
+		category: "display",
+		summary: "面包屑路径。"
+	},
+	callout: {
+		category: "display",
+		summary: "单条强调/提醒/风险摘要。",
+		quickRef: "{\"type\":\"callout\",\"content\"}",
+		gotcha: ["正文是 `content` 不是 text/desc", "tone 是 info/success/warning/error（无 danger）"],
+		usage: "`content` 只能是文本字符串，可含 `\\n` 分行；多条独立事项改用 list。"
+	},
+	steps: {
+		category: "display",
+		summary: "步骤条：current 标记进行到第几步。",
+		quickRef: "{\"type\":\"steps\",\"steps\":[{\"title\"}]}"
+	},
+	diff: {
+		category: "display",
+		summary: "代码改动对比：路径 + 旧文 + 新文。"
+	},
+	json: {
+		category: "display",
+		summary: "JSON 树查看器。"
+	},
+	code: {
+		category: "display",
+		summary: "代码块，带复制。"
+	},
+	copy: {
+		category: "display",
+		summary: "可复制的文本；长文可折叠预览。"
+	},
+	avatar: {
+		category: "display",
+		summary: "头像（按名字取色）。"
+	},
+	image: {
+		category: "display",
+		summary: "图片，可带 alt 与图注。"
+	},
+	audio: {
+		category: "display",
+		summary: "音频播放器（不自动播放）。"
+	},
+	video: {
+		category: "display",
+		summary: "视频播放器（不自动播放）。"
+	},
+	icon: {
+		category: "display",
+		summary: "内置图标；tile 画成淡色圆角底。"
+	},
+	blocks: {
+		category: "display",
+		summary: "色块图解：阶梯/等分/泳道，适合分组与逐轮推进。"
+	},
+	arrow: {
+		category: "display",
+		summary: "图里的细线连接箭头。"
+	},
+	"list-row": {
+		category: "display",
+		summary: "紧凑列表行：媒体位 + 主文本 + 副文本 + 尾部操作。",
+		promptInline: "（媒体+主副文本+尾部操作）",
+		quickRef: "{\"type\":\"list-row\",\"title\",\"desc\"}",
+		usage: "media 是短标签或图标位；actions 放 button 等节点；一行只表达一个对象。"
+	},
+	chart: {
+		category: "chart",
+		summary: "轻量原生图表：bars/line/donut，≤8 点快速对比。",
+		promptInline: " {\"kind\":\"bars|line|donut\",\"data\":[{\"label\":\"...\",\"value\":n}]}（series：bars 分组/堆叠 / line 多序列）"
+	},
+	echart: {
+		category: "chart",
+		summary: "ECharts 全功能图表：preset 或原生 option。",
+		promptInline: " (preset 名或 option 直通，清单见 skill)",
+		usage: "preset 支持 bar/line/area/pie/scatter/radar/gauge/funnel/treemap/sankey/graph/heatmap/bigline/wordCloud；多序列或需要缩放时优先用它。"
+	},
+	plot: {
+		category: "chart",
+		summary: "SVG 函数图，可带参数滑块与动画。",
+		promptInline: " (函数图)"
+	},
+	svg: {
+		category: "chart",
+		summary: "独立 SVG 图片预览。",
+		promptInline: " (单图预览)"
+	},
+	button: {
+		category: "interactive",
+		summary: "按钮；无 action 时渲染为禁用态。"
+	},
+	input: {
+		category: "interactive",
+		summary: "单行输入；带 id 的值会持久化并进 submit。"
+	},
+	textarea: {
+		category: "interactive",
+		summary: "多行输入；失焦与 Ctrl/Cmd+Enter 提交。"
+	},
+	select: {
+		category: "interactive",
+		summary: "下拉选择。"
+	},
+	checkbox: {
+		category: "interactive",
+		summary: "复选；带 group 进入聚合模式。"
+	},
+	switch: {
+		category: "interactive",
+		summary: "开关。"
+	},
+	slider: {
+		category: "interactive",
+		summary: "滑块，实时显示数值。"
+	},
+	radio: {
+		category: "interactive",
+		summary: "单选；带 group 聚合，可本地判卷。"
+	},
+	submit: {
+		category: "interactive",
+		summary: "聚合提交；groups 列出需完成的成员。"
+	},
+	quiz: {
+		category: "interactive",
+		summary: "单题自测，点选即判、可重试。"
+	},
+	link: {
+		category: "interactive",
+		summary: "安全链接；无合法 href 时渲染为纯文本。"
+	},
+	tabs: {
+		category: "interactive",
+		summary: "标签页容器。"
+	},
+	accordion: {
+		category: "interactive",
+		summary: "折叠面板。"
+	},
+	"field-group": {
+		category: "interactive",
+		summary: "字段组：标签 + 控件 + 提示 + 错误；错误态 role=alert。",
+		quickRef: "{\"type\":\"field-group\",\"label\",\"items\":[...]}",
+		gotcha: ["label 与 items 都必填"],
+		usage: "items 放控件（input/select/…）；desc 是提示，error 是错误文案，必填时加 `required:true`。"
+	},
+	mermaid: {
+		category: "advanced",
+		summary: "Mermaid 图（流程/时序/甘特/ER 等 30+ 图型）。",
+		promptInline: " (流程图/时序/甘特/ER 等，关键字见 skill)"
+	},
+	diagram: {
+		category: "advanced",
+		summary: "编辑级品牌图，27 种视觉类型。",
+		promptInline: " (架构/流程图)"
+	},
+	scene3d: {
+		category: "advanced",
+		summary: "3D WebGL 场景，1–5 个 mesh。",
+		promptInline: " (3D WebGL)"
+	}
+};
+/**
+* Root-level multi-screen contract. It is not a component: `screens` /
+* `initial` live on the spec root, and `goto` is a cross-cutting node hint.
+* Kept in the catalog so the prompt, the generated reference and the guard
+* assertions describe the same contract.
+*/
+const SCREEN_SPEC_DOC = {
+	prompt: `**多屏原型**（可选）：spec 根可写 \`{"screens":{"home":[...],"detail":[...]},"initial":"home"}\` 代替 \`items\`；可交互节点（当前为 \`button\`）加 \`"goto":"detail"\` 在本地切屏，不发 action、不请求模型。块头部出现「返回」；未声明的屏 id 被忽略，表单值与当前屏随块持久化。`,
+	reference: `### 多屏原型（根级字段，不是组件）
+
+- 根字段 \`screens\`（屏 id → 节点数组，最多 12 屏）与 \`initial\`（起始屏，缺省取第一个声明的屏）；与 \`items\` 二选一。
+- 公共节点字段 \`span\`（grid 占列）和 \`goto\`（切屏目标）对所有 type 都可写；\`goto\` 目前由 \`button\` 触发，其他节点携带但不动作。
+- 切屏是本地状态机：不发 action、不请求模型；「返回」回上一屏，栈深 20，未声明的目标忽略。`
+};
+// src/shared/catalog/derive.ts
+/**
+* Catalog derivations: the model-facing prompt sections, the full component
+* reference appended to the genui skill, and the prototype render type list.
+*
+* Everything here is derived from `definitions.ts` (fields/required/enums) and
+* `docs.ts` (grouping/summary/gotchas). `assertCatalogCoherence()` runs at
+* module load: a schema without a doc, a doc without a schema, or a type missing
+* from the prompt order throws instead of shipping a half-generated prompt.
+*/
+function assertCatalogCoherence() {
+	const ordered = CATALOG_CATEGORIES.flatMap((category) => category.types);
+	const seen = /* @__PURE__ */ new Set();
+	for (const type of ordered) {
+		if (seen.has(type)) throw new Error(`catalog: '${type}' appears twice in CATALOG_CATEGORIES`);
+		seen.add(type);
+		if (!Object.hasOwn(COMPONENT_SCHEMAS, type)) throw new Error(`catalog: '${type}' has no schema`);
+		if (!Object.hasOwn(CATALOG_DOCS, type)) throw new Error(`catalog: '${type}' has no doc`);
+	}
+	for (const type of Object.keys(COMPONENT_SCHEMAS)) if (!seen.has(type)) throw new Error(`catalog: schema '${type}' is missing from CATALOG_CATEGORIES`);
+	for (const type of Object.keys(COMPONENT_SCHEMAS)) {
+		const schema = COMPONENT_SCHEMAS[type];
+		if (schema === void 0 || !Object.hasOwn(schema.fields, "goto")) throw new Error(`catalog: '${type}' lacks the cross-cutting 'goto' field`);
+	}
+	if (!Object.hasOwn(GENUI_SPEC_SCHEMA.fields, "screens") || !Object.hasOwn(GENUI_SPEC_SCHEMA.fields, "initial")) throw new Error("catalog: spec root lacks 'screens'/'initial'");
+	for (const type of Object.keys(CATALOG_DOCS)) {
+		if (!Object.hasOwn(COMPONENT_SCHEMAS, type)) throw new Error(`catalog: doc '${type}' has no schema`);
+		if (!seen.has(type)) throw new Error(`catalog: doc '${type}' is missing from CATALOG_CATEGORIES`);
+	}
+}
+assertCatalogCoherence();
+/** Every type in prompt order. */
+const CATALOG_TYPES = CATALOG_CATEGORIES.flatMap((category) => category.types);
+function docOf(type) {
+	const doc = CATALOG_DOCS[type];
+	if (doc === void 0) throw new Error(`catalog: missing doc for '${type}'`);
+	return doc;
+}
+/**
+* The system prompt's "Allowed type values" list: one line per category.
+* New catalog entries appear here automatically.
+*/
+function componentListPrompt() {
+	return CATALOG_CATEGORIES.map((category) => {
+		const names = category.types.map((type) => `${type}${docOf(type).promptInline ?? ""}`).join(" · ");
+		return `- ${category.label}: ${names}${category.tail ?? ""}`;
+	}).join("\n");
+}
+/**
+* The system prompt's field quick reference: only components whose required
+* shape is easy to get wrong carry a `quickRef` in the catalog.
+*/
+function fieldQuickRefPrompt() {
+	return `**字段速查**（完整见 genui skill）：${CATALOG_TYPES.map((type) => ({
+		type,
+		ref: docOf(type).quickRef
+	})).filter((entry) => entry.ref !== void 0).map((entry) => `\`${entry.type}\` \`${entry.ref}\``).join(" · ")}`;
+}
+/**
+* The system prompt's "wrong field name" paragraph. Every clause starts with
+* its component type, so the generated text stays scannable.
+*/
+function fieldGotchaPrompt() {
+	return `**字段名写错 = 该组件被丢弃**（其余组件照常渲染）：${CATALOG_TYPES.flatMap((type) => (docOf(type).gotcha ?? []).map((clause) => `\`${type}\` ${clause}`)).join("；")}。不确定就调 \`validate_dsh_ui\`。`;
+}
+function fieldList(schema, names) {
+	return names.map((name) => {
+		const values = schema.enums[name];
+		return `\`${name}\`${values === void 0 ? "" : `(${values.join("|")})`}`;
+	}).join("、");
+}
+/**
+* Full component reference appended to the genui skill at runtime. This
+* replaces the hand-written field table that used to live in SKILL.md: it is
+* generated from the same definitions the validator and renderer use.
+*/
+function catalogReferenceMarkdown() {
+	const sections = CATALOG_CATEGORIES.map((category) => {
+		const lines = category.types.map((type) => {
+			const doc = docOf(type);
+			const schema = COMPONENT_SCHEMAS[type];
+			if (schema === void 0) throw new Error(`catalog: missing schema for '${type}'`);
+			const optional = Object.keys(schema.fields).filter((field) => field !== "type" && field !== "span" && !schema.required.includes(field));
+			const parts = [`- \`${type}\` — ${doc.summary}`];
+			parts.push(schema.required.length === 0 ? "无必填字段" : `必填 ${fieldList(schema, schema.required)}`);
+			if (optional.length > 0) parts.push(`可选 ${fieldList(schema, optional)}`);
+			if (doc.usage !== void 0) parts.push(`用法：${doc.usage}`);
+			return `${parts[0]}。${parts.slice(1).join("；")}。`;
+		});
+		return `### ${category.label}\n${lines.join("\n")}`;
+	});
+	return [
+		"## 组件字段参考（由 catalog 生成，勿手改）",
+		"",
+		"> 本节的类型、必填/可选字段与枚举值来自 `src/shared/catalog/definitions.ts`；",
+		"> 修改组件定义后由构建/测试自动反映到这里，不要在本文件手写字段表。",
+		"",
+		SCREEN_SPEC_DOC.reference,
+		"",
+		sections.join("\n\n")
+	].join("\n");
+}
+/**
+* Compose the genui skill body: the orchestration guide from SKILL.md plus the
+* generated field reference. SKILL.md intentionally carries no hand-written
+* field table, so this is the only place the reference is attached.
+*/
+function composeSkillContent(skillBody) {
+	return `${skillBody.trimEnd()}\n\n${catalogReferenceMarkdown()}\n`;
+}
+/** The system prompt paragraph advertising the optional multi-screen machine. */
+function prototypeScreensPrompt() {
+	return SCREEN_SPEC_DOC.prompt;
+}
 // src/plugin/index.ts
 /**
 * The mermaid/three engines ship as standalone IIFE bundles under
@@ -5462,11 +6174,7 @@ const GENUI_SECTION_TEXT = `Render UI inside your reply with a fenced \`dsh-ui\`
 
 Allowed \`type\` values; the \`genui\` skill, when available, carries the full content→component mapping and per-component field details:
 
-- 布局: text · row · col · grid · card · divider · spacer · hero（封面块，一条回答最多一个）
-- 展示: badge · stat · progress · list · table · keyvalue · timeline · file-tree · breadcrumb · callout · steps · diff · json · code · copy · avatar · image · audio · video · icon · blocks · arrow
-- 图表: chart {"kind":"bars|line|donut","data":[{"label":"...","value":n}]}（series：bars 分组/堆叠 / line 多序列） · echart (preset 名或 option 直通，清单见 skill) · plot (函数图) · svg (单图预览)
-- 交互: button · input · textarea · select · checkbox · switch · slider · radio · submit · quiz · link · tabs · accordion（row.justify / col.width / card.flat 见图元）
-- 高级: mermaid (流程图/时序/甘特/ER 等，关键字见 skill) · diagram (架构/流程图) · scene3d (3D WebGL)
+${componentListPrompt()}
 
 **默认就该出 UI**：出现下列情况至少出一个围栏：
 - ≥3 条并列要点 → \`list\`；数字对比 → \`table\`；指标/进度/状态 → \`stat\`/\`progress\`/\`badge\`
@@ -5478,10 +6186,12 @@ Allowed \`type\` values; the \`genui\` skill, when available, carries the full c
 - 趋势/占比 → \`chart\`（≤8 点）或 \`echart\`；配色跟随主题，语义需要时才用 \`palette\`/\`card.accent\`；grid 子节点用 \`"span":2\` 做宽窄混排；数据多时给 \`table\`/\`list\` 配 \`input\`(id)+\`filter\` 就地筛选。
 - 多组件回答先套 skill「编排范式」，别一行一个往下堆；章节分隔 \`divider\` 带 \`label\`。
 
-**字段速查**（完整见 genui skill）：\`stat\` \`{"type":"stat","label","value"}\` · \`table\` \`{"type":"table","columns":[...],"rows":[[...]]}\` · \`progress\` \`{"type":"progress","value":0-100}\` · \`keyvalue\` \`{"type":"keyvalue","pairs":[{"key","value"}]}\` · \`steps\` \`{"type":"steps","steps":[{"title"}]}\` · \`file-tree\` \`{"type":"file-tree","items":[{"name","type":"file|dir"}]}\` · \`callout\` \`{"type":"callout","content"}\`
+${fieldQuickRefPrompt()}
 **节点规则：** 组件节点必须带字符串 \`type\`，值为组件名；\`file-tree.items[].type\` 表示 \`file\` 或 \`dir\`。
 
-**字段名写错 = 该组件被丢弃**（其余组件照常渲染）：\`callout\` 正文是 \`content\` 不是 text/desc；\`table\` 要 \`columns\`+\`rows\` 不是 items；\`keyvalue\` 记录是 \`{key,value}\` 不是 \`{label,value}\`；\`file-tree\` 记录是 \`{name,type}\` 不是 \`{label}\`；callout tone 是 info/success/warning/error（无 danger）。不确定就调 \`validate_dsh_ui\`。
+${prototypeScreensPrompt()}
+
+${fieldGotchaPrompt()}
 
 Rules:
 - LANGUAGE: reply+UI=conversation language; schema fixed. NEVER infer it from prompt/skill/examples/tools. Replace \`<user-language ...>\`; never emit these placeholders literally.
@@ -5516,6 +6226,15 @@ const BUNDLED_SKILL_INVOCATION = {
 */
 function frontmatterField(front, key) {
 	return new RegExp("^\\s*" + key + "\\s*:\\s*(.+?)\\s*$", "mu").exec(front)?.[1]?.replace(/^['"]|['"]$/gu, "");
+}
+/**
+* Skill content = the orchestration guide in SKILL.md + the generated field
+* reference. SKILL.md deliberately carries no hand-written field table anymore;
+* appending the catalog derivation keeps the skill complete while leaving one
+* definition source (issue: prompt/schema drift).
+*/
+function composeGenuiSkillContent(skillBody) {
+	return composeSkillContent(skillBody);
 }
 /** Register through the provider path so source=bundled also gets bundled precedence. */
 function bundledSkillProvider() {
@@ -5553,7 +6272,7 @@ function bundledSkillProvider() {
 				kind: "directory",
 				path: dirname(path)
 			},
-			content: raw.slice(end + 5)
+			content: composeGenuiSkillContent(raw.slice(end + 5))
 		})
 	};
 }
@@ -5583,4 +6302,4 @@ function apply(ctx, config) {
 		}), "dsh-genui: asset route");
 	});
 }
-export { GENUI_SECTION_TEXT, apply, inject, name };
+export { GENUI_SECTION_TEXT, apply, composeGenuiSkillContent, inject, name };

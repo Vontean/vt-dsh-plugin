@@ -26,6 +26,10 @@ export interface BlockInteractionState {
     locked?: boolean;
     /** field id → current value (input/textarea with an `id`). */
     fields?: Record<string, string>;
+    /** Current screen id (prototype state machine); absent for legacy specs. */
+    screen?: string;
+    /** Previously visited screen ids, oldest first. */
+    stack?: string[];
 }
 /** Load a block's durable state, or null when absent/corrupt. */
 export declare function loadBlockState(stateKey: string): BlockInteractionState | null;

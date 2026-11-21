@@ -11,7 +11,8 @@ import { renderInline } from '../inline.ts'
 import { classifyLinkTarget } from '../file-link.ts'
 import { FileLink } from '../file-link-context.tsx'
 import { t } from '../i18n/index.ts'
-import type { GenuiList, GenuiNode } from '../spec.ts'
+import type { GenuiButton, GenuiList, GenuiNode } from '../spec.ts'
+import { useScreenNavigation } from '../screen-navigation.tsx'
 import type { AnswersState, GenuiBlockProps } from './state.ts'
 import { AudioNode, avatarColor, ClickFeedbackButton, VideoNode } from './basic.tsx'
 import { ChartNode, TableNode } from './charts.tsx'
@@ -28,6 +29,8 @@ import { ImageNode } from './image.tsx'
 import { SvgNode } from './svg.tsx'
 import { IconNode } from './icon.tsx'
 import { BlocksNode } from './blocks.tsx'
+import { PROTOTYPE_RENDERERS } from './prototype-registry.ts'
+import { wrapPrototypeRoot } from './prototype.tsx'
 
 import { EChartNode } from '../EChartNode.tsx'
 
@@ -171,6 +174,43 @@ function boundField(answers: AnswersState | undefined, id: string | undefined): 
   return value === undefined || value === '' ? undefined : value
 }
 
+/**
+ * Button with two local-first exits: `goto` switches the prototype screen
+ * (no action, no model round trip) when a screen machine is present; an
+ * `action` keeps the existing callback behavior. Without either (or outside a
+ * screen-based block) it stays disabled, exactly as before.
+ */
+function ButtonNode({ node, className, onAction }: {
+  node: GenuiButton
+  className: string
+  onAction: GenuiBlockProps['onAction'] | undefined
+}) {
+  const navigation = useScreenNavigation()
+  const goto = node.goto
+  const action = node.action
+  const canGoto = goto !== undefined && navigation !== undefined
+  const canAct = action !== undefined && onAction !== undefined
+  const interactive = canGoto || canAct
+  return (
+    <ClickFeedbackButton
+      className={className}
+      disabled={!interactive}
+      onClick={interactive
+        ? () => {
+            if (goto !== undefined && navigation !== undefined) {
+              navigation.go(goto)
+              return
+            }
+            if (action !== undefined && onAction !== undefined) onAction(action, { type: 'button', label: node.label })
+          }
+        : undefined}
+    >
+      {node.icon !== undefined && <span aria-hidden>{node.icon} </span>}
+      {renderInline(node.label, false)}
+    </ClickFeedbackButton>
+  )
+}
+
 export function renderNode(
   node: GenuiNode,
   key: number,
@@ -271,22 +311,9 @@ export function renderNode(
     case 'button': {
       const tone = node.tone ?? ''
       const cls = `${css.button} ${css[tone] || ''}` + (node.full ? ` ${css.full}` : '') + (node.small ? ` ${css.small}` : '')
-      const action = node.action
-      // A button without an action (or without an action provider) is a
-      // display-only control: render it DISABLED so the affordance is honest
-      // — clickable-looking dead buttons were the top complaint in the field.
-      const interactive = action !== undefined && onAction !== undefined
-      return (
-        <ClickFeedbackButton
-          key={key}
-          className={cls}
-          disabled={!interactive}
-          onClick={interactive ? () => onAction(action, { type: 'button', label: node.label }) : undefined}
-        >
-          {node.icon !== undefined && <span aria-hidden>{node.icon} </span>}
-          {renderInline(node.label, false)}
-        </ClickFeedbackButton>
-      )
+      // A button without an action or screen target is a display-only control:
+      // ButtonNode renders it DISABLED so the affordance is honest.
+      return <ButtonNode key={key} node={node} className={cls} onAction={onAction} />
     }
     case 'input': return <InputNode key={key} node={node} onAction={onAction} answers={answers} />
     case 'select': return <SelectNode key={key} node={node} onAction={onAction} answers={answers} />
@@ -522,7 +549,26 @@ export function renderNode(
     case 'diagram': return <DiagramNode key={key} node={node} />
 
     case 'echart': return <EChartNode key={key} node={node} />
-    default: return null
+    default: {
+      // Catalog-registered prototype types (page/nav/list-row/field-group).
+      // Their implementations live in prototype.tsx; the catalog owns the
+      // type list, so a new entry without a renderer renders nothing.
+      const Renderer = PROTOTYPE_RENDERERS[node.type]
+      if (Renderer === undefined) return null
+      // Render through React (not a direct call): the component owns its hooks.
+      const rendered = (
+        <Renderer
+          key={key}
+          node={node}
+          path={path}
+          renderChildren={(children, basePath) =>
+            children.map((child, index) => renderNode(child, index, onAction, depth + 1, answers, `${basePath}[${index}]`))}
+        />
+      )
+      // Top-level prototype nodes get the named root container (§5.3), so a
+      // component that sits outside a `page` still has a `proto-root` to query.
+      return wrapPrototypeRoot(rendered, depth, key)
+    }
   }
 }
 

@@ -2,6 +2,10 @@
 export const GENUI_LIMITS = {
   /** Maximum nesting depth of the component tree. */
   maxDepth: 8,
+  /** Maximum screens in one prototype state machine. */
+  maxScreens: 12,
+  /** Maximum length of a screen id (and of a node's `goto`). */
+  maxScreenId: 96,
   /** Maximum total nodes across the whole spec. */
   maxNodes: 200,
   /** Maximum length of any plain string field. */

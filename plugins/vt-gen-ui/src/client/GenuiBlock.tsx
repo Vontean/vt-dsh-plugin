@@ -14,6 +14,13 @@ import css from './GenuiBlock.module.css'
 import { loadBlockState, saveBlockState } from './interaction-store.ts'
 import { recordFence, recordInteraction } from './achievement-store.ts'
 import { renderNode } from './blocks/render-node.tsx'
+import { t } from './i18n/index.ts'
+import { ScreenNavigationContext } from './screen-navigation.tsx'
+import type { ScreenNavigation } from './screen-navigation.tsx'
+import {
+  degradedScreenItems, goBackScreen, goToScreen, initialScreenState, readScreenModel, screenItems,
+} from './genui-runtime/screens.ts'
+import type { ScreenState } from './genui-runtime/screens.ts'
 import type { AnswersState, GenuiBlockProps } from './blocks/state.ts'
 import type { GenuiSpec } from './spec.ts'
 import { compileSubmissionRegistry } from './submission-registry.ts'
@@ -84,7 +91,9 @@ function specEquivalent(a: GenuiSpec, b: GenuiSpec): boolean {
 
 /** Stateful implementation. Streaming state adopts its first durable key
  * when the reply settles; switching an existing durable key starts fresh. */
-function GenuiBlockInstance({ spec, stateKey, animateEntrance = true, initialState, onStateChange, onStateSnapshot }: GenuiBlockProps) {
+function GenuiBlockInstance({
+  spec, stateKey, animateEntrance = true, initialState, onStateChange, onStateSnapshot, screenMachine = true,
+}: GenuiBlockProps) {
   const gap = spec.gap ?? 16
   const copyPreviews = useCopyPreviewState(spec)
   const onAction = useDebouncedAction(useGenuiAction())
@@ -96,6 +105,35 @@ function GenuiBlockInstance({ spec, stateKey, animateEntrance = true, initialSta
   // state into one action. Block-local state survives streaming/panel
   // re-renders, and with a stateKey it also survives refresh/reopen.
   const [persisted] = useState(() => initialState ?? (onStateChange !== undefined || stateKey === undefined ? null : loadBlockState(stateKey)))
+  // Prototype screen state machine. `screenModel` is null for every legacy
+  // spec, which keeps the non-screen path unchanged (same DOM, same state).
+  const screenModel = useMemo(() => readScreenModel(spec), [spec])
+  const machineOn = screenMachine !== false && screenModel !== null
+  const [screenState, setScreenState] = useState<ScreenState>({ current: '', stack: [] })
+  const resolvedScreen = screenModel === null
+    ? null
+    : (screenState.current !== '' && screenModel.order.includes(screenState.current)
+        ? screenState
+        : initialScreenState(screenModel, persisted))
+  const resolveScreen = useCallback((state: ScreenState): ScreenState => {
+    if (screenModel === null) return state
+    return state.current !== '' && screenModel.order.includes(state.current)
+      ? state
+      : initialScreenState(screenModel, persisted)
+  }, [screenModel, persisted])
+  const goScreen = useCallback((target: string) => {
+    if (screenModel === null) return
+    setScreenState(prev => goToScreen(screenModel, resolveScreen(prev), target))
+  }, [screenModel, resolveScreen])
+  const backScreen = useCallback(() => {
+    setScreenState(prev => goBackScreen(resolveScreen(prev)))
+  }, [resolveScreen])
+  const navigation = useMemo<ScreenNavigation | undefined>(
+    () => (machineOn && resolvedScreen !== null
+      ? { go: goScreen, back: backScreen, canGoBack: resolvedScreen.stack.length > 0 }
+      : undefined),
+    [machineOn, resolvedScreen, goScreen, backScreen],
+  )
   const [answers, setAnswers] = useState<Record<string, string>>(persisted?.answers ?? {})
   const [multiAnswers, setMultiAnswers] = useState<Record<string, string[]>>(persisted?.multiAnswers ?? {})
   const [fields, setFields] = useState<Record<string, string>>(persisted?.fields ?? {})
@@ -157,8 +195,13 @@ function GenuiBlockInstance({ spec, stateKey, animateEntrance = true, initialSta
       ...(Object.keys(multiAnswers).length > 0 ? { multiAnswers } : {}),
       locked,
       ...(Object.keys(safeFields).length > 0 ? { fields: safeFields } : {}),
+      // Screen state rides the same durable key (session + slot + content
+      // fingerprint), so content changes reset it like every other interaction.
+      ...(machineOn && resolvedScreen !== null
+        ? { screen: resolvedScreen.current, stack: [...resolvedScreen.stack] }
+        : {}),
     }
-  }, [answers, multiAnswers, locked, fields, secretFields])
+  }, [answers, multiAnswers, locked, fields, secretFields, machineOn, resolvedScreen])
   useEffect(() => {
     onStateSnapshot?.(durableState)
   }, [durableState, onStateSnapshot])
@@ -187,12 +230,28 @@ function GenuiBlockInstance({ spec, stateKey, animateEntrance = true, initialSta
   useEffect(() => {
     recordFence(spec)
   }, [spec])
+  // Screen-based specs render one screen; degraded mode (machine unavailable)
+  // falls back to the initial screen only; legacy specs render `items`.
+  const items = screenModel === null
+    ? spec.items
+    : machineOn && resolvedScreen !== null
+      ? screenItems(screenModel, resolvedScreen)
+      : degradedScreenItems(screenModel)
+  const showBack = machineOn && resolvedScreen !== null && resolvedScreen.stack.length > 0
   return (
     <CopyPreviewContext.Provider value={copyPreviews}>
+      <ScreenNavigationContext.Provider value={navigation}>
       <div className={css.block} data-genui>
         {spec.title !== undefined && <div className={css.banner}>{renderInline(spec.title)}</div>}
+        {showBack && (
+          <div className={css.screenBar} data-genui-screens>
+            <button type="button" className={css.screenBack} onClick={backScreen}>
+              {t('screens.back')}
+            </button>
+          </div>
+        )}
         <div className={css.col} style={{ gap: `${gap}px` }}>
-          {spec.items.map((c, i) => (
+          {items.map((c, i) => (
             // Staggered reveal: each root item fades/slides in after its
             // predecessors, so the block assembles piece by piece instead of
             // popping in as one slab. Delay capped so long specs still settle
@@ -214,6 +273,7 @@ function GenuiBlockInstance({ spec, stateKey, animateEntrance = true, initialSta
           ))}
         </div>
       </div>
+      </ScreenNavigationContext.Provider>
     </CopyPreviewContext.Provider>
   )
 }
@@ -234,6 +294,7 @@ export const GenuiBlock = memo(function GenuiBlock(props: GenuiBlockProps) {
   }
   return <GenuiBlockInstance key={identity.generation} {...props} />
 }, (prev, next) => prev.stateKey === next.stateKey
-  && prev.animateEntrance === next.animateEntrance && prev.onStateChange === next.onStateChange
+  && prev.animateEntrance === next.animateEntrance && prev.screenMachine === next.screenMachine
+  && prev.onStateChange === next.onStateChange
   && prev.onStateSnapshot === next.onStateSnapshot
   && specEquivalent(prev.spec, next.spec))

@@ -17,7 +17,15 @@ export function walkGenuiNodes(spec: GenuiSpec, visitor: (node: GenuiNode, path:
       case 'col':
       case 'grid':
       case 'card':
+      case 'field-group':
         walk(node.items, `${at}.items`, depth + 1)
+        break
+      case 'page':
+        walk(node.items, `${at}.items`, depth + 1)
+        if (node.actions !== undefined) walk(node.actions, `${at}.actions`, depth + 1)
+        break
+      case 'list-row':
+        if (node.actions !== undefined) walk(node.actions, `${at}.actions`, depth + 1)
         break
       case 'tabs':
         node.tabs.forEach((tab, tabIndex) => walk(tab.items, `${at}.tabs[${tabIndex}].items`, depth + 1))
@@ -39,5 +47,12 @@ export function walkGenuiNodes(spec: GenuiSpec, visitor: (node: GenuiNode, path:
         break
     }
   }
-  walk(spec.items, 'items', 0)
+  // Legacy specs walk `items`; screen-based specs walk every screen so
+  // submission keys and diagnostics stay global across screens.
+  if (Array.isArray(spec.items)) walk(spec.items, 'items', 0)
+  if (spec.screens !== undefined) {
+    for (const [screenId, nodes] of Object.entries(spec.screens)) {
+      if (Array.isArray(nodes)) walk(nodes, `screens.${screenId}`, 0)
+    }
+  }
 }
