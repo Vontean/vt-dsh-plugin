@@ -37,5 +37,9 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+      # upload 与 deploy 之间偶发 artifact 元数据还不可见，deploy 会报
+      # “No artifacts named github-pages”。等几秒再部署，避开这个竞态。
+      - name: Wait for the artifact to become visible
+        run: sleep 10
       - id: deployment
         uses: actions/deploy-pages@v4
