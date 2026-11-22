@@ -6,23 +6,30 @@
 
 ## 它改了什么
 
-- 侧栏「新会话」下面多一行「网页对话」，点击后在主内容区打开整页对话面板；
-- **默认不展开自己的侧栏**：进入面板先看到对话；需要会话列表时点左上角的展开按钮，
-  之后按你的选择记住（升级到本版本时会强制收起一次）；
-- **与 DSH 的悬浮岛避让**：DSH 侧栏收起后，左上角有一组「展开侧栏 / 新对话」控件。
-  面板会量出它占的高度，把自己的侧栏与收起态按钮组整体下移同样的距离，
-  并在顶部补一条同色带，所以两边的控件不会再叠在一起；
+- 侧栏「新会话」下面多一行「网页对话」。点击后进入 **Chat 模式**：
+  主内容区是整页对话面板，左侧栏换成 Chat 自己的导航；
+- **侧栏接管**：品牌位显示 `deepseek` + `CHAT` 徽标，「新会话」按钮保持宿主原样，
+  下面是按「今天 / 昨天 / 7 天内 / 30 天内 / 月份」分组的会话历史，
+  底部保留「返回 Harness」与账号/设置行；插件、自动化任务、任务看板等全局面板行，
+  以及 DS Bot 返回、额度条在 Chat 模式下都不显示，返回后原样恢复；
+- **「新会话」只换行为**：按钮、图标、尺寸都是宿主那一颗，Chat 模式下点击是新建对话，
+  不会创建 DSH 会话；品牌行同理，点它不会误建 DSH 会话；
+- **历史真的能跳**：点一条历史会让面板切到对应会话，新建对话会回到欢迎页；
+  面板通过一处很小的宿主桥同步会话列表与当前会话；
+- **收起侧栏后的浮动控件也跟着走**：左上角那组「展开侧栏 / 新建会话」里，
+  新建会话在 Chat 模式下同样是新建对话，不会创建 DSH 会话；
 - 面板里是 DeepSeek 官方开源的 [chat-demo](https://github.com/deepseek-ai/chat-demo)：
   多会话、自动标题、消息分支、流式回答、深度思考、智能搜索与来源引用、文件上传、
   语音输入与朗读、Markdown / 代码高亮 / KaTeX / Mermaid、深浅色主题；
+- **不再保留面板自带的侧栏与收起态按钮岛**：被 DSH 嵌入时导航统一走 DSH 侧栏，
+  单独打开 `/webchat/` 时仍保留原来的侧栏；
 - **不用填 API Key**：宿主用 `ctx.deepseekAccount` 的账号 token 代发请求；
   账号不可用（未登录或授权失效）时自动回落到 DSH 里配置的 DeepSeek API Key；
 - **会话保留策略**：默认「闲置超过 30 天」的会话会在下次打开面板时自动删除，
   可在「设置 → 网页对话」改成 30 / 60 / 90 天或永不；附件原件同步清理，不再被引用的才删；
 - 会话历史存在本机浏览器 IndexedDB（面板自己的 origin），**不会写进 DSH 会话**，
   也不会出现在 DSH 的会话列表里；
-- 界面语言首次跟随宿主语言，之后以面板自己的设置为准；主题跟随系统；
-- 侧栏图标与面板品牌位显示 `DeepSeek Chat`。
+- 界面语言首次跟随宿主语言，之后以面板自己的设置为准；主题跟随系统。
 
 ## 和 1.x 的区别
 
@@ -76,7 +83,7 @@
 ```bash
 node scripts/sync-upstream.mjs   # 按固定 commit 构建官方前端到 webview/dist
 node scripts/dev-server.mjs      # 单独跑 /webchat，不用重启 DSH
-node --test test/                # 路由、凭据、代理、注入单测
+node --test test/*.test.mjs      # 路由、凭据、代理、注入、构建产物单测
 ```
 
 - `index.js`：Host 入口，只注册 `/webchat` 路由。
@@ -84,8 +91,10 @@ node --test test/                # 路由、凭据、代理、注入单测
 - `src/proxy.js`：转发到 `api.deepseek.com` 并注入凭据（SSE 与 multipart 都是流式）。
 - `src/maintenance.js`：入口页注入——会话保留清理、前端启动闸门、默认收起侧栏、避让样式。
 - `src/settings.js`：`$DSH_HOME/vt-web-chat/settings.json` 的读写。
-- `client.js`：侧栏入口、整页面板、设置页里的保留策略。
+- `client.js`：侧栏入口、Chat 模式接管（品牌 / 历史 / 返回）、整页面板、设置页里的保留策略。
 - `webview/dist/`：官方前端的构建产物（提交进仓库，安装即用）。
 - `webview/UPSTREAM.json`：产物出自哪个 commit、哪个接口前缀。
-- 上游只改两处：`rspack.config.ts` 的 `apiOrigin` 可注入，`i18n` 的 `appName` 改成
-  `DeepSeek Chat`；其余一行未动，升级时重跑 `sync-upstream` 即可。
+- 上游补丁都写在 `scripts/sync-upstream.mjs` 里，锚点找不到会显式失败：
+  `rspack.config.ts` 的 `apiOrigin` 可注入、`i18n` 的 `appName` 改成 `DeepSeek Chat`、
+  新增 `src/hostBridge.ts`（列会话 / 打开会话 / 新建对话的宿主桥）并在 `src/main.tsx` 引入、
+  `src/app/App.tsx` 在被嵌入时隐藏收起态按钮岛；其余行为未动，升级时重跑 `sync-upstream` 即可。

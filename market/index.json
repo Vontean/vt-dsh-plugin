@@ -831,8 +831,8 @@
         "en": "Web Chat"
       },
       "description": {
-        "zh": "在「新会话」下方新增网页对话入口，面板里跑 DeepSeek 官方 chat-demo 界面，请求用 DSH 账号走 API，并可按 30/60/90 天或永不自动清理旧会话。",
-        "en": "Adds a Web Chat panel running DeepSeek's official chat-demo UI, proxied through your signed-in account, with a 30/60/90-day or never chat-retention policy."
+        "zh": "在「新会话」下方新增网页对话入口；点击进入 DeepSeek Chat 模式，左侧栏换成 CHAT 品牌、会话历史与「返回 Harness」，面板里跑官方 chat-demo 界面，请求用 DSH 账号走 API，并可按 30/60/90 天或永不自动清理旧会话。",
+        "en": "Adds a Web Chat entry that opens a DeepSeek Chat mode: the sidebar becomes CHAT branding, chat history and a Back to Harness action, while the panel runs the official chat-demo UI proxied through your signed-in account, with a 30/60/90-day or never retention policy."
       },
       "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIj4KICA8cGF0aCBkPSJNMjAuMjUgMTEuNWMwIDQuMjgtMy43IDcuNzUtOC4yNSA3Ljc1LS41MyAwLTEuMDUtLjA1LTEuNTUtLjE0bC00LjEgMS45Yy0uNi4yOC0xLjI2LS4yMi0xLjE4LS44N2wuNS0zLjkzQzQuNCAxNC45IDMuNzUgMTMuMjcgMy43NSAxMS41YzAtNC4yOCAzLjctNy43NSA4LjI1LTcuNzVzOC4yNSAzLjQ3IDguMjUgNy43NVoiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjEuMyIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik04LjUgMTEuNWguMDFNMTIgMTEuNWguMDFNMTUuNSAxMS41aC4wMSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMS42IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+Cg==",
       "author": "Vontean",
@@ -848,7 +848,8 @@
           "chat",
           "deepseek",
           "chat-demo",
-          "retention"
+          "retention",
+          "chat-mode"
         ],
         "labels": [],
         "sortKeys": {}

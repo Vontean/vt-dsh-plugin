@@ -1,8 +1,8 @@
 {
   "name": "dsh-vt-web-chat",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
-  "description": "Adds a Web Chat panel that runs DeepSeek's official open-source chat UI inside DeepSeek Harness, with requests proxied through your signed-in account and a configurable local chat-retention policy.",
+  "description": "Adds a DeepSeek Chat mode inside DeepSeek Harness: the official open-source chat UI, chat history in the sidebar, and a back-to-Harness switch, with requests proxied through your signed-in account and a configurable local chat-retention policy.",
   "license": "MIT",
   "author": "Vontean",
   "homepage": "https://github.com/Vontean/vt-dsh-plugin/tree/main/plugins/vt-web-chat#readme",
@@ -20,7 +20,9 @@
     "web-chat",
     "chat-demo",
     "deepseek",
-    "retention"
+    "retention",
+    "sidebar",
+    "chat-mode"
   ],
   "engines": {
     "dsh": ">=0.2.1-rc.5 <0.3.0"

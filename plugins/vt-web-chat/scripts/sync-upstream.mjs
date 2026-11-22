@@ -79,6 +79,156 @@ for (const [file, from, to] of brandPatches) {
   }
 }
 
+// 2c. 宿主桥：DSH 的 Chat 模式侧栏需要「列会话 / 打开会话 / 新建对话」，
+//     上游没有跨文档 API。这里只加一个只读 store + 消息转发的模块，
+//     不改任何既有行为；锚点找不到就显式失败，避免静默少功能。
+const bridgeSource = `/**
+ * DSH 嵌入式宿主桥：只做消息收发，不改变本应用的默认行为。
+ *
+ * 父页面（dsh-vt-web-chat 的侧栏）需要三件事：读取会话列表、打开某个会话、新建对话。
+ * 上游没有跨文档 API，这里把 store 已有的动作转成 postMessage，
+ * 并且只接受来自 window.parent 的命令。
+ */
+import { initChat, newChat, selectSession, useChatStore } from './services/chat/store.js'
+
+const HOST_SOURCE = 'vt-webchat-host'
+const SHELL_SOURCE = 'vt-webchat-shell'
+
+type HostSession = {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+}
+
+const embedded = window.parent !== window
+
+if (embedded) {
+  // 增量发布：切会话只发 activeId，列表真的变了才带 sessions；
+  // 流式回答期间 250ms 合并一次，避免每帧都给父页面重建整张列表。
+  let lastSessions = ''
+  let lastActive: string | null | undefined
+  let lastReady: boolean | undefined
+  let lastError: boolean | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  const publish = (force = false) => {
+    const state = useChatStore.getState()
+    const sessions: HostSession[] = state.sessions.map((session) => ({
+      id: session.id,
+      title: session.title,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    }))
+    const sessionsBody = JSON.stringify(sessions)
+    const sessionsChanged = force || sessionsBody !== lastSessions
+    const activeChanged = force || state.activeId !== lastActive
+    const readyChanged = force || state.ready !== lastReady
+    const errorChanged = force || state.initError !== lastError
+    if (!sessionsChanged && !activeChanged && !readyChanged && !errorChanged) {
+      return
+    }
+
+    const message: Record<string, unknown> = { source: HOST_SOURCE, type: 'sync' }
+    if (sessionsChanged) {
+      message.sessions = sessions
+      lastSessions = sessionsBody
+    }
+    if (activeChanged) {
+      message.activeId = state.activeId
+      lastActive = state.activeId
+    }
+    if (readyChanged) {
+      message.ready = state.ready
+      lastReady = state.ready
+    }
+    if (errorChanged) {
+      message.error = state.initError
+      lastError = state.initError
+    }
+    window.parent.postMessage(message, '*')
+  }
+
+  const schedule = () => {
+    if (timer !== undefined) {
+      return
+    }
+    timer = setTimeout(() => {
+      timer = undefined
+      publish()
+    }, 250)
+  }
+
+  useChatStore.subscribe(schedule)
+
+  window.addEventListener('message', (event) => {
+    if (event.source !== window.parent) {
+      return
+    }
+    const data = event.data as { source?: string; type?: string; id?: unknown } | null
+    if (data === null || data.source !== SHELL_SOURCE) {
+      return
+    }
+    if (data.type === 'open-session' && typeof data.id === 'string') {
+      selectSession(data.id)
+    } else if (data.type === 'new-chat') {
+      newChat()
+    } else if (data.type === 'request-sync') {
+      publish(true)
+    } else if (data.type === 'retry') {
+      void initChat().then(() => publish(true))
+    }
+  })
+
+  void initChat().then(() => {
+    publish(true)
+    window.parent.postMessage({ source: HOST_SOURCE, type: 'ready' }, '*')
+  })
+}
+`;
+fs.writeFileSync(path.join(work, 'src/hostBridge.ts'), bridgeSource);
+const mainPath = path.join(work, 'src/main.tsx');
+const mainText = fs.readFileSync(mainPath, 'utf8');
+const importAnchor = "import { App } from './app/App.js'";
+if (!mainText.includes("import './hostBridge.js'")) {
+  if (!mainText.includes(importAnchor)) {
+    throw new Error('src/main.tsx 的 App 导入锚点变了，请检查上游入口结构');
+  }
+  fs.writeFileSync(mainPath, mainText.replace(importAnchor, `${importAnchor}\nimport './hostBridge.js'`));
+  process.stderr.write('patched src/main.tsx: host bridge\n');
+}
+
+// 2d. 宿主接管导航后，面板自己的「收起态按钮岛」不再需要：
+//     DSH 侧栏已经有新建对话、历史和返回入口，重复的一层只会互相打架。
+//     只在被嵌入时隐藏，单独打开 /webchat/ 的用法保持不变。
+const collapsePath = path.join(work, 'src/app/App.tsx');
+const collapseText = fs.readFileSync(collapsePath, 'utf8');
+const collapseFrom = 'const siderCollapsed = useSettings((state) => state.siderCollapsed) && !isMobile';
+const collapseTo = [
+  'const prefersCollapsed = useSettings((state) => state.siderCollapsed) && !isMobile',
+  '  // 被 DSH 嵌入时导航统一走宿主侧栏，面板自己的侧栏永远不展开。',
+  '  const siderCollapsed = window.parent !== window || prefersCollapsed',
+].join('\n');
+if (!collapseText.includes('const siderCollapsed = window.parent !== window || prefersCollapsed')) {
+  if (!collapseText.includes(collapseFrom)) {
+    throw new Error('src/app/App.tsx 的侧栏收起锚点变了，请检查上游 App 结构');
+  }
+  fs.writeFileSync(collapsePath, collapseText.replace(collapseFrom, collapseTo));
+  process.stderr.write('patched src/app/App.tsx: force the panel sider collapsed when embedded\n');
+}
+
+const appPath = path.join(work, 'src/app/App.tsx');
+const appText = fs.readFileSync(appPath, 'utf8');
+const islandFrom = '{siderCollapsed ? <CollapsedSider /> : null}';
+const islandTo = '{siderCollapsed && window.parent === window ? <CollapsedSider /> : null}';
+if (!appText.includes(islandTo)) {
+  if (!appText.includes(islandFrom)) {
+    throw new Error('src/app/App.tsx 的收起态按钮岛锚点变了，请检查上游侧栏结构');
+  }
+  fs.writeFileSync(appPath, appText.replace(islandFrom, islandTo));
+  process.stderr.write('patched src/app/App.tsx: hide the collapsed island when embedded\n');
+}
+
 // 3. 安装与构建。
 run('pnpm', ['install', '--ignore-scripts'], work);
 run('pnpm', ['build'], work, { CHAT_DEMO_API_ORIGIN: API_PREFIX, NODE_ENV: 'production' });
